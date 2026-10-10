@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saves · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html" class="current" aria-current="page">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Engine</p>
+    <article><h1 id="saves">Saves</h1>
+<p>What a save holds, where it lives, and how older saves are upgraded.</p>
+<h2 id="what-is-saved">What is saved<a class="anchor" href="#what-is-saved" aria-label="Link to this section">#</a></h2>
+<p>Saves stay small because most of the world is never stored: terrain, biomes, ordinary structures, decorations and enemies all regenerate from the seed.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Saved</th>
+<th>Not saved</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>World seed</td>
+<td>Terrain and decorations</td>
+</tr>
+<tr>
+<td>Player position, inventory (with weapon durability), vitals, level and XP</td>
+<td>Biome records</td>
+</tr>
+<tr>
+<td>Every persistent object, with its full layout, buildings, discovered flag, anchor and opened chests</td>
+<td>Temporary objects (they regenerate)</td>
+</tr>
+<tr>
+<td>Anchors whose chests were looted (<code>lootedAnchors</code>)</td>
+<td>Enemies, projectiles, NPCs and fires</td>
+</tr>
+<tr>
+<td>Dungeons, arenas and legendary spots that were cleared (<code>clearedAnchors</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Region visit counters, so regions come back as the player left them</td>
+<td></td>
+</tr>
+<tr>
+<td>The harvest log, so gathered plants stay gathered until they regrow</td>
+<td></td>
+</tr>
+<tr>
+<td>Clock, per-biome weather and quests</td>
+<td></td>
+</tr>
+<tr>
+<td>Story stage, flags, ending and lantern memories</td>
+<td></td>
+</tr>
+<tr>
+<td>Explored chunks and map markers</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p>Lost travellers from rescue quests are not saved as NPCs; their position lives in the quest record and they reappear when their spot is simulated.</p>
+<h2 id="format">Format<a class="anchor" href="#format" aria-label="Link to this section">#</a></h2>
+<p><code>SaveData</code> (<code>src/save/SaveManager.ts</code>):</p>
+<pre><code class="language-ts">interface SaveData {
+  version: number;        // SAVE_VERSION, currently 7
+  seed: number;
+  savedAt: number;        // Date.now()
+  player: {
+    x: number; y: number;
+    inventory: SavedSlot[];              // { id, count, durability? } or null, 24 slots
+    vitals: VitalValues | null;          // health, stamina, hunger, thirst
+    progression: ProgressionSave | null; // xp, level
+  };
+  objects: SavedObject[];  // persistent objects: id, kind, name, persistence, x, y, w, h,
+                           // tiles, decos (Uint8Array), discovered, anchor, opened[],
+                           // buildings (building specs), idleSince (semi-persistent)
+  lootedAnchors: string[];
+  clearedAnchors: string[];
+  living: {                // null in saves from before the living world
+    time: { day, minutes };
+    weather: Record&lt;biome, { kind, hoursLeft }&gt;;
+    quests: Quest[];
+    story?: { stage, flags, ending, memories };  // missing before the story
+  } | null;
+  exploration: {           // null before the map existed
+    explored: number[];    // flat pairs: chunk key, biome palette + 1
+    markers: { id, x, y, label }[];
+    tracked: number | null;
+  } | null;
+  regions: number[];       // flat pairs: region key, visit counter (only counters above 0)
+  harvested: { key, visit, cells: number[] }[];  // per chunk: flat triples of cell, decoration, minute
+  ground: { id, count, durability?, x, y }[];      // items dropped on the ground
+  known?: { id, name, x, y, w, h, story }[];       // discovered places, for the map
+}
+</code></pre>
+<p><code>snapshot(world, player, living, exploration)</code> builds it; <code>restore(world, data)</code> puts the persistent objects, looted anchors and cleared anchors back into a fresh world built from the same seed. <code>Game</code> restores inventory, progression and vitals, and <code>LivingWorld.load</code> restores the clock, weather, quests and story.</p>
+<h2 id="versions">Versions<a class="anchor" href="#versions" aria-label="Link to this section">#</a></h2>
+<p><code>migrate()</code> upgrades older saves one step at a time:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>From</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Adds an empty inventory, <code>vitals: null</code>, <code>progression: null</code>, <code>anchor: &#39;&#39;</code> and <code>opened: []</code> on objects, and <code>lootedAnchors: []</code>.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Adds <code>progression: null</code> and <code>clearedAnchors: []</code>.</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Adds <code>living: null</code>.</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Adds <code>exploration: null</code>.</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Adds <code>buildings: []</code> to every object, <code>regions: []</code> and <code>harvested: []</code>.</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Adds <code>ground: []</code>.</td>
+</tr>
+</tbody></table></div>
+<p>A save without <code>living.story</code> starts the story from the prologue. Unknown versions load as no save.</p>
+<h2 id="storage">Storage<a class="anchor" href="#storage" aria-label="Link to this section">#</a></h2>
+<ul>
+<li>IndexedDB database <code>untrue</code>, object store <code>saves</code>, one slot with key <code>main</code>.</li>
+<li>Autosave every 30 seconds, and whenever the page is hidden (tab switch or minimise).</li>
+<li>Ctrl+S saves now and confirms with a notification.</li>
+<li>Nothing is saved while the player is travelling (waiting to be placed after a jump or a collapse).</li>
+<li><code>?new</code> or <code>?seed=N</code> starts a fresh world; its first autosave replaces the slot.</li>
+</ul>
+<p>Settings are separate: they live in <code>localStorage</code> under <code>untrue.settings</code> (<code>lighting</code>, <code>weather</code>, <code>fps30</code>, <code>help</code>, <code>music</code>, <code>sfx</code>), per browser, and fall back to defaults if storage is blocked.</p>
+<p>The pause menu&#39;s &quot;New world&quot; clears the save slot and reloads with <code>?new</code>.</p>
+<p>See also: <a href="objects-and-structures.html">Objects and structures</a>, <a href="architecture.html">Architecture</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="rendering.html"><small>Previous</small>Rendering</a><a class="next" href="survival.html"><small>Next</small>Survival</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#what-is-saved">What is saved</a></li><li class="l2"><a href="#format">Format</a></li><li class="l2"><a href="#versions">Versions</a></li><li class="l2"><a href="#storage">Storage</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

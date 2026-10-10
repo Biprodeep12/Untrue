@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Living world · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html" class="current" aria-current="page">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Gameplay</p>
+    <article><h1 id="living-world">Living world</h1>
+<p>The clock, light, weather, hazards, regrowth, NPCs, quests, trading, world events and settings.</p>
+<p><code>src/game/LivingWorld.ts</code> owns all of these and is driven by the game loop. Opening the menu, a conversation or a vision pauses them.</p>
+<h2 id="time">Time<a class="anchor" href="#time" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/TimeSystem.ts</code>. One in-game day lasts 960 real seconds (16 minutes), so 1.5 in-game minutes pass per real second. A new world starts on Day 1 at 8:00.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Hours</th>
+<th>Darkness</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Night</td>
+<td>20:00–5:00</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Dawn</td>
+<td>5:00–7:00</td>
+<td>Ramps 1 → 0</td>
+</tr>
+<tr>
+<td>Day</td>
+<td>7:00–18:00</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Dusk</td>
+<td>18:00–20:00</td>
+<td>Ramps 0 → 1</td>
+</tr>
+</tbody></table></div>
+<p>The HUD shows the clock and the current weather above the location panel, for example &quot;Day 3 · 6:40 pm · Rain&quot;.</p>
+<p>Each in-game hour, <code>LivingWorld.onHour()</code>:</p>
+<ul>
+<li>advances the weather</li>
+<li>regrows plants</li>
+<li>burns torches</li>
+<li>may start a world event</li>
+</ul>
+<p>At midnight, each villager has a new quest to offer.</p>
+<h3 id="resting">Resting<a class="anchor" href="#resting" aria-label="Link to this section">#</a></h3>
+<p>Facing a campfire at dusk or night, E rests until 6:00. Resting:</p>
+<ul>
+<li>costs 15 hunger and 15 thirst, and restores 40 health</li>
+<li>runs the hourly weather and regrowth for the hours skipped, but no world events</li>
+<li>is refused while any enemy is hunting the player (wildlife doesn&#39;t count)</li>
+<li>plays a 3-second sleep transition (<code>src/ui/SleepOverlay.ts</code>): the screen fades to night over 1 second, &quot;Z z z&quot; drifts up for 1 second while the hours pass, then the morning fades back in over 1 second. The game is paused throughout. Beds indoors use the same transition.</li>
+</ul>
+<p>In the story&#39;s night stage, the Village of Graves campfire can be rested at any hour (<a href="story.html">story.md</a>).</p>
+<h2 id="light">Light<a class="anchor" href="#light" aria-label="Link to this section">#</a></h2>
+<p><code>src/rendering/Lighting.ts</code> draws a darkness layer, coloured violet at dusk and deep blue at night, at up to 80% opacity scaled by darkness. Every light cuts a soft hole in it, and warm lights add an orange glow.</p>
+<p>Thunderstorms add up to 0.45 darkness in daytime.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Light source</th>
+<th>Radius (tiles)</th>
+<th>Warm glow</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Player, no light</td>
+<td>2.4</td>
+<td>none</td>
+</tr>
+<tr>
+<td>Player with torch / Wanderer&#39;s Lantern / Lantern</td>
+<td>5 / 6 / 7</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Campfire</td>
+<td>5</td>
+<td>strong</td>
+</tr>
+<tr>
+<td>House window (facade tiles with a window)</td>
+<td>1.8</td>
+<td>soft</td>
+</tr>
+<tr>
+<td>Burning tree</td>
+<td>6</td>
+<td>strong</td>
+</tr>
+<tr>
+<td>Meteorite</td>
+<td>2.5</td>
+<td>some</td>
+</tr>
+<tr>
+<td>Story pieces: Pedestal, Anchor core, Monument, Book</td>
+<td>2.5, 7, 1.5, 2</td>
+<td>varies</td>
+</tr>
+</tbody></table></div>
+<p>The &quot;Lighting and night darkness&quot; setting turns the whole layer off.</p>
+<h2 id="weather">Weather<a class="anchor" href="#weather" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/WeatherSystem.ts</code>. Each biome type runs its own weather, and the player feels the weather of the biome they stand in. When a spell ends, the next is picked by weight. Clear spells last 4–10 hours; others last 2–6.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Biome</th>
+<th>Weather (weight)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Forest</td>
+<td>Clear 6, Rain 3, Thunderstorm 1, Fog 1.5</td>
+</tr>
+<tr>
+<td>Desert</td>
+<td>Clear 6, Sandstorm 1.5, Heat wave 2</td>
+</tr>
+<tr>
+<td>Snow</td>
+<td>Clear 4, Snow 4, Blizzard 1.2, Fog 1</td>
+</tr>
+</tbody></table></div>
+<p>A heat wave counts as Clear at night.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Weather</th>
+<th>Hunger</th>
+<th>Thirst</th>
+<th>Speed</th>
+<th>Veil</th>
+<th>Wet</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Clear</td>
+<td>×1</td>
+<td>×1</td>
+<td>×1</td>
+<td>0</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Rain</td>
+<td>×1</td>
+<td>×0.7</td>
+<td>×1</td>
+<td>0.1</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Thunderstorm</td>
+<td>×1.1</td>
+<td>×0.7</td>
+<td>×0.95</td>
+<td>0.2</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Fog</td>
+<td>×1</td>
+<td>×1</td>
+<td>×1</td>
+<td>0.45</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Sandstorm</td>
+<td>×1</td>
+<td>×1.3</td>
+<td>×0.8</td>
+<td>0.5</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Heat wave</td>
+<td>×1</td>
+<td>×1.6</td>
+<td>×1</td>
+<td>0.05</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Snow</td>
+<td>×1.15</td>
+<td>×1</td>
+<td>×0.95</td>
+<td>0.1</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Blizzard</td>
+<td>×1.35</td>
+<td>×1</td>
+<td>×0.8</td>
+<td>0.5</td>
+<td>yes</td>
+</tr>
+</tbody></table></div>
+<p>Hunger and thirst multiply the drain rates in <a href="survival.html#vitals">survival.md</a>. Speed multiplies movement. Veil is how much the screen is hazed. Wet weather slows fire.</p>
+<p>On screen, <code>src/rendering/ParticleSystem.ts</code> fades weather in and out over a few seconds, with rain, snow or blowing-sand particles. The &quot;Weather particles&quot; setting turns them off.</p>
+<h2 id="hazards">Hazards<a class="anchor" href="#hazards" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/HazardSystem.ts</code>.</p>
+<p><strong>Lightning</strong>, in thunderstorms only:</p>
+<ul>
+<li><strong>Timing:</strong> a strike lands every 5–13 s (the first after 8 s).</li>
+<li><strong>Target:</strong> half the time it picks a tree within 8×6 tiles of the player; otherwise a random point within 7×5 tiles.</li>
+<li><strong>Warning:</strong> a glowing circle marks the spot for 1.2 s.</li>
+<li><strong>Damage:</strong> the strike deals 25 to the player if within 1.3 tiles, unless the player is invulnerable, and lights the tree if there is one.</li>
+</ul>
+<p><strong>Fire</strong> burns trees, bushes, palms and dead bushes:</p>
+<ul>
+<li><strong>Burn time:</strong> 7 s, or twice as fast in wet weather.</li>
+<li><strong>Damage:</strong> 6/s to the player within 1.1 tiles.</li>
+<li><strong>Spread:</strong> halfway through, the fire tries to light every neighbour within 2 tiles, with a 35% chance each, or 5% in wet weather.</li>
+<li><strong>Afterwards:</strong> the tree is gone, as if harvested.</li>
+</ul>
+<h2 id="regrowth">Regrowth<a class="anchor" href="#regrowth" aria-label="Link to this section">#</a></h2>
+<p><code>WorldManager.regrow()</code> runs every in-game hour. Gathered plants grow back while their region stays loaded:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Plant</th>
+<th>Regrows after</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Bush (berries)</td>
+<td>1 day (1,440 min)</td>
+</tr>
+<tr>
+<td>Flowers (herbs)</td>
+<td>1 day</td>
+</tr>
+<tr>
+<td>Mushroom</td>
+<td>1.5 days (2,160 min)</td>
+</tr>
+<tr>
+<td>Garden vegetables</td>
+<td>1 day</td>
+</tr>
+</tbody></table></div>
+<p>Everything else stays gone until its region fully unloads and regenerates.</p>
+<h2 id="npcs">NPCs<a class="anchor" href="#npcs" aria-label="Link to this section">#</a></h2>
+<p><code>src/entities/NPC.ts</code>, <code>src/systems/NpcSystem.ts</code>.</p>
+<p><strong>Villages:</strong> each village in the simulation radius gets four people, all leaving when the village leaves the radius:</p>
+<ul>
+<li><strong>Three villagers</strong>, in one of three outfits. The first is the village&#39;s quest giver. Villagers wander within 9 tiles of the village centre at 2.2 tiles/s.</li>
+<li><strong>A trader</strong> who stays within 2 tiles of the well.</li>
+</ul>
+<p><strong>Schedule:</strong> from 20:00 to 6:00, villagers and traders walk to a door and go indoors, where the player can visit them (see <a href="buildings-and-interiors.html#residents">buildings-and-interiors.md</a>). In the morning they step out of their door again. Story characters have no house, so they stay out (<code>Npc.stayOut</code>).</p>
+<p><strong>Travelling merchant:</strong> appears through a world event, stands still, and leaves after 180 in-game minutes.</p>
+<p><strong>Lost traveller:</strong> the target of a rescue quest. They appear when their quest location enters the simulation radius, then wait until spoken to. After that they follow the player:</p>
+<ul>
+<li>at a 1.6-tile gap, at 5 tiles/s</li>
+<li>jumping back to the player if more than 12 tiles behind</li>
+</ul>
+<p>They&#39;re removed if their quest ends, or if the player gets 120 tiles away before finding them.</p>
+<p>Press E within 1.8 tiles to talk. The NPC you talk to stops and turns to face you (and you turn to them) until the conversation or trade closes, then waits 2 seconds before going on; everyone else carries on as before.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Symbol over an NPC</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>!</td>
+<td>Has something new to say, or a quest to offer</td>
+</tr>
+<tr>
+<td>$</td>
+<td>Trader or merchant</td>
+</tr>
+<tr>
+<td>?</td>
+<td>Lost traveller not yet found</td>
+</tr>
+<tr>
+<td>✓</td>
+<td>A collect quest is ready to hand in</td>
+</tr>
+</tbody></table></div>
+<h2 id="quests">Quests<a class="anchor" href="#quests" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/QuestSystem.ts</code>.</p>
+<p><strong>Getting quests:</strong></p>
+<ul>
+<li>Each quest giver offers one quest per in-game day. The offer is seeded by village, giver and day, so it&#39;s the same every time you ask that day.</li>
+<li>The player can hold 5 active quests. A full journal turns new offers away.</li>
+<li>Finished quests are dropped from the journal at the next new day.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Weight</th>
+<th>Objective</th>
+<th>Coins (base)</th>
+<th>XP</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Collect</td>
+<td>3</td>
+<td>Bring N of a biome resource, handed in to any villager</td>
+<td>10 + 2N</td>
+<td>30 + 2N</td>
+</tr>
+<tr>
+<td>Slay</td>
+<td>3</td>
+<td>Kill 3–6 of a non-night species from the giver&#39;s biome</td>
+<td>15 + 6N</td>
+<td>40 + 10N</td>
+</tr>
+<tr>
+<td>Discover</td>
+<td>2</td>
+<td>Find ruins, a tower, a temple, a mine, a cabin or a lake</td>
+<td>30</td>
+<td>60</td>
+</tr>
+<tr>
+<td>Clear</td>
+<td>1</td>
+<td>Clear any dungeon</td>
+<td>70</td>
+<td>120</td>
+</tr>
+<tr>
+<td>Rescue</td>
+<td>1.5</td>
+<td>Find a lost traveller 150–300 tiles from the village and walk them within 12 tiles of it</td>
+<td>60</td>
+<td>150</td>
+</tr>
+</tbody></table></div>
+<p>Collect resources by biome:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Biome</th>
+<th>Resources (N)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Forest</td>
+<td>Wood 10–20, Berries 5–10, Hide 3–5, Silk 3–5, Herb 4–8</td>
+</tr>
+<tr>
+<td>Desert</td>
+<td>Cactus Fruit 4–8, Chitin 3–5, Stone 10–20, Venom 1–3</td>
+</tr>
+<tr>
+<td>Snow</td>
+<td>Ice Shard 2–4, Wood 10–20, Hide 3–5, Coal 4–8</td>
+</tr>
+</tbody></table></div>
+<p><strong>Rewards:</strong></p>
+<ul>
+<li>Coins are the base × (1 + 0.5 × band) × a random 0.8–1.2.</li>
+<li>Each quest also rewards the first item of a chest roll at the giver&#39;s band.</li>
+</ul>
+<p><strong>Completion:</strong> quests complete as soon as their objective is met and pay out at once, except collect quests, which are handed in through a villager&#39;s dialog.</p>
+<p><strong>Tracking:</strong> the HUD tracker (top right, under the location) lists the story objective, any treasure waypoint and up to three quests. Rescue lines carry an arrow toward the traveller, then toward home. The menu&#39;s Quests tab lists everything with its progress and rewards.</p>
+<h2 id="trading">Trading<a class="anchor" href="#trading" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/TradeSystem.ts</code>. Talking to a trader or merchant opens the trade panel.</p>
+<p><strong>Stock:</strong> each shop shows 6 offers, seeded by who the trader is.</p>
+<ul>
+<li><strong>Village traders</strong> draw from: Arrows ×10 (12c), Torches ×3 (6c), Bandage (8c), Antidote (12c), Cooked Meat ×2 (10c), Stew (14c), Wooden Sword (20c), Hunting Bow (55c), Leather Armor (60c), Stone Pickaxe (18c).</li>
+<li><strong>Travelling merchants</strong> add rare stock: Health Potion (35c), Iron Sword (140c), Iron Armor (220c), Iron Pickaxe (120c), Lantern (90c), Iron Ingot ×3 (30c). They also carry the first four village items.</li>
+</ul>
+<p><strong>Buying</strong> needs enough coins; if the item doesn&#39;t fit in the bag, the purchase is undone. <strong>Selling</strong> goes one item at a time, and only items with a price are bought:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Price</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Golden Idol</td>
+<td>250</td>
+</tr>
+<tr>
+<td>Gemstone</td>
+<td>60</td>
+</tr>
+<tr>
+<td>Star Metal</td>
+<td>45</td>
+</tr>
+<tr>
+<td>Crystal</td>
+<td>35</td>
+</tr>
+<tr>
+<td>Gold Ore</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Iron Ingot, Spirit Essence</td>
+<td>8</td>
+</tr>
+<tr>
+<td>Venom Sac, Ice Shard</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Iron Ore</td>
+<td>4</td>
+</tr>
+<tr>
+<td>Hide, Spider Silk, Chitin, Cooked Meat</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Raw Meat, Bone</td>
+<td>1</td>
+</tr>
+</tbody></table></div>
+<h2 id="world-events">World events<a class="anchor" href="#world-events" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/WorldEvents.ts</code>. Each in-game hour, once the 3-hour cooldown has passed, there is a 22% chance an event fires. The kind is a weighted pick among those whose conditions hold. &quot;Wild&quot; means more than 64 tiles from the origin.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Weight</th>
+<th>Condition</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Meteor</td>
+<td>2</td>
+<td>Night</td>
+<td>A meteor streaks in and leaves a 7×7 crater 10–18 tiles away, with a Meteorite to mine</td>
+</tr>
+<tr>
+<td>Bandits</td>
+<td>2</td>
+<td>Wild, not in a village</td>
+<td>3–4 bandits appear 11 tiles away, already hunting</td>
+</tr>
+<tr>
+<td>Invasion</td>
+<td>3</td>
+<td>Standing in a village</td>
+<td>2 groups of 3 biome enemies attack from the village edges; clearing them pays 30 coins</td>
+</tr>
+<tr>
+<td>Treasure</td>
+<td>2</td>
+<td>Always</td>
+<td>An X is buried 18–32 tiles away, with a waypoint and a compass hint</td>
+</tr>
+<tr>
+<td>Merchant</td>
+<td>1.5</td>
+<td>Daytime, no merchant nearby</td>
+<td>A travelling merchant sets up 6–11 tiles away</td>
+</tr>
+<tr>
+<td>Ancient</td>
+<td>1</td>
+<td>Wild</td>
+<td>A 9×9 Risen Obelisk with a chest rises 12–20 tiles away</td>
+</tr>
+<tr>
+<td>Echo</td>
+<td>1</td>
+<td>Story ended</td>
+<td>An Echo Monument 14–24 tiles away holds a message from a previous self</td>
+</tr>
+<tr>
+<td>Fragment</td>
+<td>1.5</td>
+<td>Ending was The Last Memory</td>
+<td>A Memory Fragment pedestal 14–24 tiles away holds a preserved history</td>
+</tr>
+<tr>
+<td>Cabin</td>
+<td>0.3</td>
+<td>Story ended, cabin not yet found, wild</td>
+<td>The Quiet Cabin appears 20–30 tiles away</td>
+</tr>
+<tr>
+<td>Moonwell</td>
+<td>1.5</td>
+<td>Night</td>
+<td>A Moonwell rises 14–24 tiles away, with a waypoint</td>
+</tr>
+</tbody></table></div>
+<p>Event structures are temporary objects placed on open ground clear of other objects (trees and bushes under them are cleared). They come and go like any other temporary object.</p>
+<p><strong>Night-only structures.</strong> The Moonwell (<code>NIGHT_ONLY</code> in <code>src/systems/WorldEvents.ts</code>) exists only at night: a 9×9 ring of pale stone around a glowing spring, with mushrooms and flowers. Every Moonwell still standing fades at the first hour of daylight. Facing it, E drinks: half of max health back, +40 thirst, poison cured and 25 XP, once per Moonwell.</p>
+<h2 id="settings">Settings<a class="anchor" href="#settings" aria-label="Link to this section">#</a></h2>
+<p>The menu&#39;s Settings tab (<code>src/game/Settings.ts</code>) stores these in this browser&#39;s <code>localStorage</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Lighting and night darkness</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Weather particles (also fireflies and falling leaves)</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Cap at 30 frames per second</td>
+<td>off</td>
+</tr>
+<tr>
+<td>Show the controls bar</td>
+<td>on</td>
+</tr>
+<tr>
+<td>Music volume</td>
+<td>0.35</td>
+</tr>
+<tr>
+<td>Sound effects volume</td>
+<td>0.6</td>
+</tr>
+</tbody></table></div>
+<p><code>?fps=30</code> in the URL also turns on the frame cap. For testing, <code>?hour=22</code> sets the clock and <code>?weather=storm</code> forces the weather in every biome.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="survival.html">survival.md</a> · <a href="combat.html">combat.md</a> · <a href="story.html">story.md</a> · <a href="rendering.html">rendering.md</a> · <a href="saves.html">saves.md</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="combat.html"><small>Previous</small>Combat</a><a class="next" href="buildings-and-interiors.html"><small>Next</small>Buildings and interiors</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#time">Time</a></li><li class="l3"><a href="#resting">Resting</a></li><li class="l2"><a href="#light">Light</a></li><li class="l2"><a href="#weather">Weather</a></li><li class="l2"><a href="#hazards">Hazards</a></li><li class="l2"><a href="#regrowth">Regrowth</a></li><li class="l2"><a href="#npcs">NPCs</a></li><li class="l2"><a href="#quests">Quests</a></li><li class="l2"><a href="#trading">Trading</a></li><li class="l2"><a href="#world-events">World events</a></li><li class="l2"><a href="#settings">Settings</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

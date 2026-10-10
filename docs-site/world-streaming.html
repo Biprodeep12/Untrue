@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World streaming · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html" class="current" aria-current="page">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Engine</p>
+    <article><h1 id="world-streaming">World streaming</h1>
+<p>How chunks are generated around the player, kept while nearby, and thrown away behind them.</p>
+<h2 id="chunks">Chunks<a class="anchor" href="#chunks" aria-label="Link to this section">#</a></h2>
+<p>The world is a grid of chunks that extends in every direction.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Constant</th>
+<th>Value</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>TILE_SIZE</code></td>
+<td>16 px</td>
+<td><code>src/config.ts</code></td>
+</tr>
+<tr>
+<td><code>CHUNK_SIZE</code></td>
+<td>32 × 32 tiles</td>
+<td><code>src/config.ts</code></td>
+</tr>
+<tr>
+<td><code>CHUNK_PIXELS</code></td>
+<td>512 px</td>
+<td><code>src/config.ts</code></td>
+</tr>
+</tbody></table></div>
+<p>A chunk key packs <code>(cx, cy)</code> into one safe integer: <code>(cx + 2^23) × 2^24 + (cy + 2^23)</code> (<code>chunkKey</code> in <code>src/coords.ts</code>). That allows about ±8 million chunks on each axis. <code>keyX</code> and <code>keyY</code> unpack it, and <code>tileToChunk</code> floors a tile coordinate to its chunk.</p>
+<h2 id="areas">Areas<a class="anchor" href="#areas" aria-label="Link to this section">#</a></h2>
+<p><code>ChunkManager.update(view)</code> works out four rectangles of chunks from the camera&#39;s view (in tiles) and the player&#39;s position:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Rule</th>
+<th>Constant</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Visible</td>
+<td>Chunks the view touches</td>
+<td></td>
+</tr>
+<tr>
+<td>Render</td>
+<td>Visible, plus a margin on every side</td>
+<td><code>RENDER_MARGIN</code> = 1</td>
+</tr>
+<tr>
+<td>Cache</td>
+<td>Render, plus a margin on every side</td>
+<td><code>CACHE_MARGIN</code> = 2</td>
+</tr>
+<tr>
+<td>Simulation</td>
+<td>The player&#39;s chunk, plus a radius</td>
+<td><code>SIM_RADIUS</code> = 2</td>
+</tr>
+</tbody></table></div>
+<p>The render area grows and shrinks with the screen size and zoom, so the player never sees a chunk appear at the edge. The cache area always covers the render area. A cache margin of at least 1 is required: structures can reach one chunk out from their anchor, so every object that touches the render area has its anchor chunk inside the cache area and is rolled before it is drawn.</p>
+<h2 id="lifecycle">Lifecycle<a class="anchor" href="#lifecycle" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What happens</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Predict</td>
+<td>The render area is extended by one chunk in the direction of travel.</td>
+<td><code>ChunkManager.schedule</code></td>
+</tr>
+<tr>
+<td>Generate</td>
+<td>Missing chunks in that area are queued and sent to the generator.</td>
+<td><code>ChunkManager.schedule</code></td>
+</tr>
+<tr>
+<td>Activate</td>
+<td>A finished chunk inside the render area is shown; inside the simulation area it is marked <code>simulated</code>.</td>
+<td><code>ChunkManager.receive</code>, <code>syncShown</code></td>
+</tr>
+<tr>
+<td>Deactivate</td>
+<td>Leaving the render area hides it; leaving the simulation area clears <code>simulated</code>.</td>
+<td><code>ChunkManager.update</code></td>
+</tr>
+<tr>
+<td>Dispose</td>
+<td>Leaving the cache area removes it and returns it to the pool.</td>
+<td><code>ChunkManager.setCache</code></td>
+</tr>
+</tbody></table></div>
+<p>When the cache rectangle changes, <code>setCache</code> reports the chunks that left (<code>cacheLeave</code>) and the chunks that entered (<code>cacheEnter</code>). <code>WorldManager</code> uses these to keep biome records, objects and region visit counters up to date (see <a href="world-generation.html">World generation</a> and <a href="objects-and-structures.html">Objects and structures</a>). Only chunks in the render area plus the predicted strip are generated; the rest of the cache area is tracked (biomes, objects, regions) without terrain.</p>
+<h2 id="the-generation-queue">The generation queue<a class="anchor" href="#the-generation-queue" aria-label="Link to this section">#</a></h2>
+<p>Each frame, <code>schedule()</code> collects the chunks in the predicted area that have no <code>Chunk</code> yet and scores them:</p>
+<p><code>score = distance from the player&#39;s chunk − 0.5 × (offset · direction of travel) + (100 if outside the render area)</code></p>
+<p>Lower scores go first, so chunks inside the render area come before the predicted strip, nearer chunks before farther ones, and chunks ahead before chunks behind. At most <code>MAX_IN_FLIGHT</code> (6) requests are outstanding at once.</p>
+<h2 id="stale-results">Stale results<a class="anchor" href="#stale-results" aria-label="Link to this section">#</a></h2>
+<p>Each request carries a <code>token</code> from a running counter, also stored on the <code>Chunk</code>. When a result arrives, <code>receive()</code> always decrements the in-flight count, then drops the result if the chunk was disposed or reused in the meantime (<code>chunk.token !== res.token</code>).</p>
+<h2 id="pooling">Pooling<a class="anchor" href="#pooling" aria-label="Link to this section">#</a></h2>
+<p><code>ChunkPool</code> keeps disposed <code>Chunk</code> objects and their four 1,024-byte buffers for reuse, so streaming rarely allocates. The renderer pools its meshes and decoration sprites the same way (see <a href="rendering.html">Rendering</a>).</p>
+<h2 id="composition">Composition<a class="anchor" href="#composition" aria-label="Link to this section">#</a></h2>
+<p>A chunk keeps two copies of its data:</p>
+<ul>
+<li><code>baseTiles</code> and <code>baseDecos</code>: what the worker generated.</li>
+<li><code>tiles</code> and <code>decos</code>: what the game shows and collides with.</li>
+</ul>
+<p><code>WorldManager</code>&#39;s <code>compose</code> hook rebuilds the shown copy:</p>
+<ol>
+<li>Copy the base terrain.</li>
+<li>Stamp every live object that overlaps the chunk, in the order they were added (<code>WorldObject.stamp</code>).</li>
+<li>Remove decorations the player harvested, if the harvest record is from the current region visit and the plant has not grown back.</li>
+</ol>
+<p><code>ChunkManager.refresh(chunk)</code> re-runs composition and tells the renderer when an object is added, removed or changed, a chest is opened, or something is harvested.</p>
+<p><code>WorldManager.tileAt(gx, gy)</code> reads the composed data. It returns <code>null</code> for chunks that are not generated, and <code>isSolidAt</code> treats those as solid so the player cannot walk into unloaded ground.</p>
+<p>See also: <a href="world-generation.html">World generation</a>, <a href="objects-and-structures.html">Objects and structures</a>, <a href="architecture.html">Architecture</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="architecture.html"><small>Previous</small>Architecture</a><a class="next" href="world-generation.html"><small>Next</small>World generation</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#chunks">Chunks</a></li><li class="l2"><a href="#areas">Areas</a></li><li class="l2"><a href="#lifecycle">Lifecycle</a></li><li class="l2"><a href="#the-generation-queue">The generation queue</a></li><li class="l2"><a href="#stale-results">Stale results</a></li><li class="l2"><a href="#pooling">Pooling</a></li><li class="l2"><a href="#composition">Composition</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

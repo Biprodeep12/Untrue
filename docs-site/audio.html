@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html" class="current" aria-current="page">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Gameplay</p>
+    <article><h1 id="audio">Audio</h1>
+<p>Synthesised sound effects, generated music and weather ambience, all made with the Web Audio API; no audio files ship.</p>
+<h2 id="setup">Setup<a class="anchor" href="#setup" aria-label="Link to this section">#</a></h2>
+<p><code>AudioSystem</code> (<code>src/audio/AudioSystem.ts</code>) creates its <code>AudioContext</code> on the first key press or pointer press, because browsers block sound until the player interacts. Everything routes through two buses, music and effects, whose volumes come from the Settings tab (defaults: music 0.35, effects 0.6).</p>
+<p>A shared two-second white-noise buffer feeds the noise-based sounds.</p>
+<h2 id="sound-effects">Sound effects<a class="anchor" href="#sound-effects" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Sound</th>
+<th>When</th>
+<th>Made of</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>step</code></td>
+<td>Every 0.36 s walking, 0.25 s running</td>
+<td>Short low-passed noise</td>
+</tr>
+<tr>
+<td><code>chop</code></td>
+<td>Each axe strike while gathering (every 0.45 s)</td>
+<td>A falling triangle thump and band-passed noise</td>
+</tr>
+<tr>
+<td><code>mine</code></td>
+<td>Each pickaxe strike while gathering</td>
+<td>A metallic triangle ping and high-passed noise</td>
+</tr>
+<tr>
+<td><code>pickup</code></td>
+<td>Something gathered</td>
+<td>Two rising square blips</td>
+</tr>
+<tr>
+<td><code>swing</code></td>
+<td>A melee swing</td>
+<td>Band-passed noise sweeping down</td>
+</tr>
+<tr>
+<td><code>bow</code></td>
+<td>A bow shot</td>
+<td>A falling sawtooth twang</td>
+</tr>
+<tr>
+<td><code>hit</code></td>
+<td>Damage dealt to an enemy</td>
+<td>A low sine thud and noise</td>
+</tr>
+<tr>
+<td><code>hurt</code></td>
+<td>The player takes damage</td>
+<td>A falling square tone</td>
+</tr>
+<tr>
+<td><code>kill</code></td>
+<td>An enemy defeated</td>
+<td>Three falling blips</td>
+</tr>
+<tr>
+<td><code>dodge</code></td>
+<td>A dodge roll</td>
+<td>Band-passed noise sweeping up</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td>Level up</td>
+<td>A rising four-note arpeggio</td>
+</tr>
+<tr>
+<td><code>quest</code></td>
+<td>Quest complete</td>
+<td>A three-note chime</td>
+</tr>
+<tr>
+<td><code>chest</code></td>
+<td>Chest or treasure opened</td>
+<td>Two triangle notes</td>
+</tr>
+<tr>
+<td><code>ui</code></td>
+<td>Any button, slot or tab clicked</td>
+<td>A tiny click</td>
+</tr>
+<tr>
+<td><code>thunder</code></td>
+<td>A lightning strike</td>
+<td>Long low-passed noise</td>
+</tr>
+<tr>
+<td>Bell</td>
+<td>The Waking Monument crumbles</td>
+<td>Three strikes of inharmonic sine partials</td>
+</tr>
+</tbody></table></div>
+<h2 id="music">Music<a class="anchor" href="#music" aria-label="Link to this section">#</a></h2>
+<p>Music is generated one beat at a time (0.75 s per beat), scheduled slightly ahead so timing stays steady:</p>
+<ul>
+<li><strong>Scale</strong> follows the mood: major pentatonic by day, minor pentatonic at night, a Phrygian-flavoured scale in the desert, a Lydian-flavoured one in the snow.</li>
+<li><strong>Root</strong> moves between four roots every 16 beats, an octave lower at night.</li>
+<li><strong>Pad:</strong> a soft three-note chord at the start of every bar.</li>
+<li><strong>Melody:</strong> a plucked triangle note on about half the beats (fewer at night).</li>
+<li><strong>Danger:</strong> a low pulse every other beat while enemies are chasing or attacking the player.</li>
+</ul>
+<h2 id="ambience">Ambience<a class="anchor" href="#ambience" aria-label="Link to this section">#</a></h2>
+<p>A looping filtered noise source plays the weather: low-passed rain for rain and storms (louder in storms), and band-passed wind for sandstorms and blizzards. Its volume follows how strongly the weather is felt, and fades when the game is paused.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="living-world.html">living-world.md</a> · <a href="rendering.html">rendering.md</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="exploration.html"><small>Previous</small>Exploration</a><a class="next" href="story.html"><small>Next</small>The World That Forgets</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#setup">Setup</a></li><li class="l2"><a href="#sound-effects">Sound effects</a></li><li class="l2"><a href="#music">Music</a></li><li class="l2"><a href="#ambience">Ambience</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

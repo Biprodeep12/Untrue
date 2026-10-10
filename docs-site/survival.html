@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Survival · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html" class="current" aria-current="page">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Gameplay</p>
+    <article><h1 id="survival">Survival</h1>
+<p>How the player stays alive: vitals, stamina, gathering, items, the inventory, crafting, loot and light.</p>
+<h2 id="vitals">Vitals<a class="anchor" href="#vitals" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/Vitals.ts</code> keeps four bars: health, stamina, hunger and thirst. Hunger, thirst and stamina run from 0 to 100. Health runs from 0 to <code>maxHealth</code>, which starts at 100 and grows with level (see <a href="combat.html#progression">combat.md</a>).</p>
+<h3 id="drain">Drain<a class="anchor" href="#drain" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Bar</th>
+<th>Full drain at rest</th>
+<th>Multipliers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hunger</td>
+<td>600 s</td>
+<td>×1.5 while running, biome, weather</td>
+</tr>
+<tr>
+<td>Thirst</td>
+<td>420 s</td>
+<td>×1.5 while running, biome, weather</td>
+</tr>
+</tbody></table></div>
+<p>Biome multipliers (<code>BIOME_HUNGER</code>, <code>BIOME_THIRST</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Biome</th>
+<th>Hunger</th>
+<th>Thirst</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Forest</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Desert</td>
+<td>1</td>
+<td>1.6</td>
+</tr>
+<tr>
+<td>Snow</td>
+<td>1.4</td>
+<td>0.9</td>
+</tr>
+</tbody></table></div>
+<p>Weather multiplies these again; the table is in <a href="living-world.html#weather">living-world.md</a>.</p>
+<h3 id="health">Health<a class="anchor" href="#health" aria-label="Link to this section">#</a></h3>
+<p>Health changes once per frame from the sum of these rates:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hunger or thirst at 0</td>
+<td>−1.2 HP/s for each empty bar</td>
+</tr>
+<tr>
+<td>Hunger and thirst both above 40, not poisoned</td>
+<td>+0.6 HP/s</td>
+</tr>
+<tr>
+<td>Poisoned</td>
+<td>−2.5 HP/s</td>
+</tr>
+</tbody></table></div>
+<p>Starvation and healing never apply at the same time: any empty bar stops healing.</p>
+<h3 id="status-effects">Status effects<a class="anchor" href="#status-effects" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Effect</th>
+<th>Source</th>
+<th>Cure</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>poison</code></td>
+<td>−2.5 HP/s, stops healing</td>
+<td>Scorpion hits</td>
+<td>Antidote, or wait it out</td>
+</tr>
+<tr>
+<td><code>slow</code></td>
+<td>Movement speed ×0.55 (<code>SLOW_FACTOR</code>)</td>
+<td>Spider webs, Frost Golem ice</td>
+<td>Wait it out</td>
+</tr>
+</tbody></table></div>
+<p>Each status lasts a set number of seconds. A new hit refreshes it to whichever is longer.</p>
+<h3 id="collapse">Collapse<a class="anchor" href="#collapse" aria-label="Link to this section">#</a></h3>
+<p>When health reaches 0 the player collapses. <code>Game.collapse()</code> cancels gathering, calls <code>Vitals.revive()</code> and sends the player back to the origin. Revival sets:</p>
+<ul>
+<li>health to 60% of <code>maxHealth</code></li>
+<li>stamina to 100</li>
+<li>hunger and thirst to at least 50</li>
+<li>poison and slow to 0</li>
+</ul>
+<p>The player keeps everything they carry.</p>
+<h2 id="stamina">Stamina<a class="anchor" href="#stamina" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Use</th>
+<th>Cost</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Running</td>
+<td>18/s</td>
+<td>Needs stamina above 1. Blocking also stops running.</td>
+</tr>
+<tr>
+<td>Dodge roll</td>
+<td>20</td>
+<td>Needs 20 or more.</td>
+</tr>
+<tr>
+<td>Blocking a hit</td>
+<td>8 per blocked hit</td>
+<td>No stamina means the block fails.</td>
+</tr>
+<tr>
+<td>Gathering</td>
+<td>4 per completed gather</td>
+<td>Below 4 stamina, gathering takes twice as long.</td>
+</tr>
+</tbody></table></div>
+<p>Stamina recovers at 22/s while not running, or at 30% of that rate while hunger or thirst is empty.</p>
+<p>Movement speed is 5 tiles/s walking and 9 running (<code>WALK_SPEED</code>, <code>RUN_SPEED</code> in <code>src/config.ts</code>).</p>
+<h2 id="gathering">Gathering<a class="anchor" href="#gathering" aria-label="Link to this section">#</a></h2>
+<p>Press E facing a decoration, or standing on one. <code>src/systems/GatheringSystem.ts</code> checks the tile in front first, then the tile under the feet. Gathering runs while the player stands still; moving, taking a hit, attacking or dodging cancels it.</p>
+<p>Time is <code>seconds ÷ (1 + tool tier)</code>, doubled when stamina is below 4. Tools work automatically: the highest tier of the right kind anywhere in the bag counts.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Decoration</th>
+<th>Base time</th>
+<th>Tool</th>
+<th>Min tier</th>
+<th>Drops</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Oak, autumn oak, pine, snowy pine, palm</td>
+<td>4 s</td>
+<td>axe</td>
+<td>0</td>
+<td>Wood ×(1–2 + tier)</td>
+</tr>
+<tr>
+<td>Dead bush</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Wood ×1</td>
+</tr>
+<tr>
+<td>Bush</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Berries ×1–3, 30% chance of 1 Herb</td>
+</tr>
+<tr>
+<td>Flowers</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Herb ×1–2</td>
+</tr>
+<tr>
+<td>Mushroom</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Mushroom ×1</td>
+</tr>
+<tr>
+<td>Garden vegetables (villages)</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Vegetables ×1–2, Herb (20%)</td>
+</tr>
+<tr>
+<td>Cactus</td>
+<td>1.2 s</td>
+<td>–</td>
+<td>0</td>
+<td>Cactus Fruit ×1–2</td>
+</tr>
+<tr>
+<td>Stone, red rock, snowy rock</td>
+<td>3.5 s</td>
+<td>pickaxe</td>
+<td>0</td>
+<td>Stone ×(1–2 + tier)</td>
+</tr>
+<tr>
+<td>Ore</td>
+<td>4 s</td>
+<td>pickaxe</td>
+<td>1</td>
+<td>1–2 of: Coal (55%) or Iron Ore (45%); with tier 2, 15% become Gold Ore</td>
+</tr>
+<tr>
+<td>Crystal</td>
+<td>5 s</td>
+<td>pickaxe</td>
+<td>2</td>
+<td>Crystal ×1; 8% chance of a Gemstone too</td>
+</tr>
+<tr>
+<td>Barrel</td>
+<td>0.8 s</td>
+<td>–</td>
+<td>0</td>
+<td>Barrel loot (below)</td>
+</tr>
+<tr>
+<td>Buried treasure (X mark)</td>
+<td>1.6 s</td>
+<td>–</td>
+<td>0</td>
+<td>Coin ×10–40 plus a chest roll at band 2</td>
+</tr>
+<tr>
+<td>Meteorite</td>
+<td>5 s</td>
+<td>pickaxe</td>
+<td>1</td>
+<td>Star Metal ×(2–3 + tier)</td>
+</tr>
+</tbody></table></div>
+<p>Below the minimum tier the prompt reads &quot;Needs a pickaxe&quot; or &quot;Needs an iron pickaxe&quot;.</p>
+<p>Drops are seeded by the tile and the region&#39;s visit counter, so the same plant gives the same drop until its region regenerates. Gathered decorations are removed through <code>WorldManager.harvest()</code>. They stay gone until the region regenerates, except plants that regrow (<a href="living-world.html#regrowth">living-world.md</a>).</p>
+<p>If the bag is full, the overflow is lost and a notice says so.</p>
+<h3 id="drinking">Drinking<a class="anchor" href="#drinking" aria-label="Link to this section">#</a></h3>
+<p>Facing water with nothing on it, E drinks:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Tile</th>
+<th>Thirst</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Water, deep water</td>
+<td>+25</td>
+</tr>
+<tr>
+<td>Ice</td>
+<td>+12</td>
+</tr>
+</tbody></table></div>
+<h2 id="swimming">Swimming<a class="anchor" href="#swimming" aria-label="Link to this section">#</a></h2>
+<p>Rivers and lakes can be swum (<code>Game.walker</code> lets the player through water tiles with nothing on them; enemies, villagers and the world&#39;s own collision still treat water as solid).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Water</th>
+<th>Speed</th>
+<th>Stamina</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Shallow (<code>Water</code>)</td>
+<td>55%</td>
+<td>Recovers as normal</td>
+</tr>
+<tr>
+<td>Deep (<code>WaterDeep</code>)</td>
+<td>42%</td>
+<td>Drains as if running (18/s), and hunger and thirst drain 1.5×</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>No running, dodging or blocking while swimming.</li>
+<li>Out of stamina in deep water, the player starts to drown: 4 health a second, with a warning every 4 seconds, until they reach shallow water or land.</li>
+<li>Only the head and shoulders show, bobbing, with splashes while moving.</li>
+<li>Arrows and other shots fly over water.</li>
+<li>Bridges cross rivers every so often; see <a href="world-generation.html#bridges">world-generation.md</a>.</li>
+</ul>
+<h2 id="items">Items<a class="anchor" href="#items" aria-label="Link to this section">#</a></h2>
+<p><code>src/items/Items.ts</code>. The default stack is 99. Food effects apply through <code>Vitals.consume()</code> when used.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Rarity</th>
+<th>Stack</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Wood</td>
+<td>Common</td>
+<td>99</td>
+<td>Crafting</td>
+</tr>
+<tr>
+<td>Stone</td>
+<td>Common</td>
+<td>99</td>
+<td>Crafting</td>
+</tr>
+<tr>
+<td>Coal</td>
+<td>Common</td>
+<td>99</td>
+<td>Iron ingots, torches</td>
+</tr>
+<tr>
+<td>Iron Ore</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Iron ingots</td>
+</tr>
+<tr>
+<td>Gold Ore</td>
+<td>Rare</td>
+<td>99</td>
+<td>Sell (12c)</td>
+</tr>
+<tr>
+<td>Crystal</td>
+<td>Epic</td>
+<td>99</td>
+<td>Sell (35c)</td>
+</tr>
+<tr>
+<td>Herb</td>
+<td>Common</td>
+<td>99</td>
+<td>Bandages, stew, antidote</td>
+</tr>
+<tr>
+<td>Berries</td>
+<td>Common</td>
+<td>99</td>
+<td>Food: +12 hunger, +4 thirst</td>
+</tr>
+<tr>
+<td>Mushroom</td>
+<td>Common</td>
+<td>99</td>
+<td>Food: +10 hunger</td>
+</tr>
+<tr>
+<td>Vegetables</td>
+<td>Common</td>
+<td>99</td>
+<td>Food: +14 hunger, +4 thirst; sells for 2c</td>
+</tr>
+<tr>
+<td>Cactus Fruit</td>
+<td>Common</td>
+<td>99</td>
+<td>Food: +6 hunger, +20 thirst</td>
+</tr>
+<tr>
+<td>Roast Mushroom</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Food: +28 hunger</td>
+</tr>
+<tr>
+<td>Forest Stew</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Food: +45 hunger, +15 thirst</td>
+</tr>
+<tr>
+<td>Herbal Bandage</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>+25 health</td>
+</tr>
+<tr>
+<td>Health Potion</td>
+<td>Rare</td>
+<td>99</td>
+<td>+60 health</td>
+</tr>
+<tr>
+<td>Iron Ingot</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Iron tools, weapons, armor, lantern</td>
+</tr>
+<tr>
+<td>Stone Axe</td>
+<td>Common</td>
+<td>1</td>
+<td>Axe tier 1</td>
+</tr>
+<tr>
+<td>Stone Pickaxe</td>
+<td>Common</td>
+<td>1</td>
+<td>Pickaxe tier 1</td>
+</tr>
+<tr>
+<td>Iron Axe</td>
+<td>Uncommon</td>
+<td>1</td>
+<td>Axe tier 2</td>
+</tr>
+<tr>
+<td>Iron Pickaxe</td>
+<td>Rare</td>
+<td>1</td>
+<td>Pickaxe tier 2</td>
+</tr>
+<tr>
+<td>Gemstone</td>
+<td>Epic</td>
+<td>99</td>
+<td>Sell (60c)</td>
+</tr>
+<tr>
+<td>Golden Idol</td>
+<td>Legendary</td>
+<td>99</td>
+<td>Sell (250c)</td>
+</tr>
+<tr>
+<td>Wooden Sword</td>
+<td>Common</td>
+<td>1</td>
+<td>Weapon (see <a href="combat.html#weapons">combat.md</a>)</td>
+</tr>
+<tr>
+<td>Iron Sword</td>
+<td>Rare</td>
+<td>1</td>
+<td>Weapon</td>
+</tr>
+<tr>
+<td>Hunting Bow</td>
+<td>Uncommon</td>
+<td>1</td>
+<td>Weapon, uses arrows</td>
+</tr>
+<tr>
+<td>Arrow</td>
+<td>Common</td>
+<td>99</td>
+<td>Bow ammunition</td>
+</tr>
+<tr>
+<td>Leather Cap</td>
+<td>Common</td>
+<td>1</td>
+<td>Head armour, 4%</td>
+</tr>
+<tr>
+<td>Leather Tunic</td>
+<td>Uncommon</td>
+<td>1</td>
+<td>Chest armour, 8%</td>
+</tr>
+<tr>
+<td>Leather Trousers</td>
+<td>Uncommon</td>
+<td>1</td>
+<td>Leg armour, 5%</td>
+</tr>
+<tr>
+<td>Leather Boots</td>
+<td>Common</td>
+<td>1</td>
+<td>Foot armour, 3%</td>
+</tr>
+<tr>
+<td>Iron Helmet</td>
+<td>Rare</td>
+<td>1</td>
+<td>Head armour, 8%</td>
+</tr>
+<tr>
+<td>Iron Chestplate</td>
+<td>Epic</td>
+<td>1</td>
+<td>Chest armour, 16%</td>
+</tr>
+<tr>
+<td>Iron Greaves</td>
+<td>Rare</td>
+<td>1</td>
+<td>Leg armour, 10%</td>
+</tr>
+<tr>
+<td>Iron Boots</td>
+<td>Rare</td>
+<td>1</td>
+<td>Foot armour, 6%</td>
+</tr>
+<tr>
+<td>Wooden Shield</td>
+<td>Common</td>
+<td>1</td>
+<td>Off hand: blocks 85% of a blow for 6 stamina</td>
+</tr>
+<tr>
+<td>Iron Shield</td>
+<td>Rare</td>
+<td>1</td>
+<td>Off hand: blocks 95% of a blow for 4 stamina</td>
+</tr>
+<tr>
+<td>Raw Meat</td>
+<td>Common</td>
+<td>99</td>
+<td>Food: +8 hunger</td>
+</tr>
+<tr>
+<td>Cooked Meat</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Food: +35 hunger, +5 health</td>
+</tr>
+<tr>
+<td>Hide</td>
+<td>Common</td>
+<td>99</td>
+<td>Leather armor, iron armor</td>
+</tr>
+<tr>
+<td>Spider Silk</td>
+<td>Common</td>
+<td>99</td>
+<td>Bow</td>
+</tr>
+<tr>
+<td>Chitin</td>
+<td>Common</td>
+<td>99</td>
+<td>Sell (3c)</td>
+</tr>
+<tr>
+<td>Venom Sac</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Sell (6c)</td>
+</tr>
+<tr>
+<td>Ice Shard</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Sell (6c)</td>
+</tr>
+<tr>
+<td>Bone</td>
+<td>Common</td>
+<td>99</td>
+<td>Sell (1c)</td>
+</tr>
+<tr>
+<td>Antidote</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>+5 health, cures poison</td>
+</tr>
+<tr>
+<td>Coin</td>
+<td>Common</td>
+<td>999</td>
+<td>Currency</td>
+</tr>
+<tr>
+<td>Torch</td>
+<td>Common</td>
+<td>99</td>
+<td>Light, radius 5</td>
+</tr>
+<tr>
+<td>Lantern</td>
+<td>Rare</td>
+<td>1</td>
+<td>Light, radius 7, never burns out</td>
+</tr>
+<tr>
+<td>Spirit Essence</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>Lantern</td>
+</tr>
+<tr>
+<td>Wanderer&#39;s Lantern</td>
+<td>Legendary</td>
+<td>1</td>
+<td>Light, radius 6, and lantern sight (see <a href="story.html#lantern-memories">story.md</a>)</td>
+</tr>
+<tr>
+<td>Star Metal</td>
+<td>Epic</td>
+<td>99</td>
+<td>Sell (45c)</td>
+</tr>
+</tbody></table></div>
+<p>Sell prices come from <code>SELL_PRICES</code> in <code>src/systems/TradeSystem.ts</code>. Items without a price can&#39;t be sold.</p>
+<h2 id="inventory-and-hotbar">Inventory and hotbar<a class="anchor" href="#inventory-and-hotbar" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/InventorySystem.ts</code> has 24 slots (<code>INVENTORY_SIZE</code>). The first 8 (<code>HOTBAR_SIZE</code>) form the hotbar.</p>
+<ul>
+<li><code>add()</code> tops up existing stacks first, then fills empty slots, and returns what didn&#39;t fit.</li>
+<li><code>remove()</code> takes from the last slots first, and only if the whole amount is there.</li>
+<li>In the menu, click a slot and then another to move it. Equal stacks merge; anything else swaps.</li>
+<li>Weapons carry <code>durability</code>, which drops by one per attack. At 0 the weapon breaks and its slot empties.</li>
+</ul>
+<h3 id="weight">Weight<a class="anchor" href="#weight" aria-label="Link to this section">#</a></h3>
+<p>Every item has a carry weight (<code>weightOf</code> in <code>src/items/Items.ts</code>): set per item for some (coin 0.01, arrow 0.1, herb 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, lantern 1, star metal 1.5, idol 2, the Wanderer&#39;s Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10) and shields (wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.</p>
+<p>The player can carry 100, plus 25 per Pack Mule rank. Over that the player is <strong>overloaded</strong>: 60% speed and no running, with an &quot;overloaded&quot; badge on the HUD. The bag shows the load under the grid.</p>
+<h3 id="dropping-and-picking-up">Dropping and picking up<a class="anchor" href="#dropping-and-picking-up" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Q</strong> drops the selected hotbar stack in front of the player; the bag&#39;s <strong>Drop</strong> button drops the selected stack. Nothing can be dropped indoors, and the Wanderer&#39;s Lantern won&#39;t leave your hand.</li>
+<li>Dropped items lie on the ground as bobbing icons (<code>src/world/GroundItems.ts</code>). Walking over one picks it up, once the player has first stepped 1.4 tiles away from it, so a drop isn&#39;t picked straight back up. A full bag leaves the rest on the ground.</li>
+<li>Weapons keep their durability on the ground. Up to 300 dropped stacks are kept (the oldest go first), and they are saved with the world.</li>
+<li>Tools are never equipped: the best one carried applies (<code>toolTier()</code>).</li>
+</ul>
+<h3 id="equipment">Equipment<a class="anchor" href="#equipment" aria-label="Link to this section">#</a></h3>
+<p>The bag&#39;s left panel holds the <strong>equipment</strong>: head, chest, legs and feet down one side, the off hand on the other, and between them a preview of the player wearing it all, with the armour total underneath (<code>Inventory.equipment</code>).</p>
+<ul>
+<li><strong>Equip:</strong> select an item in the bag and press <strong>Equip</strong> (or <strong>Hold in off hand</strong>), or select it and click its slot. Whatever was there goes back to the bag. Click a filled slot to take it off.</li>
+<li><strong>Armour</strong> only protects while worn: every piece adds its share, up to 60% in all (<code>armor()</code>). Equipped items still count toward carry weight.</li>
+<li><strong>Off hand:</strong> a shield (stronger blocks, see <a href="combat.html#taking-damage">combat.md</a>), or a torch or lantern. A whole stack of torches goes into the off hand, and burns down from there.</li>
+<li><strong>On the player:</strong> each worn piece is drawn over the figure in every direction and walk frame: leather in browns, iron in steel with a red crest. The off-hand item is held in the other hand (a shield at the side, a torch up, a lantern hanging), and the shield comes up in front while blocking.</li>
+<li>Saves keep what is worn. Older saves put on the best armour carried for each slot.</li>
+</ul>
+<p>Keys 1–8 select a hotbar slot. F, or tapping the selected slot again, uses it. Food is eaten; tools and other items just show a notice. The selected slot is also the weapon used for attacks.</p>
+<h2 id="crafting">Crafting<a class="anchor" href="#crafting" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/CraftingSystem.ts</code>. The player never builds, so stations are found in the world instead:</p>
+<ul>
+<li><strong>Campfire:</strong> found in camps and the Village of Graves.</li>
+<li><strong>Anvil:</strong> found in villages and castles.</li>
+</ul>
+<p>A station counts if its decoration is within 3 tiles of the player (<code>STATION_RANGE</code>). &quot;By hand&quot; recipes work anywhere. The menu&#39;s Crafting tab lists every recipe, what you have against what you need, and the station each requires.</p>
+<p>Crafting removes the inputs, then adds the output. If the output doesn&#39;t fit, everything is put back and the result is <code>full</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Output</th>
+<th>Count</th>
+<th>Station</th>
+<th>Inputs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Stone Axe</td>
+<td>1</td>
+<td>By hand</td>
+<td>3 Wood, 2 Stone</td>
+</tr>
+<tr>
+<td>Stone Pickaxe</td>
+<td>1</td>
+<td>By hand</td>
+<td>3 Wood, 3 Stone</td>
+</tr>
+<tr>
+<td>Herbal Bandage</td>
+<td>1</td>
+<td>By hand</td>
+<td>2 Herb</td>
+</tr>
+<tr>
+<td>Roast Mushroom</td>
+<td>1</td>
+<td>Campfire</td>
+<td>2 Mushroom</td>
+</tr>
+<tr>
+<td>Forest Stew</td>
+<td>1</td>
+<td>Campfire</td>
+<td>2 Mushroom, 1 Herb, 1 Berries</td>
+</tr>
+<tr>
+<td>Iron Ingot</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Iron Ore, 1 Coal</td>
+</tr>
+<tr>
+<td>Iron Axe</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Iron Ingot, 2 Wood</td>
+</tr>
+<tr>
+<td>Iron Pickaxe</td>
+<td>1</td>
+<td>Anvil</td>
+<td>3 Iron Ingot, 2 Wood</td>
+</tr>
+<tr>
+<td>Wooden Sword</td>
+<td>1</td>
+<td>By hand</td>
+<td>5 Wood</td>
+</tr>
+<tr>
+<td>Hunting Bow</td>
+<td>1</td>
+<td>By hand</td>
+<td>3 Wood, 2 Spider Silk</td>
+</tr>
+<tr>
+<td>Arrow</td>
+<td>6</td>
+<td>By hand</td>
+<td>1 Wood, 1 Stone</td>
+</tr>
+<tr>
+<td>Leather Tunic</td>
+<td>1</td>
+<td>By hand</td>
+<td>5 Hide</td>
+</tr>
+<tr>
+<td>Leather Cap</td>
+<td>1</td>
+<td>By hand</td>
+<td>2 Hide</td>
+</tr>
+<tr>
+<td>Leather Trousers</td>
+<td>1</td>
+<td>By hand</td>
+<td>3 Hide</td>
+</tr>
+<tr>
+<td>Leather Boots</td>
+<td>1</td>
+<td>By hand</td>
+<td>2 Hide</td>
+</tr>
+<tr>
+<td>Wooden Shield</td>
+<td>1</td>
+<td>By hand</td>
+<td>6 Wood</td>
+</tr>
+<tr>
+<td>Antidote</td>
+<td>1</td>
+<td>By hand</td>
+<td>2 Herb, 1 Berries</td>
+</tr>
+<tr>
+<td>Cooked Meat</td>
+<td>1</td>
+<td>Campfire</td>
+<td>1 Raw Meat</td>
+</tr>
+<tr>
+<td>Iron Sword</td>
+<td>1</td>
+<td>Anvil</td>
+<td>3 Iron Ingot, 1 Wood</td>
+</tr>
+<tr>
+<td>Iron Chestplate</td>
+<td>1</td>
+<td>Anvil</td>
+<td>5 Iron Ingot, 2 Hide</td>
+</tr>
+<tr>
+<td>Iron Helmet</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Iron Ingot</td>
+</tr>
+<tr>
+<td>Iron Greaves</td>
+<td>1</td>
+<td>Anvil</td>
+<td>3 Iron Ingot, 1 Hide</td>
+</tr>
+<tr>
+<td>Iron Boots</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Iron Ingot</td>
+</tr>
+<tr>
+<td>Iron Shield</td>
+<td>1</td>
+<td>Anvil</td>
+<td>3 Iron Ingot, 2 Wood</td>
+</tr>
+<tr>
+<td>Torch</td>
+<td>3</td>
+<td>By hand</td>
+<td>1 Wood, 1 Coal</td>
+</tr>
+<tr>
+<td>Lantern</td>
+<td>1</td>
+<td>Anvil</td>
+<td>1 Iron Ingot, 2 Spirit Essence</td>
+</tr>
+</tbody></table></div>
+<h2 id="loot">Loot<a class="anchor" href="#loot" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/Loot.ts</code>.</p>
+<h3 id="chests">Chests<a class="anchor" href="#chests" aria-label="Link to this section">#</a></h3>
+<p>A chest makes 2–4 rolls, plus one more per two difficulty bands (<code>floor(band / 2)</code>). Each roll picks a rarity from the spec&#39;s chest table, then an item from that rarity&#39;s pool.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rarity</th>
+<th>Chance</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Common</td>
+<td>60%</td>
+</tr>
+<tr>
+<td>Uncommon</td>
+<td>25%</td>
+</tr>
+<tr>
+<td>Rare</td>
+<td>10%</td>
+</tr>
+<tr>
+<td>Epic</td>
+<td>4%</td>
+</tr>
+<tr>
+<td>Legendary</td>
+<td>1%</td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rarity</th>
+<th>Pool (count range)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Common</td>
+<td>Wood 2–5, Stone 2–5, Berries 2–4, Herb 1–3, Coal 1–3, Mushroom 1–3, Arrow 3–8</td>
+</tr>
+<tr>
+<td>Uncommon</td>
+<td>Iron Ore 1–3, Herbal Bandage 1–2, Roast Mushroom 1–2, Iron Ingot 1–2, Stone Axe, Wooden Sword, Antidote 1–2, Leather Tunic, Leather Cap, Leather Boots, Wooden Shield</td>
+</tr>
+<tr>
+<td>Rare</td>
+<td>Gold Ore 1–2, Health Potion, Forest Stew 1–2, Stone Pickaxe, Hunting Bow, Leather Trousers, Iron Helmet, Iron Boots</td>
+</tr>
+<tr>
+<td>Epic</td>
+<td>Crystal, Gemstone, Iron Pickaxe, Iron Axe, Iron Sword, Iron Chestplate, Iron Greaves, Iron Shield</td>
+</tr>
+<tr>
+<td>Legendary</td>
+<td>Golden Idol</td>
+</tr>
+</tbody></table></div>
+<p>Chest contents are seeded by the chest&#39;s object id and layout index, so a chest always holds the same loot.</p>
+<p><strong>Chests never refill.</strong> Opening one marks its object&#39;s anchor in <code>WorldManager.lootedAnchors</code>. Every chest that later regenerates from that anchor starts open and empty (<code>emptyChests</code>). An open chest shows as <code>ChestOpen</code> and answers &quot;Already looted&quot;.</p>
+<h3 id="barrels">Barrels<a class="anchor" href="#barrels" aria-label="Link to this section">#</a></h3>
+<p>Breaking a barrel gives nothing 35% of the time. Otherwise it gives one roll: Common (85%) or Uncommon (15%).</p>
+<h3 id="buried-treasure">Buried treasure<a class="anchor" href="#buried-treasure" aria-label="Link to this section">#</a></h3>
+<p>Digging up an X gives 10–40 coins plus a chest roll at band 2. Treasure comes from the treasure world event (<a href="living-world.html#world-events">living-world.md</a>).</p>
+<h3 id="enemy-drops">Enemy drops<a class="anchor" href="#enemy-drops" aria-label="Link to this section">#</a></h3>
+<p>See <a href="combat.html#enemies">combat.md</a>.</p>
+<h2 id="light">Light<a class="anchor" href="#light" aria-label="Link to this section">#</a></h2>
+<p>At night the player carries a light radius (<code>LivingWorld.playerLight()</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Radius (tiles)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Nothing (night eyes)</td>
+<td>2.4</td>
+</tr>
+<tr>
+<td>Torch</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Wanderer&#39;s Lantern (unless the story has put it out)</td>
+<td>6</td>
+</tr>
+<tr>
+<td>Lantern</td>
+<td>7</td>
+</tr>
+</tbody></table></div>
+<p>The largest radius applies.</p>
+<p><strong>Torches burn down:</strong> for every 2 in-game hours with darkness above 0.5, one torch is used up, unless a lantern is already lighting the way: a Lantern, or a lit Wanderer&#39;s Lantern.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="combat.html">combat.md</a> · <a href="living-world.html">living-world.md</a> · <a href="story.html">story.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="saves.html"><small>Previous</small>Saves</a><a class="next" href="combat.html"><small>Next</small>Combat</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#vitals">Vitals</a></li><li class="l3"><a href="#drain">Drain</a></li><li class="l3"><a href="#health">Health</a></li><li class="l3"><a href="#status-effects">Status effects</a></li><li class="l3"><a href="#collapse">Collapse</a></li><li class="l2"><a href="#stamina">Stamina</a></li><li class="l2"><a href="#gathering">Gathering</a></li><li class="l3"><a href="#drinking">Drinking</a></li><li class="l2"><a href="#swimming">Swimming</a></li><li class="l2"><a href="#items">Items</a></li><li class="l2"><a href="#inventory-and-hotbar">Inventory and hotbar</a></li><li class="l3"><a href="#weight">Weight</a></li><li class="l3"><a href="#dropping-and-picking-up">Dropping and picking up</a></li><li class="l3"><a href="#equipment">Equipment</a></li><li class="l2"><a href="#crafting">Crafting</a></li><li class="l2"><a href="#loot">Loot</a></li><li class="l3"><a href="#chests">Chests</a></li><li class="l3"><a href="#barrels">Barrels</a></li><li class="l3"><a href="#buried-treasure">Buried treasure</a></li><li class="l3"><a href="#enemy-drops">Enemy drops</a></li><li class="l2"><a href="#light">Light</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

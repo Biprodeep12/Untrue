@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exploration · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html" class="current" aria-current="page">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Gameplay</p>
+    <article><h1 id="exploration">Exploration</h1>
+<p>The world map with fog of war, map markers, the compass, and rewards for exploring (spec 6.4).</p>
+<h2 id="fog-of-war">Fog of war<a class="anchor" href="#fog-of-war" aria-label="Link to this section">#</a></h2>
+<p><code>ExplorationSystem</code> (<code>src/systems/ExplorationSystem.ts</code>) remembers every chunk the player has seen. Each frame it walks the render area (<code>ChunkManager.renderRect</code>) and records any chunk not yet seen, keyed by its chunk key, with the biome palette it had at that moment (<code>paletteOf(type, variant) + 1</code>).</p>
+<p>Seen chunks stay on the map after the world unloads them. Biome types are fixed per area (see <a href="world-generation.html">world-generation.md</a>), so the recorded colours stay accurate even when the area regenerates.</p>
+<p>Every <code>EXPLORE_STEP</code> (50) newly seen chunks grants <code>EXPLORE_XP</code> (20) experience and a notification.</p>
+<h2 id="the-map">The map<a class="anchor" href="#the-map" aria-label="Link to this section">#</a></h2>
+<p>The menu&#39;s Map tab (<code>src/ui/MapView.ts</code>), also opened with <strong>M</strong>, draws on a canvas:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Drawn as</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unexplored</td>
+<td>Dark background</td>
+</tr>
+<tr>
+<td>Explored chunks</td>
+<td>A square per chunk in its biome colour</td>
+</tr>
+<tr>
+<td>Forgotten places (lantern memories)</td>
+<td>Dashed blue outlines</td>
+</tr>
+<tr>
+<td>Discovered places still standing</td>
+<td>Cream dots, labelled when zoomed in</td>
+</tr>
+<tr>
+<td>Story places</td>
+<td>Larger gold dots, always labelled</td>
+</tr>
+</tbody></table></div>
+<p>Discovered places come from <code>WorldManager.known</code>, a register of every place the player has found that is still standing, loaded or not. It is saved, so the map keeps every dot across reloads. When a known place regenerates after a reload (same region visit), it comes back already discovered, with no second &quot;Discovered&quot; notice or XP. When it is discarded, it leaves the register and the lantern remembers it. A known place that never comes back once its whole neighbourhood is loaded (its area changed while the game was closed) is also turned into a lantern memory.
+| The story&#39;s next destination | A gold star, even before it is explored |
+| Markers | Red pins; the tracked one is brighter |
+| The player | A white dot |</p>
+<p>Drag to pan, scroll to zoom (2 to 40 pixels per chunk, opening at 16). The tile coordinates under the cursor show below the map. &quot;Centre on me&quot; recentres on the player.</p>
+<h2 id="markers">Markers<a class="anchor" href="#markers" aria-label="Link to this section">#</a></h2>
+<p>Clicking the map without dragging drops a marker there, named &quot;Marker N&quot;. The list beside the map tracks or removes each one. A tracked marker gets a line with a direction arrow in the quest tracker.</p>
+<h2 id="compass">Compass<a class="anchor" href="#compass" aria-label="Link to this section">#</a></h2>
+<p>The compass sits at the top left of the HUD. North is always up (the view never rotates). The needle points toward the story&#39;s current objective, or, if there is none, the tracked marker. Next to it are the player&#39;s tile coordinates and the destination&#39;s name.</p>
+<h2 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h2>
+<p>Explored chunks (as flat key/value pairs), markers and the tracked marker are saved with the game; see <a href="saves.html">saves.md</a>.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="story.html">story.md</a> · <a href="living-world.html">living-world.md</a> · <a href="rendering.html">rendering.md</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="buildings-and-interiors.html"><small>Previous</small>Buildings and interiors</a><a class="next" href="audio.html"><small>Next</small>Audio</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#fog-of-war">Fog of war</a></li><li class="l2"><a href="#the-map">The map</a></li><li class="l2"><a href="#markers">Markers</a></li><li class="l2"><a href="#compass">Compass</a></li><li class="l2"><a href="#saving">Saving</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

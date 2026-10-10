@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Combat · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html" class="current" aria-current="page">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Gameplay</p>
+    <article><h1 id="combat">Combat</h1>
+<p>Attacks, defence, weapons, enemies and their AI, spawning, guarded places, and progression.</p>
+<p>Code: <code>src/systems/CombatSystem.ts</code>, <code>src/entities/Enemy.ts</code>, <code>src/entities/Species.ts</code>, <code>src/generation/EnemyGenerator.ts</code>, <code>src/game/Player.ts</code>, <code>src/systems/Progression.ts</code>.</p>
+<h2 id="controls">Controls<a class="anchor" href="#controls" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Keyboard and mouse</th>
+<th>Touch</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Attack</td>
+<td>Left click (toward the mouse) or J (the way you face)</td>
+<td>Hit</td>
+</tr>
+<tr>
+<td>Block</td>
+<td>Hold right click or K</td>
+<td>–</td>
+</tr>
+<tr>
+<td>Dodge roll</td>
+<td>Space</td>
+<td>Roll</td>
+</tr>
+<tr>
+<td>Choose weapon</td>
+<td>1–8 selects the hotbar slot</td>
+<td>Tap a slot</td>
+</tr>
+</tbody></table></div>
+<p>Attacking with the mouse turns the player toward the cursor. The weapon is whatever sits in the selected hotbar slot; anything else counts as fists.</p>
+<h2 id="damage">Damage<a class="anchor" href="#damage" aria-label="Link to this section">#</a></h2>
+<h3 id="dealing-damage">Dealing damage<a class="anchor" href="#dealing-damage" aria-label="Link to this section">#</a></h3>
+<p><code>playerHitDamage(base, levelBonus, crit) = round(base × levelBonus × (crit ? 2 : 1))</code></p>
+<ul>
+<li><strong>Crit chance:</strong> 10% per hit (<code>CRIT_CHANCE</code>). A crit doubles the damage.</li>
+<li><strong>Level bonus:</strong> see <a href="#progression">Progression</a>.</li>
+<li><strong>Melee arc:</strong> a swing hits every enemy within <code>reach + 0.4</code> tiles and within 60° either side of the swing direction. Enemies closer than 0.3 tiles are always hit.</li>
+<li><strong>Knockback:</strong> each hit pushes the enemy 0.35 tiles along the swing, unless that spot is solid.</li>
+<li><strong>Burrowed enemies</strong> can&#39;t be hit.</li>
+</ul>
+<h3 id="taking-damage">Taking damage<a class="anchor" href="#taking-damage" aria-label="Link to this section">#</a></h3>
+<p><code>incomingDamage(raw, armor, blocked, pass) = max(1, round(raw × (1 − armor) × (blocked ? pass : 1)))</code></p>
+<ul>
+<li><strong>Armor:</strong> the pieces worn add up (see <a href="survival.html#equipment">survival.md</a>), to at most 60%. A full leather set gives 20%, a full iron set 40%.</li>
+<li><strong>Blocking:</strong> without a shield, absorbs 70% of a hit (<code>pass</code> 0.3) and costs 8 stamina. A <strong>Wooden Shield</strong> in the off hand absorbs 85% for 6 stamina; an <strong>Iron Shield</strong> 95% for 4. While blocking, the shield is raised in front of the player. It only works if the player faces the attacker and has the stamina. Blocking also halves movement speed and stops running, and a blocked hit inflicts no status effect.</li>
+<li><strong>After a hit:</strong> the player is knocked back 0.45 tiles and can&#39;t be hit again for 0.6 s (the sprite blinks).</li>
+<li><strong>Dodge roll:</strong> a 0.18 s dash at 15 tiles/s, during which the player can&#39;t be hit. It costs 20 stamina and has a 0.7 s cooldown.</li>
+<li><strong>Projectiles:</strong> enemy projectiles deal 80% of the enemy&#39;s damage.</li>
+</ul>
+<h2 id="weapons">Weapons<a class="anchor" href="#weapons" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Weapon</th>
+<th>Kind</th>
+<th>Damage</th>
+<th>Reach / range</th>
+<th>Cooldown</th>
+<th>Durability</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Fists</td>
+<td>melee</td>
+<td>5</td>
+<td>1.1</td>
+<td>0.45 s</td>
+<td>–</td>
+</tr>
+<tr>
+<td>Wooden Sword</td>
+<td>melee</td>
+<td>9</td>
+<td>1.4</td>
+<td>0.45 s</td>
+<td>60</td>
+</tr>
+<tr>
+<td>Iron Sword</td>
+<td>melee</td>
+<td>20</td>
+<td>1.6</td>
+<td>0.4 s</td>
+<td>220</td>
+</tr>
+<tr>
+<td>Hunting Bow</td>
+<td>bow</td>
+<td>12</td>
+<td>9</td>
+<td>0.65 s</td>
+<td>140</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><strong>Durability:</strong> each attack with a weapon costs one point. At 0 it breaks and a notice says so.</li>
+<li><strong>Bows:</strong> each shot uses one Arrow from the bag. Without arrows the attack fails with &quot;No arrows&quot;. Arrows fly at 14 tiles/s and stop at their range or at anything solid. They can crit like melee hits.</li>
+</ul>
+<h2 id="enemies">Enemies<a class="anchor" href="#enemies" aria-label="Link to this section">#</a></h2>
+<p>Stats below are at band 0. &quot;Aggro&quot; is the distance at which the enemy notices the player; &quot;drops&quot; are (count, chance).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Species</th>
+<th>Biomes</th>
+<th>HP</th>
+<th>Dmg</th>
+<th>Speed</th>
+<th>Aggro</th>
+<th>Behaviour</th>
+<th>Drops</th>
+<th>XP</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Wolf</td>
+<td>Forest, Snow</td>
+<td>30</td>
+<td>8</td>
+<td>4.4</td>
+<td>7</td>
+<td>Packs of 2–3 that alert each other; flees below 20% HP</td>
+<td>Raw Meat 1–2 (100%), Hide 1 (70%)</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Bear</td>
+<td>Forest</td>
+<td>85</td>
+<td>18</td>
+<td>3.1</td>
+<td>5</td>
+<td>Slow, heavy hitter</td>
+<td>Raw Meat 2–3, Hide 1–2</td>
+<td>30</td>
+</tr>
+<tr>
+<td>Spider</td>
+<td>Forest</td>
+<td>22</td>
+<td>6</td>
+<td>3.7</td>
+<td>6.5</td>
+<td>Ranged web (range 5); hits slow you for 2.5 s</td>
+<td>Silk 1–2, Venom 1 (15%)</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Scorpion</td>
+<td>Desert</td>
+<td>35</td>
+<td>9</td>
+<td>3.4</td>
+<td>6</td>
+<td>Hits poison you for 4 s</td>
+<td>Chitin 1, Venom 1 (50%)</td>
+<td>14</td>
+</tr>
+<tr>
+<td>Sand Lurker</td>
+<td>Desert</td>
+<td>45</td>
+<td>14</td>
+<td>3.8</td>
+<td>3.5</td>
+<td>Ambush: hides underground until close</td>
+<td>Chitin 1–2, Bone 1 (50%)</td>
+<td>18</td>
+</tr>
+<tr>
+<td>Frost Golem</td>
+<td>Snow</td>
+<td>60</td>
+<td>12</td>
+<td>2.4</td>
+<td>7</td>
+<td>Ranged ice (range 6); hits slow you for 2 s</td>
+<td>Ice Shard 1–2, Crystal 1 (5%)</td>
+<td>22</td>
+</tr>
+<tr>
+<td>Wraith</td>
+<td>All</td>
+<td>28</td>
+<td>10</td>
+<td>3.6</td>
+<td>8</td>
+<td>Night only, fades at dawn; flies over water and walls</td>
+<td>Spirit Essence 1 (80%), Coin 1–4 (50%)</td>
+<td>18</td>
+</tr>
+<tr>
+<td>Bandit</td>
+<td>Event only</td>
+<td>45</td>
+<td>11</td>
+<td>3.9</td>
+<td>10</td>
+<td>Groups of 3–4 from the ambush event; human sprite</td>
+<td>Coin 5–15, Arrow 2–6 (40%), Bandage 1 (30%)</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Skeleton</td>
+<td>Guard only</td>
+<td>40</td>
+<td>10</td>
+<td>3.2</td>
+<td>9</td>
+<td>Dungeon and archive guard</td>
+<td>Bone 1–2, Arrow 2–5 (40%)</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Elder Stag</td>
+<td>Legend only</td>
+<td>420</td>
+<td>24</td>
+<td>4.6</td>
+<td>8</td>
+<td>Legendary creature, boss</td>
+<td>Hide 3–5, Gemstone 1, Crystal 1–2, plus a chest roll</td>
+<td>300</td>
+</tr>
+<tr>
+<td>Arena Guardian</td>
+<td>Arena only</td>
+<td>900</td>
+<td>30</td>
+<td>2.6</td>
+<td>14</td>
+<td>Boss; also throws boulders (range 8)</td>
+<td>Golden Idol 1, Iron Ingot 3–6, plus a chest roll</td>
+<td>600</td>
+</tr>
+</tbody></table></div>
+<p>Spawn weights within a biome: Wolf 4, Bear 1.5, Spider 3, Scorpion 4, Sand Lurker 2, Frost Golem 3, Wraith 3.</p>
+<h2 id="wildlife">Wildlife<a class="anchor" href="#wildlife" aria-label="Link to this section">#</a></h2>
+<p>Animals (<code>passive</code> species in <code>src/entities/Species.ts</code>) share the enemy code but never start a fight. Skittish animals bolt when the player comes within their range (and warn their herd); defensive ones ignore the player until hurt, then fight back like an enemy.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Animal</th>
+<th>Biomes</th>
+<th>HP</th>
+<th>Dmg</th>
+<th>Speed</th>
+<th>Range</th>
+<th>Temper</th>
+<th>Drops</th>
+<th>XP</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Rabbit</td>
+<td>Forest</td>
+<td>8</td>
+<td>0</td>
+<td>5</td>
+<td>4</td>
+<td>Skittish</td>
+<td>Raw Meat 1</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Deer</td>
+<td>Forest</td>
+<td>24</td>
+<td>0</td>
+<td>5.2</td>
+<td>6</td>
+<td>Skittish, herds of 2–3</td>
+<td>Raw Meat 1–2, Hide 1 (80%)</td>
+<td>7</td>
+</tr>
+<tr>
+<td>Boar</td>
+<td>Forest</td>
+<td>38</td>
+<td>7</td>
+<td>3.8</td>
+<td>—</td>
+<td>Defensive</td>
+<td>Raw Meat 2–3, Hide 1 (60%)</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Sand Lizard</td>
+<td>Desert</td>
+<td>10</td>
+<td>0</td>
+<td>5.4</td>
+<td>3.5</td>
+<td>Skittish</td>
+<td>Raw Meat 1, Chitin 1 (30%)</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Snow Hare</td>
+<td>Snow</td>
+<td>8</td>
+<td>0</td>
+<td>5</td>
+<td>4</td>
+<td>Skittish</td>
+<td>Raw Meat 1, Hide 1 (30%)</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Mountain Goat</td>
+<td>Snow, Desert</td>
+<td>30</td>
+<td>6</td>
+<td>4</td>
+<td>—</td>
+<td>Defensive, 1–3</td>
+<td>Raw Meat 1–2, Hide 1–2 (80%)</td>
+<td>9</td>
+</tr>
+</tbody></table></div>
+<p>Weights within a biome: Rabbit 4, Deer 3, Boar 2, Sand Lizard 4, Snow Hare 4, Mountain Goat 2. Hunting an animal says &quot;Hunted a …&quot;; the Hunter skill adds to its drops. Animals never block resting by a campfire.</p>
+<p>Drops go straight into the bag.</p>
+<h3 id="ai-states">AI states<a class="anchor" href="#ai-states" aria-label="Link to this section">#</a></h3>
+<p><code>Enemy.update()</code> runs a small state machine.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Behaviour</th>
+<th>Leaves when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>burrowed</code></td>
+<td>Hidden, can&#39;t be hit</td>
+<td>Player within aggro range → <code>aggro</code></td>
+</tr>
+<tr>
+<td><code>patrol</code></td>
+<td>Wanders at 35% speed: picks a direction, or stands still half the time, for 1–3 s</td>
+<td>Player within aggro range → <code>aggro</code>, and the pack is alerted</td>
+</tr>
+<tr>
+<td><code>aggro</code></td>
+<td>Faces the player and shows &quot;!&quot;</td>
+<td>After 0.4 s → <code>chase</code></td>
+</tr>
+<tr>
+<td><code>chase</code></td>
+<td>Runs at the player. Ranged enemies hold position within 60% of their range.</td>
+<td>Player farther than 2.5× aggro → <code>patrol</code>. In melee reach, or in ranged range but more than twice melee reach, with the attack ready → <code>attack</code>.</td>
+</tr>
+<tr>
+<td><code>attack</code></td>
+<td>Flickers during a 0.3 s wind-up, then hits if the player is within <code>attackRange + 0.4</code>, or else fires a projectile if in range</td>
+<td>After 0.5 s → <code>chase</code></td>
+</tr>
+<tr>
+<td><code>flee</code></td>
+<td>Runs away at 110% speed</td>
+<td>After 3 s → <code>patrol</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Taking a hit provokes an enemy (patrol or burrowed → aggro).</li>
+<li>A wolf that drops below 20% health flees instead.</li>
+<li>Every enemy except a flier collides with solid tiles, sliding along walls.</li>
+</ul>
+<h3 id="difficulty-scaling-and-elites">Difficulty scaling and elites<a class="anchor" href="#difficulty-scaling-and-elites" aria-label="Link to this section">#</a></h3>
+<p>Bands come from distance to the origin (<code>src/generation/WorldRules.ts</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Band</th>
+<th>Distance</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0 Easy</td>
+<td>0–1,000 tiles</td>
+</tr>
+<tr>
+<td>1 Medium</td>
+<td>1,000–5,000 tiles</td>
+</tr>
+<tr>
+<td>2 Hard</td>
+<td>5,000–10,000 tiles</td>
+</tr>
+<tr>
+<td>3 Extreme</td>
+<td>10,000+ tiles</td>
+</tr>
+</tbody></table></div>
+<p>Per band:</p>
+<ul>
+<li><strong>Health:</strong> <code>round(hp × (1 + 0.6 × band))</code></li>
+<li><strong>Damage:</strong> <code>damage × (1 + 0.5 × band)</code></li>
+<li><strong>XP:</strong> <code>round(xp × (1 + 0.5 × band))</code></li>
+</ul>
+<p>Elites appear with chance <code>0.04 + 0.03 × band</code>. Only one member of a spawned group can be elite. An elite has:</p>
+<ul>
+<li>×2.5 health and ×1.5 damage, with XP tripled</li>
+<li>a gold tint and a sprite 1.25× larger</li>
+<li>doubled drop counts, plus a chest roll at its band</li>
+</ul>
+<h2 id="spawning">Spawning<a class="anchor" href="#spawning" aria-label="Link to this section">#</a></h2>
+<p>Wild enemies spawn inside the simulation radius; tries happen every 2.5 s.</p>
+<ul>
+<li><strong>Safe zone:</strong> nothing spawns while the player is within 64 tiles of the origin (<code>SAFE_RADIUS</code>), and no spawn point may be within 64 tiles of it.</li>
+<li><strong>Population cap:</strong> <code>round((3 + 2 × band) × (night ? 1.5 : 1))</code> wild enemies. Guards and event groups don&#39;t count toward it.</li>
+<li><strong>Spawn point:</strong> a random open tile in the simulation area, at least 12 tiles from the player (<code>MIN_SPAWN_DISTANCE</code>). The species is a weighted pick from the biome at that tile; wraiths are added at night.</li>
+<li><strong>Despawn:</strong> enemies that leave the simulation area are removed. Night-only enemies are removed at dawn.</li>
+<li><strong>Wildlife:</strong> animals spawn on the same timer, separately: up to 6 by day and 3 at night, anywhere in the simulation area (the safe zone included), at least 12 tiles from the player. They never count toward the enemy cap.</li>
+</ul>
+<h2 id="guarded-places">Guarded places<a class="anchor" href="#guarded-places" aria-label="Link to this section">#</a></h2>
+<p>Walking into some places wakes their guards (<code>GUARDED_KINDS</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Place</th>
+<th>Guards</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dungeon</td>
+<td>3–5 Skeletons on open floor tiles</td>
+</tr>
+<tr>
+<td>Boss Arena</td>
+<td>1 Arena Guardian at the centre</td>
+</tr>
+<tr>
+<td>Sunken Archive (story)</td>
+<td>6 Skeletons</td>
+</tr>
+</tbody></table></div>
+<p>Killing every guard clears the place:</p>
+<ul>
+<li>the player gets 60 XP and a &quot;cleared!&quot; notice</li>
+<li>the place&#39;s anchor goes into <code>WorldManager.clearedAnchors</code>, which is saved</li>
+</ul>
+<p><strong>Cleared stays cleared:</strong> a cleared anchor never wakes guards again, even after its region regenerates. If the player leaves before clearing it, the guards despawn and the place resets for the next visit.</p>
+<p><strong>Elder Stag:</strong> every chunk in the simulation area gets one roll per region visit, with a 0.05% chance (<code>LEGEND_CHANCE</code>) of an Elder Stag at the chunk&#39;s centre. Killing it records <code>legend@cx,cy</code> in <code>clearedAnchors</code>, so that spot never spawns another.</p>
+<p><strong>Event groups</strong> (bandit ambush, village defence) are tracked the same way, without persistence. Clearing them reports to quests; clearing a village defence also pays 30 coins.</p>
+<h2 id="progression">Progression<a class="anchor" href="#progression" aria-label="Link to this section">#</a></h2>
+<p><code>src/systems/Progression.ts</code>:</p>
+<ul>
+<li><strong>XP to level up:</strong> going from level <code>L</code> to <code>L + 1</code> takes <code>round(40 × L^1.5)</code> XP.</li>
+<li><strong>Level cap:</strong> 50.</li>
+<li><strong>Per level:</strong> each level adds 8 max health and 5% damage, and a skill point. When you level up, current health rises by the same amount as max health.</li>
+</ul>
+<h3 id="skills">Skills<a class="anchor" href="#skills" aria-label="Link to this section">#</a></h3>
+<p>Skill points are spent in the menu&#39;s Skills tab. Each skill has 3 ranks; points left = level − 1 − ranks learned.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Per rank</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Warrior</td>
+<td>+8% damage (multiplies the level bonus)</td>
+</tr>
+<tr>
+<td>Hunter</td>
+<td>+35% chance of one extra of each drop from animals</td>
+</tr>
+<tr>
+<td>Gatherer</td>
+<td>Chopping, mining and picking 15% faster</td>
+</tr>
+<tr>
+<td>Forager</td>
+<td>+30% chance of one extra from plants (berries, herbs, mushrooms, cactus fruit)</td>
+</tr>
+<tr>
+<td>Swimmer</td>
+<td>Swim 10% faster; deep water tires 25% slower</td>
+</tr>
+<tr>
+<td>Pack Mule</td>
+<td>Carry 25 more weight</td>
+</tr>
+<tr>
+<td>Survivalist</td>
+<td>Hunger and thirst drain 10% slower</td>
+</tr>
+</tbody></table></div>
+<p>Ranks are saved with progression; older saves load with none.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>XP source</th>
+<th>Amount</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Killing an enemy</td>
+<td>Species XP, scaled by band and elite</td>
+</tr>
+<tr>
+<td>Clearing a guarded place or event group</td>
+<td>60</td>
+</tr>
+<tr>
+<td>Discovering a structure</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Quests</td>
+<td>32–150, see <a href="living-world.html#quests">living-world.md</a></td>
+</tr>
+<tr>
+<td>Story milestones</td>
+<td>80 (graves, revision, astronomer), 160 (Hall of Lanterns), 400 (ending)</td>
+</tr>
+</tbody></table></div>
+<p>See also: <a href="index.html">README.md</a> · <a href="survival.html">survival.md</a> · <a href="living-world.html">living-world.md</a> · <a href="story.html">story.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="survival.html"><small>Previous</small>Survival</a><a class="next" href="living-world.html"><small>Next</small>Living world</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#controls">Controls</a></li><li class="l2"><a href="#damage">Damage</a></li><li class="l3"><a href="#dealing-damage">Dealing damage</a></li><li class="l3"><a href="#taking-damage">Taking damage</a></li><li class="l2"><a href="#weapons">Weapons</a></li><li class="l2"><a href="#enemies">Enemies</a></li><li class="l2"><a href="#wildlife">Wildlife</a></li><li class="l3"><a href="#ai-states">AI states</a></li><li class="l3"><a href="#difficulty-scaling-and-elites">Difficulty scaling and elites</a></li><li class="l2"><a href="#spawning">Spawning</a></li><li class="l2"><a href="#guarded-places">Guarded places</a></li><li class="l2"><a href="#progression">Progression</a></li><li class="l3"><a href="#skills">Skills</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

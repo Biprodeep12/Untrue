@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html" class="current" aria-current="page">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Engine</p>
+    <article><h1 id="architecture">Architecture</h1>
+<p>How the source is organised, what runs each frame, and how the parts talk to each other.</p>
+<h2 id="source-layout">Source layout<a class="anchor" href="#source-layout" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/main.ts</code></td>
+<td>Entry point. Creates <code>Game</code>; dev builds expose it as <code>window.game</code>.</td>
+</tr>
+<tr>
+<td><code>src/config.ts</code></td>
+<td>World constants: tile and chunk size, margins, minimum biome size, region size, speeds.</td>
+</tr>
+<tr>
+<td><code>src/coords.ts</code></td>
+<td>Chunk keys, region keys and chunk rectangles.</td>
+</tr>
+<tr>
+<td><code>src/style.css</code></td>
+<td>All HTML UI styling.</td>
+</tr>
+<tr>
+<td><strong><code>src/game/</code></strong></td>
+<td>The game shell.</td>
+</tr>
+<tr>
+<td><code>Game.ts</code></td>
+<td>Boots PixiJS, owns the frame loop, wires every system together, spawning and saving.</td>
+</tr>
+<tr>
+<td><code>LivingWorld.ts</code></td>
+<td>Owns time, weather, hazards, NPCs, quests, events, the story, lighting and weather rendering.</td>
+</tr>
+<tr>
+<td><code>Player.ts</code></td>
+<td>Movement, collision, dodge roll, knockback and invulnerability.</td>
+</tr>
+<tr>
+<td><code>Camera.ts</code></td>
+<td>Smooth follow and zoom (0.25 to 2).</td>
+</tr>
+<tr>
+<td><code>Input.ts</code></td>
+<td>Keyboard, mouse, wheel and the touch stick.</td>
+</tr>
+<tr>
+<td><code>Settings.ts</code></td>
+<td>Player settings kept in <code>localStorage</code>.</td>
+</tr>
+<tr>
+<td><strong><code>src/world/</code></strong></td>
+<td>The streamed world, independent of rendering.</td>
+</tr>
+<tr>
+<td><code>WorldManager.ts</code></td>
+<td>Ties streaming, biomes, objects, regions and the harvest log together.</td>
+</tr>
+<tr>
+<td><code>ChunkManager.ts</code></td>
+<td>Visible, render, cache and simulation areas; generation queue; chunk lifecycle.</td>
+</tr>
+<tr>
+<td><code>Chunk.ts</code></td>
+<td>Chunk buffers and the chunk pool.</td>
+</tr>
+<tr>
+<td><code>BiomeManager.ts</code></td>
+<td>Biome records and chunk ownership.</td>
+</tr>
+<tr>
+<td><code>ObjectManager.ts</code></td>
+<td>Live world objects indexed by chunk.</td>
+</tr>
+<tr>
+<td><code>WorldObject.ts</code></td>
+<td>One object spanning one or more chunks, and how it stamps onto a chunk.</td>
+</tr>
+<tr>
+<td><code>Regions.ts</code></td>
+<td>Per-region visit counters that drive regeneration.</td>
+</tr>
+<tr>
+<td><code>SyncGenerator.ts</code></td>
+<td>Main-thread chunk generator for tests.</td>
+</tr>
+<tr>
+<td><strong><code>src/generation/</code></strong></td>
+<td>Pure, seeded generation code. Runs in workers and on the main thread.</td>
+</tr>
+<tr>
+<td><code>TerrainGenerator.ts</code></td>
+<td>Noise fields (<code>TerrainFields</code>) and <code>generateChunk</code>.</td>
+</tr>
+<tr>
+<td><code>BiomeGenerator.ts</code></td>
+<td>Biome footprint growth.</td>
+</tr>
+<tr>
+<td><code>StructureGenerator.ts</code></td>
+<td><code>Layout</code>, structure layouts, the structure catalogue and the per-chunk roll.</td>
+</tr>
+<tr>
+<td><code>EnemyGenerator.ts</code></td>
+<td>Enemy spawn rules.</td>
+</tr>
+<tr>
+<td><code>Noise.ts</code></td>
+<td>Seeded 2D simplex noise.</td>
+</tr>
+<tr>
+<td><code>Random.ts</code></td>
+<td>Hashing, the <code>Rng</code> class and named random streams.</td>
+</tr>
+<tr>
+<td><code>Tiles.ts</code></td>
+<td>Tile, decoration and biome ids; solidity.</td>
+</tr>
+<tr>
+<td><code>WorldRules.ts</code></td>
+<td>Difficulty bands by distance.</td>
+</tr>
+<tr>
+<td><strong><code>src/workers/</code></strong></td>
+<td><code>worldGenerator.worker.ts</code> (runs <code>generateChunk</code>) and <code>WorkerGenerator.ts</code> (the worker pool).</td>
+</tr>
+<tr>
+<td><strong><code>src/entities/</code></strong></td>
+<td><code>Enemy.ts</code> (enemy AI), <code>Species.ts</code> (enemy roster), <code>NPC.ts</code> (NPC schedules and following).</td>
+</tr>
+<tr>
+<td><strong><code>src/items/</code></strong></td>
+<td><code>Items.ts</code>: the item catalogue.</td>
+</tr>
+<tr>
+<td><strong><code>src/systems/</code></strong></td>
+<td>Gameplay systems: inventory, crafting, gathering, loot, vitals, progression, combat, NPCs, quests, trade, time, weather, hazards, world events, exploration.</td>
+</tr>
+<tr>
+<td><strong><code>src/story/</code></strong></td>
+<td><code>StorySystem.ts</code>, <code>StoryPlaces.ts</code> (story landmarks), <code>StoryScript.ts</code> (all story text).</td>
+</tr>
+<tr>
+<td><strong><code>src/rendering/</code></strong></td>
+<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>.</td>
+</tr>
+<tr>
+<td><strong><code>src/ui/</code></strong></td>
+<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code>, <code>MapView</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>.</td>
+</tr>
+<tr>
+<td><strong><code>src/audio/</code></strong></td>
+<td><code>AudioSystem.ts</code>: synthesised sound effects, generated music and weather ambience; see <a href="audio.html">audio.md</a>.</td>
+</tr>
+<tr>
+<td><strong><code>src/save/</code></strong></td>
+<td><code>SaveManager.ts</code>: IndexedDB saves and migration.</td>
+</tr>
+</tbody></table></div>
+<p>Tests sit next to the code they cover as <code>*.test.ts</code>.</p>
+<h2 id="the-frame">The frame<a class="anchor" href="#the-frame" aria-label="Link to this section">#</a></h2>
+<p><code>Game.tick(dt)</code> runs once per frame, with <code>dt</code> capped at 0.1 seconds:</p>
+<ol>
+<li><code>handleKeys()</code>: debug overlay, menu, vision paging, Escape, save, zoom, hotbar, use, interact, attack, dodge and the debug far trip.</li>
+<li>If the player is waiting to be placed (<code>spawnTarget</code>), <code>trySpawn()</code> looks for open ground once the chunks around the target have loaded.</li>
+<li>Otherwise, unless a menu, dialog or vision pauses the world:<ul>
+<li><code>LivingWorld.update(dt)</code>: clock and hourly events, hazards, NPCs, the story, lost travellers and escorts.</li>
+<li>Blocking state and movement speed (slow status, blocking, weather).</li>
+<li><code>Player.update</code>, then gathering, then <code>CombatSystem.update</code> with the player&#39;s body.</li>
+<li>The camera follows the player.</li>
+<li><code>Vitals.update</code>; a collapse sends the player back to the origin.</li>
+</ul>
+</li>
+<li><code>WorldManager.update(view)</code> with the camera&#39;s view in tiles: streaming, biome and object bookkeeping, discovery.</li>
+<li>The world layer is positioned and scaled for the camera.</li>
+<li><code>updateTarget()</code>: the interaction prompt and target outline.</li>
+<li>Rendering updates: tree fading, <code>EntityRenderer.update</code>, then <code>LivingWorld.render</code> (weather particles, effects, lighting).</li>
+<li>Touch stick, hotbar and menu refresh.</li>
+<li>Autosave every 30 seconds; HUD refresh every 0.25 seconds.</li>
+<li><code>Input.endFrame()</code> clears one-frame inputs.</li>
+</ol>
+<h2 id="threads">Threads<a class="anchor" href="#threads" aria-label="Link to this section">#</a></h2>
+<p>Terrain generation runs off the main thread so streaming never stalls a frame.</p>
+<ul>
+<li><code>ChunkManager</code> talks to a <code>ChunkGenerator</code>: <code>request(req)</code> and <code>onResult(handler)</code>.</li>
+<li><code>WorkerGenerator</code> runs between 1 and 3 web workers (one fewer than <code>navigator.hardwareConcurrency</code>, capped at 3) and hands out requests round-robin. Each worker builds its own <code>TerrainFields</code> for the seed and returns tiles and decorations as transferable <code>Uint8Array</code> buffers, so nothing is copied.</li>
+<li><code>SyncGenerator</code> runs <code>generateChunk</code> on the calling thread and answers immediately. Tests use it.</li>
+</ul>
+<p>Only terrain tiles and decorations come from the workers. Biome records, structure rolls, object stamping, enemies and everything else run on the main thread. Structure rolls use the same <code>TerrainFields</code> (for flat-ground checks), built on the main thread.</p>
+<h2 id="how-systems-talk">How systems talk<a class="anchor" href="#how-systems-talk" aria-label="Link to this section">#</a></h2>
+<p>Systems hold references to what they need and report back through callbacks:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>Raised by</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>WorldManager.onDiscover(o)</code></td>
+<td>The player first stands inside an object</td>
+<td>Discovery toast, XP, quest discovery objectives, lantern whispers</td>
+</tr>
+<tr>
+<td><code>WorldManager.onForget(o)</code></td>
+<td>A discovered object is discarded</td>
+<td>The story&#39;s lantern memories (<code>StorySystem</code> sets it)</td>
+</tr>
+<tr>
+<td><code>ObjectManager.onDiscard(o)</code></td>
+<td>Any object is discarded</td>
+<td>Forwarded by <code>WorldManager</code> to <code>onForget</code></td>
+</tr>
+<tr>
+<td><code>ChunkListener.show / hide / changed</code></td>
+<td><code>ChunkManager</code></td>
+<td><code>TileRenderer</code> builds, removes and refreshes chunk meshes</td>
+</tr>
+<tr>
+<td><code>CombatSystem.onKill(enemy)</code></td>
+<td>An enemy dies</td>
+<td>Quest slay objectives</td>
+</tr>
+<tr>
+<td><code>CombatSystem.onCleared(kind)</code></td>
+<td>A guarded group is wiped out</td>
+<td>Quest clear objectives, village defence reward</td>
+</tr>
+<tr>
+<td><code>QuestSystem.onComplete(q)</code></td>
+<td>A quest finishes</td>
+<td>Rewards</td>
+</tr>
+<tr>
+<td><code>CombatEvents</code>, <code>HazardHooks</code>, <code>EventHooks</code>, <code>StoryHooks</code></td>
+<td>Their systems</td>
+<td>Damage numbers, swings, hurt flashes, notifications, visions, dialogs</td>
+</tr>
+</tbody></table></div>
+<p><code>WorldManager.now</code> is a function the game clock provides; the world uses it to timestamp harvests for regrowth.</p>
+<h2 id="testing">Testing<a class="anchor" href="#testing" aria-label="Link to this section">#</a></h2>
+<p>Vitest runs headless. <code>WorldManager</code> does not touch the renderer, so tests build a world with a <code>SyncGenerator</code> and drive it with <code>world.update(view)</code> and hand-made views. The suites cover:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Covers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src/world/WorldManager.test.ts</code></td>
+<td>Streaming, minimum biome size, bounded memory, determinism, multi-chunk lifetime, regeneration</td>
+</tr>
+<tr>
+<td><code>src/save/SaveManager.test.ts</code></td>
+<td>Persistent finds and save round trips</td>
+</tr>
+<tr>
+<td><code>src/systems/Survival.test.ts</code></td>
+<td>Inventory, crafting, vitals, gathering, chests that never refill</td>
+</tr>
+<tr>
+<td><code>src/systems/Combat.test.ts</code></td>
+<td>Damage, enemy AI, spawning, weapons, dungeons, progression</td>
+</tr>
+<tr>
+<td><code>src/systems/LivingWorld.test.ts</code></td>
+<td>Time, weather, regrowth, NPCs, quests, trade, events, hazards</td>
+</tr>
+<tr>
+<td><code>src/systems/Exploration.test.ts</code></td>
+<td>Fog of war, milestones, markers</td>
+</tr>
+<tr>
+<td><code>src/story/Story.test.ts</code></td>
+<td>Story places and a full playthrough to an ending</td>
+</tr>
+</tbody></table></div>
+<p>See also: <a href="world-streaming.html">World streaming</a>, <a href="rendering.html">Rendering</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="design-spec.html"><small>Previous</small>Design spec</a><a class="next" href="world-streaming.html"><small>Next</small>World streaming</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#source-layout">Source layout</a></li><li class="l2"><a href="#the-frame">The frame</a></li><li class="l2"><a href="#threads">Threads</a></li><li class="l2"><a href="#how-systems-talk">How systems talk</a></li><li class="l2"><a href="#testing">Testing</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

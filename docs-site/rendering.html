@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rendering · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html" class="current" aria-current="page">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Engine</p>
+    <article><h1 id="rendering">Rendering</h1>
+<p>How the world is drawn: a procedural atlas, one mesh per chunk, y-sorted sprites, night lighting, weather and an HTML UI.</p>
+<h2 id="pixel-scaling">Pixel scaling<a class="anchor" href="#pixel-scaling" aria-label="Link to this section">#</a></h2>
+<p>The canvas renders at a low internal resolution and is scaled up with nearest-neighbour filtering (<code>Game.resize</code> in <code>src/game/Game.ts</code>):</p>
+<ul>
+<li>Scale = <code>max(1, floor(window height / TARGET_HEIGHT))</code>, with <code>TARGET_HEIGHT</code> = 270. A 1080-pixel window renders at 480 × 270 internally, scaled ×4.</li>
+<li>The renderer resolution is 1 (device pixel ratio is ignored), <code>roundPixels</code> is on, and <code>TextureStyle.defaultOptions.scaleMode</code> is <code>&#39;nearest&#39;</code>.</li>
+<li>The CSS sets <code>image-rendering: pixelated</code> on the canvas.</li>
+</ul>
+<p>The camera zoom (0.25 to 2, steps of ×0.8, snapping to exactly 1 near 1) scales the world layer, and the render area grows or shrinks to match.</p>
+<h2 id="the-atlas">The atlas<a class="anchor" href="#the-atlas" aria-label="Link to this section">#</a></h2>
+<p>Every image is painted in code at startup by <code>buildAtlas()</code> (<code>src/rendering/Atlas.ts</code>) into one 256-pixel-wide canvas. No image files ship.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Region</th>
+<th>Contents</th>
+<th>Layout</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tiles</td>
+<td>41 tile types × 4 variants</td>
+<td>16 × 16 cells, <code>cell = tileId × 4 + variant</code></td>
+</tr>
+<tr>
+<td>Decorations</td>
+<td>36 decoration types</td>
+<td>Shelf-packed frames from <code>DECO_Y</code>; most are 16 × 32, plants and trees larger (oaks and palms 32 × 48, pines 24 × 48, cacti 24 × 40, crystals 24 × 32, bushes 24 × 24, flowers, mushrooms and dead bushes 16 × 16, the Anchor core 32 × 48)</td>
+</tr>
+<tr>
+<td>Humans</td>
+<td>8 outfits × 4 directions × 4 walk frames</td>
+<td>16 × 32 cells from <code>PLAYER_Y</code>, one row per outfit</td>
+</tr>
+<tr>
+<td>Items</td>
+<td>One icon per item</td>
+<td>16 × 16 cells from <code>ITEM_Y</code></td>
+</tr>
+<tr>
+<td>Creatures and projectiles</td>
+<td>Two walk frames per species, the buried sand lurker, and four projectiles</td>
+<td>Shelf-packed frames from <code>CREATURE_Y</code></td>
+</tr>
+</tbody></table></div>
+<p><code>ATLAS_H</code> is the bottom of the creature region.</p>
+<p><strong>Painters.</strong> A small <code>Painter</code> class draws into an <code>ImageData</code>: pixels with alpha blending, rectangles, ellipses, speckles, soft shadows, and <code>outline()</code>, which adds a dark one-pixel outline around opaque pixels for the Stardew look. Ground tiles use per-palette colour sets and speckle styles (grass, sand, snow, dirt). Foliage uses <code>foliage()</code>, which shades a leafy cluster from the top left with noise and ragged edges, then adds random leaf flecks.</p>
+<p><strong>Outfits.</strong> <code>OUTFITS</code> holds skin, hair, shirt and trouser colours, plus an optional apron, robe, mask or rags: <code>player</code>, <code>villager-a</code>, <code>villager-b</code>, <code>villager-c</code>, <code>trader</code>, <code>merchant</code>, <code>lost</code> and <code>bandit</code>. <code>playerCell(dir, frame, outfit)</code> returns a frame.</p>
+<p>Lookup helpers: <code>tileCell</code>, <code>decoFrame</code>, <code>itemCell</code>, <code>playerCell</code>, <code>creatureFrame</code> (keys such as <code>wolf:1</code>, <code>lurker:buried</code> or <code>projectile:arrow</code>).</p>
+<h2 id="chunk-meshes">Chunk meshes<a class="anchor" href="#chunk-meshes" aria-label="Link to this section">#</a></h2>
+<p><code>TileRenderer</code> (<code>src/rendering/TileRenderer.ts</code>) implements <code>ChunkListener</code>:</p>
+<ul>
+<li>Each shown chunk is one <code>Mesh</code> of 1,024 quads over the atlas texture, so a chunk is one draw call. All meshes share the same positions and indices; only UVs change.</li>
+<li>The tile variant is <code>hash3(gx, gy, 17) % 4</code>, so ground tiles do not repeat visibly.</li>
+<li>Stone and wood walls draw their top or their front face depending on the tile below; see <a href="buildings-and-interiors.html#walls-with-height">buildings-and-interiors.md</a>.</li>
+<li>UVs are pulled in by 0.02 pixels (<code>INSET</code>) so neighbouring atlas cells never bleed when zoomed out.</li>
+<li>Meshes and decoration sprites are pooled and reused when chunks are hidden.</li>
+</ul>
+<p><strong>Decorations</strong> are sprites anchored at their bottom centre, positioned on their tile and added to the shared <code>entities</code> container with <code>zIndex</code> = their foot position, so they sort with the player, NPCs and enemies.</p>
+<p><strong>Tree fading.</strong> <code>fadeAround(px, py)</code> checks sprites in the 3 × 3 chunks around the player. Any sprite at least 24 pixels tall whose foot is below the player&#39;s and whose box overlaps the player&#39;s body is drawn at 45% opacity, so the player is never lost behind a tree.</p>
+<p><strong>Lights.</strong> While collecting a chunk&#39;s sprites, <code>collectLights</code> also records light sources in world pixels: campfires (radius 5 tiles, warm), meteorites, memory pedestals, the Anchor core, monuments, story books, and windowed facade tiles (radius 1.8 tiles). <code>lights(out)</code> returns them for every shown chunk.</p>
+<h2 id="buildings-and-interiors">Buildings and interiors<a class="anchor" href="#buildings-and-interiors" aria-label="Link to this section">#</a></h2>
+<p>Buildings are painted once per building into cached canvas textures and drawn as y-sorted sprites (<code>src/rendering/Buildings.ts</code>); their windows are night lights. Interiors have their own view (<code>src/rendering/InteriorRenderer.ts</code>): a sprite per tile, furniture and residents y-sorted with the player, and fireplace and lamp lights. Details are in <a href="buildings-and-interiors.html">buildings-and-interiors.md</a>.</p>
+<h2 id="the-player">The player<a class="anchor" href="#the-player" aria-label="Link to this section">#</a></h2>
+<p>The player (<code>src/game/Player.ts</code>) is a container: the body sprite, the item in hand, and a two-pixel fist drawn over the grip. The hand position follows the arms in the human sprite (<code>handAt</code>), including the walk sway.</p>
+<ul>
+<li><strong>Holding:</strong> the selected hotbar item is shown if it is a weapon, tool or light. Weapons, tools and torches are carried upright, tipped away from the body; lanterns hang from their handle and sway while walking; a bow is held at the side. Facing away, the item is drawn behind the body. Nothing is held while swimming or rolling.</li>
+<li><strong>Actions</strong> (<code>act()</code>): a <strong>swing</strong> (0.28 s) winds the item up behind and sweeps it through the facing, with a 2-pixel lunge; a <strong>punch</strong> (0.2 s) is a lunge with empty hands; a <strong>shot</strong> (0.3 s) holds the bow out in front; a <strong>pick</strong> (0.4 s) is a stoop. Attacks play a swing, shot or punch; chopping and mining swing the best axe or pickaxe carried (or punch bare-handed) on every strike; gathering plants stoops.</li>
+<li><strong>Armour and off hand:</strong> worn armour is drawn as overlays (<code>armorCell()</code> in the atlas: one row of 16 frames per set and part) over the body, legs and feet first, then chest and head, matching every direction and walk frame. The off-hand item sits in the other hand, or in front of the body when the shield is raised. <code>layer()</code> orders everything back to front each frame: what is held on the far side, the body and its armour, then what is held on the near side.</li>
+<li><strong>Swimming:</strong> only the top 24 pixels of the body show, sunk 4 pixels and bobbing; leg and foot armour are hidden.</li>
+</ul>
+<h2 id="entities">Entities<a class="anchor" href="#entities" aria-label="Link to this section">#</a></h2>
+<p><code>EntityRenderer</code> (<code>src/rendering/EntityRenderer.ts</code>) draws what moves:</p>
+<ul>
+<li><strong>Enemies and animals.</strong> Creature frames with two walk frames, mirrored by facing (rabbits, hares, deer, boars, lizards and goats included). Humanoid species (bandits) use the four-direction human sprites instead. Elites are drawn 1.25 times larger and tinted gold. A hit flashes red; the attack wind-up flickers pink. A health bar shows once an enemy is hurt (bosses use the HUD bar instead), and a &quot;!&quot; marks enemies that have just noticed the player.</li>
+<li><strong>NPCs.</strong> Human sprites by outfit, with the walk cycle while moving, hidden while indoors, scaled (children are smaller) and translucent if they are a ghost. A floating symbol marks them: &quot;!&quot; for news or work, &quot;$&quot; for trade, &quot;?&quot; for the lost, &quot;✓&quot; for a quest hand-in.</li>
+<li><strong>Projectiles.</strong> Pooled sprites; arrows and ice shards point along their flight, webs and boulders spin.</li>
+<li><strong>Damage numbers.</strong> Text that floats up and fades over 0.8 seconds: white, yellow for critical hits, red for damage to the player.</li>
+<li><strong>Swings.</strong> A white arc in front of the player for 0.14 seconds.</li>
+</ul>
+<h2 id="lighting">Lighting<a class="anchor" href="#lighting" aria-label="Link to this section">#</a></h2>
+<p><code>Lighting</code> (<code>src/rendering/Lighting.ts</code>) adds darkness without a custom shader:</p>
+<ol>
+<li>A <code>RenderTexture</code> the size of the internal canvas is cleared and filled with a dark colour: deep blue (<code>0x080c22</code>) when darkness is above 0.6, purple dusk (<code>0x2a1430</code>) otherwise, at <code>darkness × 0.8</code> opacity.</li>
+<li>For each light, a soft radial gradient sprite is drawn with the <code>erase</code> blend mode, cutting a hole in the darkness. Warm lights flicker slightly.</li>
+<li>The texture is shown above the world. A second set of the same gradient sprites, tinted orange with the <code>add</code> blend mode at <code>warmth × 0.35 × darkness</code>, gives fires and windows a warm glow.</li>
+</ol>
+<p>Darkness comes from the clock, plus up to 0.45 during a thunderstorm. The player carries a light: 2.4 tiles with nothing, 5 with a torch, 6 with the Wanderer&#39;s Lantern (unless the story has darkened it), and 7 with a lantern. Burning trees are lights too.</p>
+<h2 id="weather">Weather<a class="anchor" href="#weather" aria-label="Link to this section">#</a></h2>
+<p><code>ParticleSystem</code> (<code>src/rendering/ParticleSystem.ts</code>) draws weather in screen space, above the lighting:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Weather</th>
+<th>Particles</th>
+<th>Veil</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Rain</td>
+<td>140 rain streaks</td>
+<td>Grey-blue</td>
+</tr>
+<tr>
+<td>Thunderstorm</td>
+<td>220 faster, slanted streaks</td>
+<td>Dark blue</td>
+</tr>
+<tr>
+<td>Snow</td>
+<td>110 slow flakes</td>
+<td>White</td>
+</tr>
+<tr>
+<td>Blizzard</td>
+<td>240 fast sideways flakes</td>
+<td>White</td>
+</tr>
+<tr>
+<td>Sandstorm</td>
+<td>180 sand streaks blowing in from the right</td>
+<td>Tan</td>
+</tr>
+<tr>
+<td>Fog</td>
+<td>None</td>
+<td>Pale grey</td>
+</tr>
+<tr>
+<td>Heat wave</td>
+<td>None</td>
+<td>Faint yellow</td>
+</tr>
+</tbody></table></div>
+<p>Particle counts scale with the screen area (relative to 480 × 270) and fade in and out as the weather changes. Lightning draws a white flash that fades over 0.25 seconds.</p>
+<h2 id="effects">Effects<a class="anchor" href="#effects" aria-label="Link to this section">#</a></h2>
+<p><code>Effects</code> (<code>src/rendering/Effects.ts</code>) draws world-space effects with one <code>Graphics</code> object:</p>
+<ul>
+<li><strong>Fires.</strong> Flickering flame circles and rising smoke over burning trees.</li>
+<li><strong>Lightning warnings.</strong> A circle that fills in over the 1.2 seconds before a strike lands.</li>
+<li><strong>Meteors.</strong> A streak falling toward the impact point, then an expanding shock ring.</li>
+<li><strong>Memory ghosts.</strong> Places the world has forgotten, drawn on the ground (<code>Effects.floor</code>, a layer between the tiles and everything standing) as a faint blue glow outlined along the place&#39;s edge, within the Wanderer&#39;s Lantern&#39;s light, pulsing gently and fading with distance.</li>
+<li><strong>Particle bursts.</strong> <code>burst(x, y, kind)</code> throws small squares with their own speed, gravity and lifetime: <code>wood</code> and <code>stone</code> chips while gathering, <code>leaf</code> for plants, <code>dust</code> for running, dodging and defeated enemies, <code>hit</code> sparks on damage, <code>magic</code> for crystals, <code>gold</code> for chests and level-ups. At most 400 live at once.</li>
+<li><strong>Ambient life.</strong> Fireflies drift around the player on calm forest nights and add small glowing lights to the lighting layer. Falling leaves drift and sway in autumn forests by day. Both follow the weather particles setting.</li>
+</ul>
+<h2 id="html-ui">HTML UI<a class="anchor" href="#html-ui" aria-label="Link to this section">#</a></h2>
+<p>The interface is HTML and CSS over the canvas (<code>src/ui/</code>, styled in <code>src/style.css</code>), so it costs nothing while closed:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Hud</code></td>
+<td>Compass, location panel (clock, weather, biome, difficulty, position), quest tracker with direction arrows, notifications, action prompt, vitals, level and XP, status effects, boss bar, hurt flash, controls bar, touch buttons, loading screen</td>
+</tr>
+<tr>
+<td><code>Hotbar</code></td>
+<td>The first 8 inventory slots, with counts</td>
+</tr>
+<tr>
+<td><code>Menu</code></td>
+<td>Tabs: Inventory, Crafting, Quests, Map, Lantern, Settings</td>
+</tr>
+<tr>
+<td><code>MapView</code></td>
+<td>The world map canvas; see <a href="exploration.html">exploration.md</a></td>
+</tr>
+<tr>
+<td><code>PauseMenu</code></td>
+<td>Esc: Resume, Save, Settings, New world, and the controls table</td>
+</tr>
+<tr>
+<td><code>Dialog</code></td>
+<td>NPC conversation and trade</td>
+</tr>
+<tr>
+<td><code>Vision</code></td>
+<td>Full-screen story text, one page at a time, with queued visions</td>
+</tr>
+<tr>
+<td><code>DebugOverlay</code></td>
+<td>F3: seed, frame rate, chunk counts, biomes, objects, enemies, regions, and a minimap of the cache area</td>
+</tr>
+<tr>
+<td><code>TouchStick</code></td>
+<td>The virtual stick on touch screens</td>
+</tr>
+</tbody></table></div>
+<p>Item icons are copied from the atlas canvas into small canvases (<code>ItemIcon.ts</code>). Panels use a wood-framed style and the Pixelify Sans font.</p>
+<h2 id="low-quality-settings">Low-quality settings<a class="anchor" href="#low-quality-settings" aria-label="Link to this section">#</a></h2>
+<p>The Settings tab (stored in <code>localStorage</code>) can switch off:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Effect when off</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Lighting and night darkness</td>
+<td>Darkness is 0; the lighting layer is hidden</td>
+</tr>
+<tr>
+<td>Weather particles</td>
+<td>The weather layer (particles and veil) is hidden</td>
+</tr>
+<tr>
+<td>Cap at 30 frames per second</td>
+<td>Sets the ticker&#39;s <code>maxFPS</code> to 30 when on</td>
+</tr>
+<tr>
+<td>Show the controls bar</td>
+<td>Hides the controls bar</td>
+</tr>
+</tbody></table></div>
+<p>The same tab has music and sound effects volume sliders; see <a href="audio.html">audio.md</a>.</p>
+<p>See also: <a href="architecture.html">Architecture</a>, <a href="world-streaming.html">World streaming</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="objects-and-structures.html"><small>Previous</small>Objects and structures</a><a class="next" href="saves.html"><small>Next</small>Saves</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#pixel-scaling">Pixel scaling</a></li><li class="l2"><a href="#the-atlas">The atlas</a></li><li class="l2"><a href="#chunk-meshes">Chunk meshes</a></li><li class="l2"><a href="#buildings-and-interiors">Buildings and interiors</a></li><li class="l2"><a href="#the-player">The player</a></li><li class="l2"><a href="#entities">Entities</a></li><li class="l2"><a href="#lighting">Lighting</a></li><li class="l2"><a href="#weather">Weather</a></li><li class="l2"><a href="#effects">Effects</a></li><li class="l2"><a href="#html-ui">HTML UI</a></li><li class="l2"><a href="#low-quality-settings">Low-quality settings</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

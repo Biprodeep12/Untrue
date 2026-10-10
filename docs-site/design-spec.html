@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design spec · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html" class="current" aria-current="page">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Start here</p>
+    <article><h1 id="endless-2d-procedural-survival-game-design-spec">Endless 2D Procedural Survival Game: Design Spec</h1>
+<h2 id="1-overview">1. Overview<a class="anchor" href="#1-overview" aria-label="Link to this section">#</a></h2>
+<p>An endless 2D survival and exploration game whose world is generated on demand and discarded once the player leaves. Because discarded areas are not stored, they can regenerate differently on a later visit. The world is memory-efficient and evolving rather than infinitely saved. Its look, UI and feel follow Stardew Valley: top-down pixel art with a warm, cozy tone.</p>
+<p>The game&#39;s story, The World That Forgets, lives in its own document: <a href="story.html">docs/story.md</a>. It turns the world&#39;s regeneration into the story&#39;s central mystery.</p>
+<h3 id="design-pillars">Design pillars<a class="anchor" href="#design-pillars" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Endless world.</strong> No map boundary. Only chunks near the player exist in memory.</li>
+<li><strong>Fully procedural.</strong> Terrain, biomes, structures, resources and enemies come from rules and seeded randomness, not stored maps.</li>
+<li><strong>Multi-chunk objects.</strong> A castle, lake or mountain can span many chunks and still behave as one object.</li>
+<li><strong>Temporary world state.</strong> An object lives while any chunk it occupies is active, then is discarded.</li>
+<li><strong>Evolving world.</strong> Discarded areas can regenerate differently. Only objects marked persistent are guaranteed to remain.</li>
+<li><strong>The player is an adventurer.</strong> They explore, fight and gather, but never build houses or place building blocks.</li>
+</ul>
+<h2 id="2-world-streaming">2. World streaming<a class="anchor" href="#2-world-streaming" aria-label="Link to this section">#</a></h2>
+<p>The world is a grid of fixed-size chunks with coordinates that extend indefinitely. Chunks are generated around the player and disposed of behind them.</p>
+<h3 id="21-radii">2.1 Radii<a class="anchor" href="#21-radii" aria-label="Link to this section">#</a></h3>
+<p>The render area is derived from the screen. The simulation and cache radii are configurable. Current values: chunks are 32 × 32 tiles of 16 px, the simulation radius is 2 chunks around the player&#39;s chunk, and the cache radius is the render area plus 2 chunks on every side.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Radius</th>
+<th>What happens inside it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Render</td>
+<td>Chunks are drawn</td>
+</tr>
+<tr>
+<td>Simulation</td>
+<td>Entities, AI and world events are updated</td>
+</tr>
+<tr>
+<td>Cache</td>
+<td>Chunks stay in memory but are not simulated</td>
+</tr>
+</tbody></table></div>
+<h3 id="22-render-margin">2.2 Render margin<a class="anchor" href="#22-render-margin" aria-label="Link to this section">#</a></h3>
+<p>The render area is always the visible area plus a one-chunk margin on every side. A screen that shows 4 × 4 chunks renders 6 × 6. The render area scales the same way with screen size and zoom, so the player never sees a chunk appear at the screen edge. The cache radius must always cover the render area.</p>
+<h3 id="23-chunk-lifecycle">2.3 Chunk lifecycle<a class="anchor" href="#23-chunk-lifecycle" aria-label="Link to this section">#</a></h3>
+<ol>
+<li><strong>Predict.</strong> Queue chunks ahead of the player, based on direction of travel.</li>
+<li><strong>Generate.</strong> Build queued chunks in the background, nearest and most likely first.</li>
+<li><strong>Activate.</strong> Start rendering and simulating a chunk when it enters the relevant radius.</li>
+<li><strong>Deactivate.</strong> Stop simulating a chunk when it leaves the simulation radius.</li>
+<li><strong>Dispose.</strong> Destroy a chunk when it leaves the cache radius and return it to the pool.</li>
+</ol>
+<h2 id="3-procedural-generation">3. Procedural generation<a class="anchor" href="#3-procedural-generation" aria-label="Link to this section">#</a></h2>
+<p>Everything in the world is computed from rules and a seed. Nothing is authored as a fixed map.</p>
+<h3 id="31-terrain">3.1 Terrain<a class="anchor" href="#31-terrain" aria-label="Link to this section">#</a></h3>
+<p>Terrain is shaped by layered noise fields. The same fields pick a biome&#39;s type when the biome is first generated (section 3.2):</p>
+<pre><code class="language-text">Height + Moisture + Temperature + Erosion + Randomness  →  Biome
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Landforms</td>
+<td>Mountains, hills, plains, valleys, cliffs, beaches</td>
+</tr>
+<tr>
+<td>Water</td>
+<td>Rivers, lakes, swamps</td>
+</tr>
+<tr>
+<td>Underground</td>
+<td>Caves, underground areas</td>
+</tr>
+<tr>
+<td>Climate regions</td>
+<td>Forests, deserts, snow regions</td>
+</tr>
+</tbody></table></div>
+<h3 id="32-biomes">3.2 Biomes<a class="anchor" href="#32-biomes" aria-label="Link to this section">#</a></h3>
+<p>Each biome defines its own terrain, resources, enemies, structures and weather. Biomes blend at their borders and can have rare variants.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Biome</th>
+<th>Features</th>
+<th>Enemies</th>
+<th>Structures</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Forest</td>
+<td>Trees, mushrooms, wildlife</td>
+<td>Wolves, bears, spiders</td>
+<td>Ruins, cabins</td>
+</tr>
+<tr>
+<td>Desert</td>
+<td>Cactus, oases, sandstorms</td>
+<td>Scorpions, sand creatures</td>
+<td>Ruins</td>
+</tr>
+<tr>
+<td>Snow</td>
+<td>Snow, ice, pine trees</td>
+<td>Wolves, ice creatures</td>
+<td>Frozen structures</td>
+</tr>
+</tbody></table></div>
+<h4 id="biome-size-and-lifetime">Biome size and lifetime<a class="anchor" href="#biome-size-and-lifetime" aria-label="Link to this section">#</a></h4>
+<p>A biome is generated once, as a single region, the first time any part of it enters the render area. Its size and shape then stay fixed for as long as it is loaded, so every chunk inside it generates consistently.</p>
+<ol>
+<li><strong>Trigger.</strong> A chunk enters the cache radius where no biome record exists. (Cache rather than render, so structures anchored next to the render area know their biome before they are drawn.)</li>
+<li><strong>Type.</strong> The biome type is picked from the climate noise at that point and the world-scale rules. Growth prefers chunks whose climate matches, so an area keeps its type across regenerations.</li>
+<li><strong>Size.</strong> A size is rolled, never below the minimum biome size.</li>
+<li><strong>Shape.</strong> The region grows outward from that point with noise-roughened borders. It stops where it meets a neighbouring biome that is already loaded.</li>
+<li><strong>Store.</strong> The biome record (type, footprint, borders) is kept in memory.</li>
+<li><strong>Generate.</strong> Every chunk in the footprint reads the record for its terrain, resources, enemies and structures.</li>
+<li><strong>Discard.</strong> The record is dropped once the player has left the biome and none of its chunks remain inside the cache radius.</li>
+</ol>
+<p>Rules:</p>
+<ul>
+<li><strong>Minimum size.</strong> Every biome covers at least a fixed minimum area, set by one hardcoded constant (64 chunks). This prevents slivers and tiny patches. A biome hemmed in below the minimum joins the neighbour it touches most.</li>
+<li><strong>One record, many chunks.</strong> A biome follows the same lifetime rule as a multi-chunk object (section 4.1).</li>
+<li><strong>Temporary by default.</strong> A discarded biome is not saved. The same area can generate with a different size, shape, variant and contents on a later visit. Its type stays fixed by climate.</li>
+</ul>
+<h3 id="33-structures-and-points-of-interest">3.3 Structures and points of interest<a class="anchor" href="#33-structures-and-points-of-interest" aria-label="Link to this section">#</a></h3>
+<p>Structures are placed by probability plus rules. Larger ones can span multiple chunks (see section 4).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rarity</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Common</td>
+<td>Small houses, camps, trees, rocks, resource deposits</td>
+</tr>
+<tr>
+<td>Uncommon</td>
+<td>Ruins, towers, cabins, abandoned camps, caves, mines</td>
+</tr>
+<tr>
+<td>Rare</td>
+<td>Villages, temples, castles, dungeons, ancient ruins</td>
+</tr>
+<tr>
+<td>Extremely rare</td>
+<td>Giant cities, special temples, boss arenas, legendary locations, unique landmarks</td>
+</tr>
+</tbody></table></div>
+<p>Each structure definition carries these placement inputs:</p>
+<ul>
+<li>Probability</li>
+<li>Biome requirement</li>
+<li>Terrain requirement</li>
+<li>Distance requirement</li>
+<li>Size</li>
+<li>Orientation</li>
+</ul>
+<h3 id="34-randomness">3.4 Randomness<a class="anchor" href="#34-randomness" aria-label="Link to this section">#</a></h3>
+<ul>
+<li>Seeded RNG with independent random streams per system</li>
+<li>Weighted selection from probability tables</li>
+<li>Rarity tiers and spawn probabilities</li>
+<li>Minimum-distance and maximum-density rules</li>
+<li>Regional variation</li>
+<li>Random rotation and variants for structures</li>
+</ul>
+<p>Example loot table for a chest:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rarity</th>
+<th>Chance</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Common</td>
+<td>60%</td>
+</tr>
+<tr>
+<td>Uncommon</td>
+<td>25%</td>
+</tr>
+<tr>
+<td>Rare</td>
+<td>10%</td>
+</tr>
+<tr>
+<td>Epic</td>
+<td>4%</td>
+</tr>
+<tr>
+<td>Legendary</td>
+<td>1%</td>
+</tr>
+</tbody></table></div>
+<h3 id="35-world-scale-rules">3.5 World-scale rules<a class="anchor" href="#35-world-scale-rules" aria-label="Link to this section">#</a></h3>
+<p>Global patterns sit on top of local generation. Difficulty is hardcoded. The game has no difficulty setting for the player to choose. It rises with distance from the origin in fixed bands:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Distance from origin (tiles)</th>
+<th>Difficulty</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0 to 1,000</td>
+<td>Easy</td>
+</tr>
+<tr>
+<td>1,000 to 5,000</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>5,000 to 10,000</td>
+<td>Hard</td>
+</tr>
+<tr>
+<td>10,000+</td>
+<td>Extreme</td>
+</tr>
+</tbody></table></div>
+<p>Other world-scale rules:</p>
+<ul>
+<li>Rare structures appear farther from the origin</li>
+<li>Biomes and resources are distributed by region</li>
+<li>Special regions, dangerous zones and safe zones</li>
+<li>World rings</li>
+</ul>
+<h3 id="36-rare-events">3.6 Rare events<a class="anchor" href="#36-rare-events" aria-label="Link to this section">#</a></h3>
+<p>Very low-probability finds give each player discoveries that others may never see.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Find</th>
+<th>Chance</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Ancient temple</td>
+<td>0.1%</td>
+</tr>
+<tr>
+<td>Legendary creature</td>
+<td>0.05%</td>
+</tr>
+<tr>
+<td>Lost city</td>
+<td>0.01%</td>
+</tr>
+<tr>
+<td>Extremely rare landmark</td>
+<td>0.001%</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-object-lifetime-and-persistence">4. Object lifetime and persistence<a class="anchor" href="#4-object-lifetime-and-persistence" aria-label="Link to this section">#</a></h2>
+<p>This is the system that defines the game. A world object is discarded only when every chunk it occupies has left the active range. In this section, active means loaded: the chunk is still inside the cache radius.</p>
+<h3 id="41-multi-chunk-objects">4.1 Multi-chunk objects<a class="anchor" href="#41-multi-chunk-objects" aria-label="Link to this section">#</a></h3>
+<ul>
+<li>Each object records the chunks it occupies.</li>
+<li>The object stays alive while any of those chunks is active.</li>
+<li>It is discarded only when all of them are inactive.</li>
+</ul>
+<p>This applies to buildings, dungeons, lakes, forests, mountains and other terrain formations. A giant castle might cover a 3 × 3 block of chunks:</p>
+<pre><code class="language-text">┌─────────┬─────────┬─────────┐
+│ Chunk 1 │ Chunk 2 │ Chunk 3 │
+├─────────┼─────────┼─────────┤
+│ Chunk 4 │ Chunk 5 │ Chunk 6 │
+├─────────┼─────────┼─────────┤
+│ Chunk 7 │ Chunk 8 │ Chunk 9 │
+└─────────┴─────────┴─────────┘
+</code></pre>
+<h3 id="42-temporary-world-state">4.2 Temporary world state<a class="anchor" href="#42-temporary-world-state" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>The player approaches and the area is generated.</li>
+<li>Objects exist in memory.</li>
+<li>The player moves away. Objects remain while partially active.</li>
+<li>An object&#39;s whole footprint leaves the active area.</li>
+<li>The object is discarded.</li>
+<li>The area can regenerate differently on a later visit.</li>
+</ol>
+<p>Example: the first visit finds a forest with a cabin. A later visit can find the forest with ruins instead, or a different biome.</p>
+<h3 id="43-persistence-tiers">4.3 Persistence tiers<a class="anchor" href="#43-persistence-tiers" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Temporary</td>
+<td>Discarded and free to regenerate differently. The default for everything.</td>
+</tr>
+<tr>
+<td>Semi-persistent</td>
+<td>Between the two: once discovered, kept for 3 in-game days after the player leaves (villages, castles, mines).</td>
+</tr>
+<tr>
+<td>Persistent</td>
+<td>Saved and always restored.</td>
+</tr>
+</tbody></table></div>
+<p>Persistent objects include:</p>
+<ul>
+<li>Important NPCs</li>
+<li>Quest locations and boss locations</li>
+<li>Major discoveries and special landmarks</li>
+<li>Important loot</li>
+</ul>
+<h2 id="5-gameplay-systems">5. Gameplay systems<a class="anchor" href="#5-gameplay-systems" aria-label="Link to this section">#</a></h2>
+<p>These systems sit on top of the world technology and are built after the MVP.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>System</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Player</td>
+<td>Walking, running, jumping, crouching. Health, stamina, hunger, thirst. Damage, death, respawn. Status effects and equipment.</td>
+</tr>
+<tr>
+<td>Combat</td>
+<td>Melee and ranged weapons, projectiles. Dodge, block, critical hits. Damage types, armor, weapon durability. Enemy drops and boss fights.</td>
+</tr>
+<tr>
+<td>Enemies</td>
+<td>Biome-based spawning and despawning. AI states: patrol, aggro, chase, attack, flee. Group behaviour, difficulty scaling, rare variants, bosses. No wild spawns within 64 tiles of the origin (safe zone). Dungeons wake skeleton guards; boss arenas wake an Arena Guardian.</td>
+</tr>
+<tr>
+<td>Resources</td>
+<td>Wood, stone, iron, coal, gold, rare minerals, herbs, food, water, biome-specific resources.</td>
+</tr>
+<tr>
+<td>Crafting</td>
+<td>Recipes, recipe discovery, crafting stations, tiers, rare recipes. Produces tools, weapons, armor and consumables. Stations are found in the world, never built: campfires in camps, anvils in villages and castles.</td>
+</tr>
+<tr>
+<td>Inventory</td>
+<td>Stacking and quantities, equipment slots, hotbar, sorting, categories, rarity, weight or capacity limits, dropping and picking up.</td>
+</tr>
+<tr>
+<td>Progression</td>
+<td>XP, levels, skills, unlockable abilities. Equipment, crafting and exploration progression. Difficulty scaling.</td>
+</tr>
+</tbody></table></div>
+<p>One rule ties these systems back to the world:</p>
+<ul>
+<li><strong>Resource rarity</strong> depends on biome, terrain, depth, distance from origin and randomness.</li>
+</ul>
+<p>There is no building system: the player is an adventurer, not a settler.</p>
+<h2 id="6-living-world">6. Living world<a class="anchor" href="#6-living-world" aria-label="Link to this section">#</a></h2>
+<p>Only the area near the player is simulated. Distant entities get no full simulation.</p>
+<h3 id="61-time-and-weather">6.1 Time and weather<a class="anchor" href="#61-time-and-weather" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>System</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Day/night cycle</td>
+<td>Sunrise, day, sunset, night. Darkness, torches and light sources. Night-only enemies, structures and events. NPC schedules.</td>
+</tr>
+<tr>
+<td>Weather</td>
+<td>Rain, storms, snow, fog, sandstorms. Temperature, lighting changes, environmental hazards.</td>
+</tr>
+</tbody></table></div>
+<p>A full day lasts 16 real minutes. Players can rest by a campfire at dusk or night to skip to morning. Wraiths roam only at night, more enemies spawn after dark, and lit windows, campfires, torches and lanterns push back the darkness.</p>
+<p>Weather depends on the biome and feeds into gameplay. Each biome type runs its own weather pattern (forest: rain, thunderstorms, fog; desert: sandstorms, heat waves; snow: snow, blizzards, fog), and the player feels the weather of the biome they stand in. Thunderstorms bring lightning strikes that can set trees burning; fire spreads unless the weather is wet.</p>
+<pre><code class="language-text">Biome  →  Weather  →  Environment  →  Gameplay
+</code></pre>
+<h3 id="62-simulation">6.2 Simulation<a class="anchor" href="#62-simulation" aria-label="Link to this section">#</a></h3>
+<p>Simulated within the simulation radius:</p>
+<ul>
+<li>NPC, animal and enemy behaviour (villagers wander by day and go indoors at night)</li>
+<li>Resource regeneration (berry bushes, herbs and mushrooms regrow after a day or so while their region stays loaded)</li>
+<li>Weather and fire</li>
+<li>Environmental and time-based events</li>
+</ul>
+<h3 id="63-quests-and-world-events">6.3 Quests and world events<a class="anchor" href="#63-quests-and-world-events" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Generated quests</td>
+<td>Find an NPC, explore a location, kill an enemy, find an item, escort an NPC, defend a location, discover a landmark, clear a dungeon, collect resources</td>
+</tr>
+<tr>
+<td>Random world events</td>
+<td>Meteor crash, bandit attack, monster invasion, treasure event, rare merchant, ancient structure appearing</td>
+</tr>
+</tbody></table></div>
+<p>Quests come from villagers: each village has three villagers (one offering a new quest each day) and a trader. Quests complete on their own when the objective is met, except collect quests, which are handed in to any villager. Rewards are coins, experience and an item. Coins buy goods from traders and travelling merchants, who also buy treasure. A lost traveller is an important NPC: their position lives in the quest record, so they persist until rescued, while ordinary villagers come and go with their village.</p>
+<h3 id="64-exploration">6.4 Exploration<a class="anchor" href="#64-exploration" aria-label="Link to this section">#</a></h3>
+<ul>
+<li>Map with fog of war, coordinates and compass</li>
+<li>Discovered locations and landmarks</li>
+<li>Waypoints and player markers</li>
+<li>Rare discoveries and exploration rewards</li>
+</ul>
+<h2 id="7-presentation">7. Presentation<a class="anchor" href="#7-presentation" aria-label="Link to this section">#</a></h2>
+<p>The theme, UI and visual design follow Stardew Valley. All art, audio and UI assets are original work made in that style, not copies of the game&#39;s own assets.</p>
+<h3 id="71-visual-direction">7.1 Visual direction<a class="anchor" href="#71-visual-direction" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Direction</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Perspective</td>
+<td>Top-down, three-quarter view</td>
+</tr>
+<tr>
+<td>Art style</td>
+<td>16-bit style pixel art on a square tile grid</td>
+</tr>
+<tr>
+<td>Palette</td>
+<td>Warm and saturated, with a distinct palette per biome</td>
+</tr>
+<tr>
+<td>Tone</td>
+<td>Cozy and inviting near the origin, more threatening with distance</td>
+</tr>
+<tr>
+<td>Characters</td>
+<td>Small, expressive sprites with four-direction walk animations</td>
+</tr>
+<tr>
+<td>UI style</td>
+<td>Wood-framed panels, pixel font, tabbed menus</td>
+</tr>
+</tbody></table></div>
+<h3 id="72-hud-layout">7.2 HUD layout<a class="anchor" href="#72-hud-layout" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Position</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hotbar</td>
+<td>Bottom centre</td>
+</tr>
+<tr>
+<td>Health and stamina bars</td>
+<td>Bottom right, vertical</td>
+</tr>
+<tr>
+<td>Hunger and thirst bars</td>
+<td>Bottom right, beside health and stamina</td>
+</tr>
+<tr>
+<td>Clock, day and weather</td>
+<td>Top right</td>
+</tr>
+<tr>
+<td>Notifications</td>
+<td>Bottom left</td>
+</tr>
+<tr>
+<td>Main menu</td>
+<td>Full-screen panel with tabs: inventory, crafting, map, quests, settings</td>
+</tr>
+</tbody></table></div>
+<h3 id="73-features">7.3 Features<a class="anchor" href="#73-features" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Rendering</td>
+<td>2D tiles and sprites, animated sprites, animation system. Particles, lighting, shadows, weather and screen effects. Camera movement and zoom. Parallax backgrounds.</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td>Background and biome-specific music. Ambient, environmental and weather sounds. Footsteps, combat and creature sounds. Structure-specific ambience.</td>
+</tr>
+<tr>
+<td>UI</td>
+<td>Health, stamina, hunger and thirst bars. Hotbar, inventory, crafting menu, map, quest UI. Interaction prompts and notifications. Settings and pause menu.</td>
+</tr>
+</tbody></table></div>
+<h2 id="8-technical-design">8. Technical design<a class="anchor" href="#8-technical-design" aria-label="Link to this section">#</a></h2>
+<p>The game runs in the browser. Generation happens off the main thread so streaming never stalls the frame.</p>
+<h3 id="81-tech-stack">8.1 Tech stack<a class="anchor" href="#81-tech-stack" aria-label="Link to this section">#</a></h3>
+<p>The stack is chosen for frame rate first and for running on low-end phones and laptops.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Choice</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Language</td>
+<td>TypeScript</td>
+<td>Type safety across the main thread and worker boundary</td>
+</tr>
+<tr>
+<td>Build tool</td>
+<td>Vite</td>
+<td>Fast rebuilds and small production bundles</td>
+</tr>
+<tr>
+<td>Renderer</td>
+<td>PixiJS v8, WebGL renderer</td>
+<td>Batched GPU sprite drawing that runs on older devices</td>
+</tr>
+<tr>
+<td>Tile drawing</td>
+<td>One batched mesh per chunk, one texture atlas</td>
+<td>Very few draw calls per frame</td>
+</tr>
+<tr>
+<td>World generation</td>
+<td>Web Workers, typed arrays sent as transferable buffers</td>
+<td>Generation never blocks a frame and chunk data is not copied</td>
+</tr>
+<tr>
+<td>Noise</td>
+<td>Seeded simplex noise</td>
+<td>Cheap to compute and repeatable per seed</td>
+</tr>
+<tr>
+<td>Saves</td>
+<td>IndexedDB</td>
+<td>Local, asynchronous, no server needed</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td>Web Audio API</td>
+<td>Built into every browser, no extra download</td>
+</tr>
+<tr>
+<td>Menus</td>
+<td>HTML and CSS overlay</td>
+<td>Costs nothing while closed and keeps the canvas for the world</td>
+</tr>
+</tbody></table></div>
+<p>PixiJS is preferred over a full framework such as Phaser because the world systems here are custom anyway, and a renderer-only library is lighter. WebGPU stays off by default: the <a href="https://pixijs.download/release/docs/rendering.html">PixiJS rendering docs</a> recommend the WebGL renderer for production.</p>
+<p>Rules for low-end devices:</p>
+<ul>
+<li>Render at a low internal resolution and scale up with nearest-neighbour filtering. Pixel art loses nothing and the GPU fills far fewer pixels.</li>
+<li>Cap the device pixel ratio at 1.</li>
+<li>Give lighting, shadows, particles and weather effects a low-quality setting that turns them off.</li>
+<li>Offer a 30 fps cap.</li>
+<li>Pool chunks and entities so the garbage collector rarely runs during play.</li>
+</ul>
+<h3 id="82-threading">8.2 Threading<a class="anchor" href="#82-threading" aria-label="Link to this section">#</a></h3>
+<p>As built, the worker generates terrain tiles and decorations only. Structures, lakes and events are rolled on the main thread, because they need the live object list to avoid collisions.</p>
+<pre><code class="language-text">MAIN THREAD                      WEB WORKER
+├── Game loop                    ├── Terrain generation
+└── Renderer (WebGL)             ├── Structure generation
+                                 └── Resource generation
+</code></pre>
+<h3 id="83-performance-techniques">8.3 Performance techniques<a class="anchor" href="#83-performance-techniques" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Techniques</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Streaming</td>
+<td>Chunk streaming, generation prioritisation, lazy loading, render-distance and simulation-distance management</td>
+</tr>
+<tr>
+<td>Concurrency</td>
+<td>Web Workers, background generation</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>Chunk pooling, object pooling, typed arrays, asset caching</td>
+</tr>
+<tr>
+<td>Rendering</td>
+<td>WebGL, sprite batching, texture atlases, entity culling</td>
+</tr>
+</tbody></table></div>
+<h3 id="84-save-system">8.4 Save system<a class="anchor" href="#84-save-system" aria-label="Link to this section">#</a></h3>
+<p>Saves stay small because most of the world is never stored. Saves live in IndexedDB.</p>
+<p>A save contains:</p>
+<ul>
+<li>World seed</li>
+<li>Player state, inventory and progression</li>
+<li>Persistent objects</li>
+<li>Important discoveries</li>
+</ul>
+<h3 id="85-project-layout">8.5 Project layout<a class="anchor" href="#85-project-layout" aria-label="Link to this section">#</a></h3>
+<p>The tree below was the starting plan. The code has since grown its own layout (adding <code>story/</code>, <code>items/</code>, <code>ui/</code>, <code>audio/</code> and more systems); <code>docs/architecture.md</code> describes it as built.</p>
+<pre><code class="language-text">src/
+├── game/
+│   ├── Game.ts
+│   ├── Player.ts
+│   ├── Camera.ts
+│   └── Input.ts
+├── world/
+│   ├── WorldManager.ts
+│   ├── ChunkManager.ts
+│   ├── Chunk.ts
+│   ├── WorldObject.ts
+│   └── ObjectManager.ts
+├── generation/
+│   ├── TerrainGenerator.ts
+│   ├── BiomeGenerator.ts
+│   ├── StructureGenerator.ts
+│   ├── ResourceGenerator.ts
+│   ├── EnemyGenerator.ts
+│   └── Random.ts
+├── entities/
+│   ├── Entity.ts
+│   ├── Enemy.ts
+│   ├── NPC.ts
+│   └── Animal.ts
+├── systems/
+│   ├── CombatSystem.ts
+│   ├── InventorySystem.ts
+│   ├── CraftingSystem.ts
+│   ├── WeatherSystem.ts
+│   └── TimeSystem.ts
+├── workers/
+│   └── worldGenerator.worker.ts
+├── rendering/
+│   ├── TileRenderer.ts
+│   ├── ParticleSystem.ts
+│   └── Lighting.ts
+└── save/
+    └── SaveManager.ts
+</code></pre>
+<h2 id="9-roadmap">9. Roadmap<a class="anchor" href="#9-roadmap" aria-label="Link to this section">#</a></h2>
+<p>Build the world technology first. It is the unique part of the game and the riskiest, so it should be proven before combat, crafting or quests.</p>
+<h3 id="91-mvp-build-order">9.1 MVP build order<a class="anchor" href="#91-mvp-build-order" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>Player movement and camera</li>
+<li>Chunk streaming</li>
+<li>Procedural terrain</li>
+<li>Biomes</li>
+<li>Procedural structures</li>
+<li>Multi-chunk object lifetime</li>
+<li>Regeneration of discarded areas</li>
+</ol>
+<p>The MVP is done when a multi-chunk structure survives a partial unload and the area regenerates differently after a full unload.</p>
+<h3 id="92-after-the-mvp">9.2 After the MVP<a class="anchor" href="#92-after-the-mvp" aria-label="Link to this section">#</a></h3>
+<p>The original notes only fix the MVP. The order below is a suggested grouping, not a decision. Phases 2 to 6 are now built (building was dropped: the player is an adventurer). The current behaviour of every system is documented in <code>docs/</code>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Goal</th>
+<th>Systems</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2. Persistence</td>
+<td>The world remembers what matters</td>
+<td>Persistence tiers, save system</td>
+</tr>
+<tr>
+<td>3. Survival loop</td>
+<td>There is a reason to explore</td>
+<td>Resources, inventory, crafting, player vitals</td>
+</tr>
+<tr>
+<td>4. Threat</td>
+<td>The world pushes back</td>
+<td>Enemies, combat, distance-based difficulty, progression</td>
+</tr>
+<tr>
+<td>5. Living world</td>
+<td>The world feels alive</td>
+<td>Day/night, weather, simulation, quests, world events, rare events</td>
+</tr>
+<tr>
+<td>6. Polish</td>
+<td>The game is presentable</td>
+<td>Map and exploration tools, audio, lighting, particles, full UI</td>
+</tr>
+</tbody></table></div>
+<h2 id="10-open-questions">10. Open questions<a class="anchor" href="#10-open-questions" aria-label="Link to this section">#</a></h2>
+<p>These gaps surfaced while tightening the notes. The first three, plus chunk size and minimum biome size, must be settled before the MVP.</p>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Side-view leftovers.</strong> The Stardew Valley direction makes the game top-down. Jumping, crouching and parallax backgrounds do not fit that view. Drop them or redefine them? <em>Deferred: redefine after the MVP.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>How regeneration differs.</strong> A seeded RNG gives the same result for the same seed and coordinates. Regenerating differently needs an extra input, such as a per-region visit counter or world time. <em>Decided: a visit counter per 8 × 8-chunk region, raised when the region fully leaves the cache radius. Rivers and mountains stay fixed; biomes, ground detail, decorations, lakes and structures vary.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Biome regeneration.</strong> A discarded biome can currently return as a different type. Confirm this, or fix the type per area and vary only size, shape and contents. <em>Decided: the type is fixed per area; size, shape, variant and contents vary.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Semi-persistent tier.</strong> What does it keep, and for how long? <em>Decided: villages, castles and mines are semi-persistent. Once discovered, one is kept unchanged for 3 in-game days after the player last left it, then forgotten like a temporary place.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Player changes to temporary objects.</strong> Does a looted chest or cleared dungeon reset when its area regenerates? <em>Decided: chests never refill. A looted chest stays open, and chests that later regenerate from the same anchor start empty. Gathered trees, rocks and plants come back only when their region regenerates. Cleared dungeons, defeated arena bosses and slain legendary creatures stay cleared the same way.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Map and waypoints.</strong> What does the map show for a discovered location that has since regenerated? <em>Decided by the story: the lantern remembers it. Forgotten places are listed in the Lantern tab and show as ghosts in the lantern&#39;s light.</em></li>
+<li><input disabled="" type="checkbox"> <strong>Rare event odds.</strong> Are the percentages per chunk, per region or per structure roll? <em>Rolled per chunk for now, including the legendary creature (per chunk, per region visit).</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Chunk size, simulation radius and cache radius.</strong> No values are set yet. <em>Decided: 32 × 32 tiles, simulation radius 2 chunks, cache radius = render area + 2 chunks.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Minimum biome size.</strong> The value of the constant is not set yet. <em>Decided: 64 chunks.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Persistent objects in a regenerated biome.</strong> A persistent landmark is saved but its biome is not. What happens if the area comes back as a different biome? <em>Resolved: biome types are fixed per area, and there is no player building.</em></li>
+</ul>
+</article>
+    <nav class="pager"><a class="prev" href="index.html"><small>Previous</small>Overview</a><a class="next" href="architecture.html"><small>Next</small>Architecture</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#1-overview">1. Overview</a></li><li class="l3"><a href="#design-pillars">Design pillars</a></li><li class="l2"><a href="#2-world-streaming">2. World streaming</a></li><li class="l3"><a href="#21-radii">2.1 Radii</a></li><li class="l3"><a href="#22-render-margin">2.2 Render margin</a></li><li class="l3"><a href="#23-chunk-lifecycle">2.3 Chunk lifecycle</a></li><li class="l2"><a href="#3-procedural-generation">3. Procedural generation</a></li><li class="l3"><a href="#31-terrain">3.1 Terrain</a></li><li class="l3"><a href="#32-biomes">3.2 Biomes</a></li><li class="l3"><a href="#33-structures-and-points-of-interest">3.3 Structures and points of interest</a></li><li class="l3"><a href="#34-randomness">3.4 Randomness</a></li><li class="l3"><a href="#35-world-scale-rules">3.5 World-scale rules</a></li><li class="l3"><a href="#36-rare-events">3.6 Rare events</a></li><li class="l2"><a href="#4-object-lifetime-and-persistence">4. Object lifetime and persistence</a></li><li class="l3"><a href="#41-multi-chunk-objects">4.1 Multi-chunk objects</a></li><li class="l3"><a href="#42-temporary-world-state">4.2 Temporary world state</a></li><li class="l3"><a href="#43-persistence-tiers">4.3 Persistence tiers</a></li><li class="l2"><a href="#5-gameplay-systems">5. Gameplay systems</a></li><li class="l2"><a href="#6-living-world">6. Living world</a></li><li class="l3"><a href="#61-time-and-weather">6.1 Time and weather</a></li><li class="l3"><a href="#62-simulation">6.2 Simulation</a></li><li class="l3"><a href="#63-quests-and-world-events">6.3 Quests and world events</a></li><li class="l3"><a href="#64-exploration">6.4 Exploration</a></li><li class="l2"><a href="#7-presentation">7. Presentation</a></li><li class="l3"><a href="#71-visual-direction">7.1 Visual direction</a></li><li class="l3"><a href="#72-hud-layout">7.2 HUD layout</a></li><li class="l3"><a href="#73-features">7.3 Features</a></li><li class="l2"><a href="#8-technical-design">8. Technical design</a></li><li class="l3"><a href="#81-tech-stack">8.1 Tech stack</a></li><li class="l3"><a href="#82-threading">8.2 Threading</a></li><li class="l3"><a href="#83-performance-techniques">8.3 Performance techniques</a></li><li class="l3"><a href="#84-save-system">8.4 Save system</a></li><li class="l3"><a href="#85-project-layout">8.5 Project layout</a></li><li class="l2"><a href="#9-roadmap">9. Roadmap</a></li><li class="l3"><a href="#91-mvp-build-order">9.1 MVP build order</a></li><li class="l3"><a href="#92-after-the-mvp">9.2 After the MVP</a></li><li class="l2"><a href="#10-open-questions">10. Open questions</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

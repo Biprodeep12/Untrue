@@ -1,0 +1,980 @@
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap');
+
+:root {
+  --wood: #b07a3e;
+  --wood-dark: #6b4220;
+  --wood-light: #d9a861;
+  --paper: #f6dfa8;
+  --ink: #3b2412;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #1d1a17;
+  font-family: 'Pixelify Sans', ui-monospace, monospace;
+  color: var(--ink);
+}
+
+#game canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Wood-framed panel, after Stardew Valley's menus. */
+.panel {
+  background: var(--paper);
+  border: 3px solid var(--wood-dark);
+  box-shadow:
+    inset 0 0 0 2px var(--wood-light),
+    inset 0 0 0 4px var(--wood),
+    0 3px 0 rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.hud-location {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  text-align: right;
+  min-width: 150px;
+}
+
+.hud-biome {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hud-meta {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.hud-notes {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.hud-note {
+  font-size: 15px;
+  transition: opacity 0.6s;
+}
+
+.hud-note.fade {
+  opacity: 0;
+}
+
+.hud-help {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.hud-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 16, 12, 0.6);
+  font-size: 20px;
+}
+
+.debug {
+  position: absolute;
+  top: 96px;
+  left: 12px;
+  font-size: 12px;
+}
+
+.debug pre {
+  margin: 0 0 8px;
+  font: inherit;
+  white-space: pre;
+}
+
+.debug canvas {
+  display: block;
+  background: #222;
+  border: 2px solid var(--wood-dark);
+}
+
+.debug-key {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.debug-key i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid;
+  margin: 0 3px 0 6px;
+  vertical-align: middle;
+}
+
+/* Hotbar: bottom centre. */
+.hotbar {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  pointer-events: auto;
+}
+
+.slot {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--wood);
+  border-radius: 3px;
+  background: #e9c98a;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.slot .item-icon {
+  display: block;
+  margin: auto;
+  image-rendering: pixelated;
+}
+
+.slot .key {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.slot .count {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 1px 1px 0 var(--ink), -1px -1px 0 var(--ink), 1px -1px 0 var(--ink), -1px 1px 0 var(--ink);
+}
+
+.slot.selected {
+  border-color: #d8402c;
+  box-shadow: 0 0 0 2px #f5c542;
+}
+
+.hud-notes {
+  bottom: 84px;
+}
+
+/* Action prompt above the hotbar. */
+.hud-prompt {
+  position: absolute;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 4px 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Vitals: bottom right, vertical bars. */
+.hud-vitals {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+}
+
+.vital {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+}
+
+.vital-track {
+  position: relative;
+  width: 12px;
+  height: 64px;
+  background: #3b2412;
+  border: 2px solid var(--wood-dark);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.vital-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transition: height 0.25s;
+}
+
+.vital-health .vital-fill { background: #d8402c; }
+.vital-stamina .vital-fill { background: #7ec850; }
+.vital-hunger .vital-fill { background: #e8963a; }
+.vital-thirst .vital-fill { background: #4a9ad8; }
+
+.vital.low .vital-track {
+  animation: pulse 0.8s infinite alternate;
+}
+
+@keyframes pulse {
+  to { border-color: #ff5a4a; }
+}
+
+/* Main menu. */
+.menu-backdrop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 16, 12, 0.55);
+  pointer-events: auto;
+}
+
+.menu-backdrop.open {
+  display: flex;
+}
+
+.menu {
+  position: relative;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 14px 18px 18px;
+}
+
+.menu-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.menu-tab,
+.btn,
+.menu-close,
+.touch-btn {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: #e9c98a;
+  border: 2px solid var(--wood-dark);
+  border-radius: 3px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.menu-tab.active {
+  background: var(--wood-light);
+  box-shadow: inset 0 -3px 0 var(--wood);
+}
+
+.menu-tab:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.menu-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 2px 8px;
+}
+
+.inv-view {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 44px);
+  gap: 4px;
+}
+
+.inv-grid .slot.hot {
+  background: #f3dca6;
+}
+
+.inv-details {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.inv-details h3 {
+  margin: 0;
+}
+
+.inv-details p {
+  margin: 2px 0;
+  font-size: 13px;
+}
+
+.inv-details .item-icon {
+  image-rendering: pixelated;
+}
+
+.hint {
+  font-size: 13px;
+  opacity: 0.8;
+  margin: 0 0 8px;
+}
+
+.effects {
+  color: #2f6b2e;
+}
+
+.rarity { font-size: 12px; font-weight: 600; }
+.r0 { color: #6b5a44; }
+.r1 { color: #2f8a3a; }
+.r2 { color: #2f6bc8; }
+.r3 { color: #8a3ac8; }
+.r4 { color: #c88a1a; }
+
+.recipe {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-bottom: 1px solid rgba(107, 66, 32, 0.25);
+  opacity: 0.75;
+}
+
+.recipe.ready {
+  opacity: 1;
+}
+
+.recipe .item-icon {
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.recipe-text {
+  flex: 1;
+  font-size: 13px;
+}
+
+.recipe-text .have { color: #2f6b2e; margin-right: 8px; }
+.recipe-text .need { color: #b0402c; margin-right: 8px; }
+.station { font-size: 11px; padding: 0 4px; border: 1px solid var(--wood); border-radius: 2px; }
+.station.away { color: #b0402c; }
+
+/* Level and experience, above the vitals. */
+.hud-level {
+  position: absolute;
+  right: 12px;
+  bottom: 118px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.xp-track {
+  width: 64px;
+  height: 6px;
+  background: #3b2412;
+  border: 1px solid var(--wood-dark);
+}
+
+.xp-fill {
+  height: 100%;
+  background: #c8a0ff;
+}
+
+.hud-status {
+  position: absolute;
+  right: 12px;
+  bottom: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.status {
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.status-poison { color: #3a8a2a; }
+.status-slow { color: #2a6ab0; }
+.status-overloaded { color: #a8501e; }
+
+.inv-load {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.inv-load.over {
+  color: #a8501e;
+}
+
+.skill .pips {
+  color: #b8862e;
+  letter-spacing: 2px;
+}
+
+/* Boss health: top centre. */
+.hud-boss {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  width: min(420px, calc(100vw - 32px));
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.boss-track {
+  height: 8px;
+  margin-top: 4px;
+  background: #3b2412;
+  border: 1px solid var(--wood-dark);
+}
+
+.boss-fill {
+  height: 100%;
+  background: #d8402c;
+  transition: width 0.2s;
+}
+
+.hud-hurt {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  box-shadow: inset 0 0 80px 10px rgba(200, 30, 20, 0.7);
+}
+
+.hud-hurt.on {
+  animation: hurt 0.4s ease-out;
+}
+
+@keyframes hurt {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Clock and weather sit in the location panel. */
+.hud-clock {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* Quest tracker: under the location panel. */
+.hud-tracker {
+  position: absolute;
+  top: 100px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 300px;
+}
+
+.tracker-line {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.tracker-arrow {
+  display: inline-block;
+  margin-right: 6px;
+  color: #c8402c;
+}
+
+/* NPC dialog and trade. */
+.dialog {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  display: none;
+  pointer-events: auto;
+}
+
+.dialog.open {
+  display: block;
+}
+
+.dialog h3 {
+  margin: 0 0 4px;
+}
+
+.dialog p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.dialog-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.trade-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.trade-cols h4 {
+  margin: 0 0 4px;
+}
+
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.trade-row span {
+  flex: 1;
+}
+
+.trade-row .item-icon {
+  image-rendering: pixelated;
+}
+
+.quest {
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(107, 66, 32, 0.25);
+}
+
+.quest.done {
+  opacity: 0.6;
+}
+
+.quest .giver,
+.quest-reward {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.quest-text {
+  margin: 2px 0;
+  font-size: 13px;
+}
+
+.quest-progress {
+  font-size: 13px;
+  color: #2f6b2e;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .trade-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Story visions: full screen, one page at a time. */
+.vision {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(10, 20, 40, 0.88), rgba(4, 6, 14, 0.97));
+  pointer-events: auto;
+  color: #d8ecff;
+}
+
+.vision.open {
+  display: flex;
+}
+
+.vision-box {
+  width: min(620px, calc(100vw - 48px));
+  text-align: center;
+}
+
+.vision h2 {
+  font-weight: 600;
+  font-size: 20px;
+  color: #7fd8ff;
+  margin: 0 0 18px;
+}
+
+.vision p {
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+  min-height: 4.8em;
+}
+
+.vision p.fade-in {
+  animation: vision-in 0.8s ease-out;
+}
+
+@keyframes vision-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Compass: top left. */
+.hud-compass {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  max-width: 280px;
+}
+
+.compass-dial {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: #e9c98a;
+  border: 2px solid var(--wood-dark);
+}
+
+.compass-n {
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #c8402c;
+}
+
+.compass-needle {
+  position: absolute;
+  left: 18px;
+  top: 6px;
+  width: 0;
+  height: 0;
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  border-bottom: 13px solid #c8402c;
+  transform-origin: 2px 13px;
+}
+
+.compass-label {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+/* World map. */
+.map-view {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.map-main canvas {
+  display: block;
+  max-width: 100%;
+  border: 2px solid var(--wood-dark);
+  border-radius: 3px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.map-side {
+  flex: 1;
+  min-width: 140px;
+}
+
+.map-side h4 {
+  margin: 10px 0 4px;
+}
+
+.map-marker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.map-marker span {
+  flex: 1;
+}
+
+.map-marker .btn {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+/* Pause menu. */
+.pause-panel {
+  width: min(460px, calc(100vw - 32px));
+  text-align: center;
+}
+
+.pause-panel h2 {
+  margin: 0 0 12px;
+}
+
+.pause-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.controls {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.controls td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(107, 66, 32, 0.2);
+}
+
+.controls td:first-child {
+  font-weight: 600;
+  width: 40%;
+}
+
+.setting input[type='range'] {
+  margin-left: auto;
+  width: 160px;
+}
+
+/* Touch buttons, only on touch screens. */
+.touch-buttons {
+  position: absolute;
+  right: 12px;
+  bottom: 180px;
+  display: none;
+  grid-template-columns: repeat(2, 56px);
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.touch-btn.block {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+@media (pointer: coarse) {
+  .touch-buttons {
+    display: grid;
+  }
+}
+
+/* Virtual stick for touch screens. */
+.stick {
+  position: absolute;
+  display: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(246, 223, 168, 0.25);
+  border: 3px solid rgba(107, 66, 32, 0.6);
+}
+
+.stick-knob {
+  position: absolute;
+  left: 26px;
+  top: 26px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(246, 223, 168, 0.85);
+  border: 3px solid var(--wood-dark);
+}
+
+@media (max-width: 900px) {
+  .hud-help {
+    display: none;
+  }
+}
+
+/* Panels still scroll with the wheel, touch or keys, but show no scrollbar. */
+.menu,
+.dialog {
+  scrollbar-width: none;
+}
+
+.menu::-webkit-scrollbar,
+.dialog::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sleeping: fade to night, drifting Z's, fade back to morning. */
+.sleep-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #141a33, #04050b);
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.sleep-overlay.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sleep-z {
+  font-size: 28px;
+  color: #cfd8ff;
+  letter-spacing: 6px;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.sleep-overlay.on .sleep-z {
+  opacity: 1;
+}
+
+.sleep-z span {
+  display: inline-block;
+  animation: sleep-drift 1.6s ease-in-out infinite;
+}
+
+.sleep-z span:nth-child(2) {
+  font-size: 22px;
+  animation-delay: 0.25s;
+}
+
+.sleep-z span:nth-child(3) {
+  font-size: 16px;
+  animation-delay: 0.5s;
+}
+
+@keyframes sleep-drift {
+  0%, 100% { transform: translateY(4px); opacity: 0.5; }
+  50% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* Equipment: armour slots, the player preview and the off hand. */
+.equip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 2px solid #8a5a2b;
+  border-radius: 6px;
+  background: rgba(60, 36, 18, 0.12);
+}
+
+.equip-slots,
+.equip-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.equip-preview {
+  width: 80px;
+  height: 160px;
+  image-rendering: pixelated;
+  background: radial-gradient(ellipse at 50% 85%, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.08) 60%);
+  border-radius: 6px;
+}
+
+.slot.ghost .item-icon {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+
+.armor-value {
+  font-size: 12px;
+  color: #5c3a1c;
+}
+
+/* Shown when the game cannot start at all. */
+.fatal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: #f6e8c8;
+  background: #1d1a17;
+  font-family: sans-serif;
+}
+
+.fatal p {
+  max-width: 480px;
+  line-height: 1.5;
+}
