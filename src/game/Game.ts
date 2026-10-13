@@ -26,6 +26,7 @@ import { WEATHER, type WeatherKind } from '../systems/WeatherSystem';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { Hotbar } from '../ui/Hotbar';
 import { Hints } from '../ui/Hints';
+import { Intro } from '../ui/Intro';
 import { Hud } from '../ui/Hud';
 import { Playground, type PlaygroundFind } from '../ui/Playground';
 import type { Landmark } from '../ui/MapView';
@@ -191,6 +192,8 @@ export class Game {
   private autosaveTimer = AUTOSAVE_SECONDS;
   private uiTimer = 0;
   private hints!: Hints;
+  /** The opening screen, until the first spawn clears it. */
+  private intro: Intro | null = new Intro();
 
   async start(host: HTMLElement, ui: HTMLElement): Promise<void> {
     // ?new or ?seed=N start a fresh world; otherwise the save is loaded.
@@ -266,6 +269,8 @@ export class Game {
 
     this.input = new Input(window, this.app.canvas);
     this.hud = new Hud(ui);
+    // The opening screen covers the first load; the HUD's own loading screen is for later trips.
+    this.hud.setLoading(false);
     this.hints = new Hints((t) => this.hud.tip(t));
     this.sleepOverlay = new SleepOverlay(ui);
     this.hotbar = new Hotbar(ui, atlasCanvas, this.inventory);
@@ -1387,6 +1392,14 @@ export class Game {
       });
   }
 
+  /** The player is placed: lift the loading screen, or play the opening reveal the first time. */
+  private loaded(): void {
+    this.hud.setLoading(false);
+    if (!this.intro) return;
+    void this.intro.play();
+    this.intro = null;
+  }
+
   private travel(x: number, y: number): void {
     this.spawnTarget = { x, y };
     this.hud.setLoading(true);
@@ -1408,7 +1421,7 @@ export class Game {
     // A saved position is restored exactly when it is still open.
     if (!player.blocked(target.x, target.y, world)) {
       this.spawnTarget = null;
-      this.hud.setLoading(false);
+      this.loaded();
       return;
     }
     for (let r = 0; r <= SPAWN_SEARCH; r++) {
@@ -1421,7 +1434,7 @@ export class Game {
           player.place(x, y);
           camera.snap(x * TILE_SIZE, y * TILE_SIZE);
           this.spawnTarget = null;
-          this.hud.setLoading(false);
+          this.loaded();
           return;
         }
       }

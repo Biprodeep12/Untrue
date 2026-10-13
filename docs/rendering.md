@@ -139,6 +139,7 @@ The interface is HTML and CSS over the canvas (`src/ui/`, styled in `src/style.c
 | `DebugOverlay` | F3: seed, frame rate, chunk counts, biomes, objects, enemies, regions, and a minimap of the cache area |
 | `TouchStick` | The virtual stick on touch screens |
 | `Hints` | First-time tips (`Hints.ts`); see below |
+| `Intro` | The opening screen (`Intro.ts`, markup in `index.html`): the title over darkness from the first paint; once the player is placed, the darkness breaks into 40px squares that clear outward from the centre in a ragged ring (about 1.3 s), then it is removed. A low-resolution canvas (8 pixels per square) scaled up with `image-rendering: pixelated`; reduced motion gets a 0.4 s fade. Later trips (death, travel) use the HUD's loading screen. |
 | `Fullscreen` | Full screen helpers for the Full button and the pause menu (`Fullscreen.ts`) |
 | `SleepOverlay`, `Playground` | The sleep transition; the story playground panel (development builds) |
 

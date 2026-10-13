@@ -1,6 +1,3 @@
-// The font ships with the game: no request to Google Fonts.
-import '@fontsource/pixelify-sans/400.css';
-import '@fontsource/pixelify-sans/600.css';
 import { Game } from './game/Game';
 
 const game = new Game();
@@ -11,6 +8,7 @@ game.start(document.getElementById('game')!, document.getElementById('ui')!).cat
   box.className = 'fatal';
   box.innerHTML = '<h1>Untrue could not start</h1><p>This game needs a browser with WebGL turned on. Try an up-to-date Chrome, Edge, Firefox or Safari, and check that hardware acceleration is enabled.</p>';
   document.body.appendChild(box);
+  document.getElementById('intro')?.remove();
 });
 // Dev builds expose the game for poking at it from the console.
 if (import.meta.env.DEV) Object.assign(window, { game });

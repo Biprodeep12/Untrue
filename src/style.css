@@ -1,3 +1,8 @@
+/* The font ships with the game (no request to Google Fonts), loaded with
+   the stylesheet so the opening screen's title has it from the first paint. */
+@import '@fontsource/pixelify-sans/400.css';
+@import '@fontsource/pixelify-sans/600.css';
+
 :root {
   --wood: #b07a3e;
   --wood-dark: #6b4220;
@@ -1505,5 +1510,67 @@ body {
 @media (pointer: coarse) and (max-height: 500px) {
   .playground.hidden {
     bottom: calc(190px + env(safe-area-inset-bottom));
+  }
+}
+
+/* The opening screen (index.html, src/ui/Intro.ts): above everything until
+   the world is ready, then cleared by a ring of shrinking squares. */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #1d1a17;
+  color: var(--paper);
+  pointer-events: none;
+}
+
+.intro-title {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(40px, 9vw, 72px);
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-shadow: 0 4px 0 var(--wood-dark);
+}
+
+.intro-sub {
+  position: relative;
+  z-index: 1;
+  font-size: 16px;
+  opacity: 0.75;
+  animation: intro-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes intro-pulse {
+  from { opacity: 0.4; }
+  to { opacity: 0.9; }
+}
+
+/* Leaving: the title fades while the squares clear. */
+.intro.leaving .intro-title,
+.intro.leaving .intro-sub {
+  opacity: 0;
+  transition: opacity 0.5s;
+  animation: none;
+}
+
+.intro-cells {
+  position: absolute;
+  image-rendering: pixelated;
+}
+
+.intro.fade {
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-sub {
+    animation: none;
   }
 }
