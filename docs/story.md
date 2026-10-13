@@ -123,7 +123,7 @@ Code:
 - `src/story/StoryPlaces.ts`: the story's places and their layouts
 - `src/story/StoryScript.ts`: every line of text
 - `src/ui/Vision.ts`: full-screen visions
-- `src/audio/Sfx.ts`: the bell
+- `src/audio/AudioSystem.ts`: the bell (`AudioSystem.bell`)
 
 `LivingWorld` owns the `StorySystem` and routes talk, rest, prompts and interactions through it.
 
@@ -145,13 +145,15 @@ The HUD tracker shows the current objective with a ★ and an arrow toward the s
 | `bell` | Follow the bell | The player enters the Village of Graves | – |
 | `village` | Talk to the villagers (n/3), then Visit the cemetery | After talking to all three villagers, the player reads a gravestone. Gravestones read earlier only show their inscription. | 80 |
 | `night` | Rest by the village fire tonight | E at the village campfire, at any hour. The "Chapter II" vision plays, the village and its three people vanish, the lantern keeps the village, and the clock skips to 6:00. | 80 |
-| `observatory` | Seek the observatory | The Astronomer's speech is finished | 80 |
+| `observatory` | Seek the observatory and speak to the old man | The Astronomer's speech is finished. He shows a "!" through this stage, even if he was met before. | 80 |
 | `archive` | Read the memories (n/3), then Enter the Hall of Lanterns | All three pedestals have been touched, then any lantern rack in the archive. Racks touched earlier answer "The lanterns are dark. Not yet." | 160 |
 | `return` | Return to the observatory | The Astronomer is gone and the translucent younger self waits. Their speech plays, then the Chapter V and VI visions; the lantern goes dark and the younger self leaves. | – |
 | `anchor` | Find the Original Anchor | E on the Anchor core offers the three endings. Choosing one plays its vision. | 400 |
 | `epilogue` | – | Endless play under the ending's rules | – |
 
 The Observatory's journal (the Book) shows the entry in the player's handwriting until the `return` stage, and blank pages after.
+
+Reaching a new stage also moves the player's waking spot (where they wake after collapsing) to where they stand, outdoors ([survival.md](survival.md#collapse)). Nothing is saved while a vision is open, so a reload never lands half way through a stage change.
 
 ### Places
 
@@ -162,9 +164,9 @@ All story places are persistent objects with id `story:<id>` and kind `story-<id
 | Id | Name | Distance (tiles) | Size | Contents |
 | --- | --- | --- | --- | --- |
 | `monument` | Waking Monument | 0 (just north of the origin) | 7×7 | Path ring, stone floor, the Monument |
-| `graves` | Village of Graves | 260 | village (40–54) + 14 | A generated village (houses, well, anvil, paths), a 12×12 cemetery on its east side with 12 gravestones, a campfire by the well |
+| `graves` | Village of Graves | 260 | village (46–56) + 14 | A generated village (houses, well, anvil, paths), a 12×12 cemetery on its east side with 12 gravestones, a campfire by the well |
 | `observatory` | The Observatory | 1,400 | 21×23 | A round stone wall, telescope, four bookshelves, the journal |
-| `archive` | Sunken Archive | 3,200 | 64×64 | Dark stone halls, shelves and rubble. Three memory rooms (north, west, east), each with a pedestal. A central 22×22 Hall of Lanterns with 16 lantern racks. 6 skeleton guards ([combat.md](combat.md#guarded-places)). |
+| `archive` | Sunken Archive | 3,200 | 64×64 | Dark stone halls, shelves and rubble. Three memory rooms (north, west, east), each with a pedestal. A central 22×22 Hall of Lanterns with 16 lantern racks. 4 skeleton guards and 2 skeleton archers ([combat.md](combat.md#guarded-places)). |
 | `anchor` | The Original Anchor | 5,200 | 72×72 | A round platform in rings of stone, temple and dark floor, with 16 pillars, 8 lantern racks, and the Anchor core at the centre |
 
 The distances put the archive in the Medium band and the Anchor in the Hard band ([combat.md](combat.md#difficulty-scaling-and-elites)).
@@ -173,7 +175,7 @@ The pedestals are numbered in reading order: north shows "the builders", west "t
 
 ### People
 
-Story people are ordinary NPCs. They appear while their place's centre chunk is in the simulation radius and their stage is active, and leave otherwise. They show a "!" until spoken to, and conversations go page by page (Continue, then Farewell).
+Story people are ordinary NPCs. They appear while their place's centre chunk is in the simulation radius and their stage is active, and leave otherwise. They show a "!" until spoken to (the Astronomer also during the `observatory` stage), and conversations go page by page (Continue, then Farewell).
 
 | Person | Place | Outfit | Present during |
 | --- | --- | --- | --- |
@@ -224,7 +226,7 @@ Ending the story unlocks three world events ([living-world.md](living-world.md#w
 
 ### Story playground
 
-For testing, development builds open a story playground at `?playground` (or `?playground=SEED`; the default seed is 1). It is a fresh world that is never saved, so the real save is untouched.
+For testing, development builds open a story playground at `?playground` (or `?playground=SEED`; the default seed is 1). It is a fresh world that is never saved, so the real save is untouched. It does not take the save lock, so it can run beside a tab of the real game, and it shows no first-time tips.
 
 - **Compact places:** `StorySystem.compact` makes `placeStory` put the places near the spawn, one per direction: the Village of Graves 70 tiles east, the Observatory 80 south, the Sunken Archive 110 west and the Original Anchor 140 north.
 - **Start chapter:** `StorySystem.jumpTo(stage)` rebuilds every story place, clears memories, flags, the ending and its world rules, then sets the flags of every earlier chapter (villagers spoken to and the grave read, the village gone, the astronomer spoken to, the three pedestals read, the younger self met and the lantern dark). The monument is already crumbled from the bell onwards. The panel then takes the player to that chapter's place.

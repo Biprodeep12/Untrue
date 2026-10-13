@@ -4,12 +4,12 @@
 import { CHUNK_SIZE } from '../config';
 import { chunkKey, inRect, tileToChunk } from '../coords';
 import { Enemy, type EnemyContext } from '../entities/Enemy';
-import { SPECIES, type ProjectileKind, type Species } from '../entities/Species';
+import { elementFactor, SPECIES, type ProjectileKind, type Species } from '../entities/Species';
 import { eliteChance, groupSize, LEGEND_CHANCE, MIN_SPAWN_DISTANCE, pickSpecies, populationCap, SAFE_RADIUS } from '../generation/EnemyGenerator';
 import { Rng, streamRng, Stream } from '../generation/Random';
 import { difficultyBand } from '../generation/WorldRules';
-import { isWater } from '../generation/Tiles';
-import { Items, type WeaponStats } from '../items/Items';
+import { BiomeType, isWater } from '../generation/Tiles';
+import { Items, type Element, type WeaponStats } from '../items/Items';
 import type { WorldManager } from '../world/WorldManager';
 import type { WorldObject } from '../world/WorldObject';
 import type { Inventory } from './InventorySystem';
@@ -19,6 +19,15 @@ import type { Vitals } from './Vitals';
 
 const FISTS: WeaponStats = { kind: 'melee', damage: 5, durability: 0, reach: 1.1, cooldown: 0.45 };
 export const CRIT_CHANCE = 0.1;
+/** The legend that roams a land: the Elder Stag near home, a land's own
+ *  legend further out. `roll` is 0 to 1. */
+export function legendFor(biome: BiomeType | undefined, band: number, roll: number): Species {
+  if (biome === BiomeType.Desert && band >= 1) return SPECIES.duneTyrant;
+  if (biome === BiomeType.Snow && band >= 1) return roll < 0.5 ? SPECIES.ancientGolem : SPECIES.alphaWolf;
+  if (band >= 2 && roll < 0.5) return SPECIES.alphaWolf;
+  return SPECIES.stag;
+}
+
 /** Share of damage that gets through a block. */
 const BLOCK_PASS = 0.3;
 const BLOCK_STAMINA = 8;
@@ -42,6 +51,8 @@ export interface Projectile {
   vy: number;
   kind: ProjectileKind;
   damage: number;
+  /** The damage type of the player's shot, if any. */
+  element?: Element;
   fromPlayer: boolean;
   /** Seconds left in flight. */
   ttl: number;
@@ -113,6 +124,7 @@ export class CombatSystem {
   private readonly guarded = new Map<string, Guarded>();
   /** Chunks already rolled for a legendary creature this region visit. */
   private readonly legendChecked = new Set<string>();
+  private legendRect = '';
 
   constructor(
     private readonly world: WorldManager,
@@ -187,7 +199,7 @@ export class CombatSystem {
       const crit = this.rng.chance(CRIT_CHANCE);
       this.projectiles.push({
         x, y: y - BODY, vx: dx * ARROW_SPEED, vy: dy * ARROW_SPEED, kind: 'arrow',
-        damage: playerHitDamage(weapon.damage, this.progression.damageBonus, crit), fromPlayer: true, ttl: weapon.reach / ARROW_SPEED,
+        damage: playerHitDamage(weapon.damage, this.progression.damageBonus, crit), element: weapon.element, fromPlayer: true, ttl: weapon.reach / ARROW_SPEED,
       });
     } else {
       this.events.swing(x, y - BODY, dx, dy, weapon.reach);
@@ -198,7 +210,7 @@ export class CombatSystem {
         const d = Math.hypot(ex, ey);
         if (d > weapon.reach + 0.4 || (d > 0.3 && (ex * dx + ey * dy) / d < SWING_COS)) continue;
         const crit = this.rng.chance(CRIT_CHANCE);
-        this.damageEnemy(e, playerHitDamage(weapon.damage, this.progression.damageBonus, crit), crit, dx, dy);
+        this.damageEnemy(e, playerHitDamage(weapon.damage, this.progression.damageBonus, crit), crit, dx, dy, weapon.element);
       }
     }
     this.cooldown = weapon.cooldown;
@@ -206,7 +218,9 @@ export class CombatSystem {
     return true;
   }
 
-  private damageEnemy(e: Enemy, amount: number, crit: boolean, pushX: number, pushY: number): void {
+  private damageEnemy(e: Enemy, raw: number, crit: boolean, pushX: number, pushY: number, element?: Element): void {
+    // Some creatures are weak to a damage type, some shrug it off.
+    const amount = Math.max(1, Math.round(raw * elementFactor(e.species, element)));
     e.takeHit(amount);
     this.events.damage(e.x, e.y - 1, amount, crit, false);
     // Knockback, unless something solid is in the way.
@@ -236,6 +250,7 @@ export class CombatSystem {
   private kill(e: Enemy): void {
     this.enemies.splice(this.enemies.indexOf(e), 1);
     this.grantXp(e.xp);
+    if (e.species.boss) this.progression.trophies[e.species.id] = (this.progression.trophies[e.species.id] ?? 0) + 1;
     this.onKill?.(e);
     this.events.killed?.(e);
     const drops: Array<[typeof Items.wood, number]> = [];
@@ -248,6 +263,11 @@ export class CombatSystem {
     for (const [item, count] of drops) {
       const left = this.inv.add(item, count);
       if (count > left) this.events.notify(`+${count - left} ${item.name}`);
+      // A full bag leaves the rest where the enemy fell.
+      if (left > 0) {
+        this.world.ground.drop({ item, count: left }, e.x, e.y);
+        this.events.notify(`Bag full: ${left} ${item.name} left on the ground`);
+      }
     }
     this.events.notify(e.species.passive ? `Hunted a ${e.name}` : `Defeated ${e.name}`);
 
@@ -268,7 +288,7 @@ export class CombatSystem {
     const before = this.vitals.maxHealth;
     this.vitals.maxHealth = this.progression.maxHealth;
     this.vitals.health += this.vitals.maxHealth - before;
-    this.events.notify(`Level up! You are level ${this.progression.level}. New skill point (Tab → Skills)`);
+    this.events.notify(`Level up! You are level ${this.progression.level}. New skill point: spend it in the Skills tab`);
     this.events.levelUp?.(this.progression.level);
   }
 
@@ -284,7 +304,7 @@ export class CombatSystem {
         const hit = this.enemies.find((e) => e.state !== 'burrowed' && Math.hypot(e.x - p.x, e.y - BODY - p.y) < 0.6);
         if (hit) {
           const len = Math.hypot(p.vx, p.vy) || 1;
-          this.damageEnemy(hit, p.damage, false, p.vx / len, p.vy / len);
+          this.damageEnemy(hit, p.damage, false, p.vx / len, p.vy / len, p.element);
           done = true;
         }
       } else if (!done && Math.hypot(b.x - p.x, b.y - BODY - p.y) < 0.5) {
@@ -399,34 +419,50 @@ export class CombatSystem {
       if (!GUARDED_KINDS.has(o.kind) || !o.contains(gx, gy)) continue;
       const key = o.anchor || o.id;
       if (this.world.clearedAnchors.has(key) || this.guarded.has(o.id)) continue;
-      if (o.kind === 'dungeon') this.spawnGuards(o, SPECIES.skeleton, this.rng.int(3, 5), key);
-      else if (o.kind === 'story-archive') this.spawnGuards(o, SPECIES.skeleton, 6, key);
-      else this.spawnGuards(o, SPECIES.guardian, 1, key);
+      if (o.kind === 'dungeon') {
+        // Skeletons, archers behind them, and further out a ghoul or two.
+        const band = difficultyBand(o.x, o.y);
+        const ghouls = band >= 3 ? 2 : band >= 2 ? 1 : 0;
+        this.spawnGuards(o, [[SPECIES.skeleton, this.rng.int(2, 3)], [SPECIES.skeletonArcher, this.rng.int(1, 2)], [SPECIES.ghoul, ghouls]], key);
+      } else if (o.kind === 'story-archive') this.spawnGuards(o, [[SPECIES.skeleton, 4], [SPECIES.skeletonArcher, 2]], key);
+      else this.spawnGuards(o, [[SPECIES.guardian, 1]], key);
     }
   }
 
-  private spawnGuards(o: WorldObject, species: Species, count: number, key: string): void {
+  private spawnGuards(o: WorldObject, groups: ReadonlyArray<[Species, number]>, key: string): void {
     const band = difficultyBand(o.x, o.y);
     let placed = 0;
-    for (let attempt = 0; attempt < 60 && placed < count; attempt++) {
-      // Bosses take the centre; guards spread over the floor.
-      const lx = count === 1 ? Math.floor(o.w / 2) : this.rng.int(1, o.w - 2);
-      const ly = count === 1 ? Math.floor(o.h / 2) + 2 : this.rng.int(1, o.h - 2);
-      if (this.world.isSolidAt(o.x + lx, o.y + ly)) continue;
-      const e = new Enemy(species, o.x + lx + 0.5, o.y + ly + 0.9, band, false);
-      e.tag = o.id;
-      this.enemies.push(e);
-      placed++;
+    let boss: Species | null = null;
+    for (const [species, count] of groups) {
+      let n = 0;
+      for (let attempt = 0; attempt < 60 && n < count; attempt++) {
+        // Bosses take the centre; guards spread over the floor.
+        const lx = species.boss ? Math.floor(o.w / 2) : this.rng.int(1, o.w - 2);
+        const ly = species.boss ? Math.floor(o.h / 2) + 2 : this.rng.int(1, o.h - 2);
+        if (this.world.isSolidAt(o.x + lx, o.y + ly)) continue;
+        const e = new Enemy(species, o.x + lx + 0.5, o.y + ly + 0.9, band, false);
+        e.tag = o.id;
+        this.enemies.push(e);
+        n++;
+      }
+      if (n && species.boss) boss = species;
+      placed += n;
     }
     if (!placed) return;
     this.guarded.set(o.id, { remaining: placed, key, name: o.name, kind: o.kind });
-    this.events.notify(species.boss ? `${species.name} awakens!` : `Something stirs in the ${o.name.toLowerCase()}…`);
+    this.events.notify(boss ? `${boss.name} awakens!` : `Something stirs in the ${o.name.toLowerCase()}…`);
   }
 
   /** Rolls each simulated chunk once per region visit for a legendary creature. */
   private rollLegends(): void {
     const sim = this.world.chunks.simRect;
     if (!sim) return;
+    // Only new chunks can roll: look again when the simulated area moves.
+    const at = `${sim.x0},${sim.y0},${sim.x1},${sim.y1}`;
+    if (at === this.legendRect) return;
+    this.legendRect = at;
+    // Rolls are seeded, so forgetting old ones only means rolling them again.
+    if (this.legendChecked.size > 4096) this.legendChecked.clear();
     for (let cy = sim.y0; cy <= sim.y1; cy++) {
       for (let cx = sim.x0; cx <= sim.x1; cx++) {
         const visit = this.world.regions.visit(cx, cy);
@@ -435,14 +471,18 @@ export class CombatSystem {
         this.legendChecked.add(id);
         const key = `legend@${cx},${cy}`;
         if (this.world.clearedAnchors.has(key) || this.guarded.has(key)) continue;
-        if (streamRng(Stream.RareEvent, this.world.seed, cx, cy, visit, 77).next() >= LEGEND_CHANCE) continue;
         const gx = cx * CHUNK_SIZE + 16;
         const gy = cy * CHUNK_SIZE + 16;
+        const band = difficultyBand(gx, gy);
+        // Legends grow commoner, and fiercer, the further out.
+        const rng = streamRng(Stream.RareEvent, this.world.seed, cx, cy, visit, 77);
+        if (rng.next() >= LEGEND_CHANCE * (1 + band)) continue;
         if (this.world.isSolidAt(gx, gy)) continue;
-        const e = new Enemy(SPECIES.stag, gx + 0.5, gy + 0.9, difficultyBand(gx, gy), false);
+        const species = legendFor(this.world.biomeAt(gx, gy)?.type, band, rng.next());
+        const e = new Enemy(species, gx + 0.5, gy + 0.9, band, false);
         e.tag = key;
         this.enemies.push(e);
-        this.guarded.set(key, { remaining: 1, key, name: 'The Elder Stag', kind: 'legend' });
+        this.guarded.set(key, { remaining: 1, key, name: `The ${species.name}`, kind: 'legend' });
         this.events.notify('A legendary creature roams nearby…');
       }
     }

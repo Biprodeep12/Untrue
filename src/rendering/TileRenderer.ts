@@ -1,5 +1,7 @@
 // Draws chunks: one batched mesh per chunk over a single atlas texture, plus
-// pooled, y-sorted sprites for decorations.
+// pooled, y-sorted sprites for decorations. Chunks are loaded a chunk beyond
+// the screen; those outside the camera's view are culled, so their meshes are
+// not drawn and their sprites leave the sorted container.
 
 import { Container, Mesh, MeshGeometry, Rectangle, Sprite, Texture } from 'pixi.js';
 import { CHUNK_AREA, CHUNK_SIZE, TILE_SIZE } from '../config';
@@ -33,11 +35,18 @@ const WALL_FACES: Partial<Record<number, number>> = {
 
 /** Pulls UVs in slightly so neighbouring atlas cells never bleed when zoomed out. */
 const INSET = 0.02;
+/** Culling margin in pixels: tall decorations reach above their tile, and lights glow past the edge. */
+const CULL_PAD = 6 * TILE_SIZE;
+const CHUNK_PX = CHUNK_SIZE * TILE_SIZE;
 
 interface Drawn {
   mesh: Mesh<MeshGeometry>;
   sprites: Sprite[];
   lights: Light[];
+  /** On screen (or near it) as of the last cull. */
+  inView: boolean;
+  cx: number;
+  cy: number;
 }
 
 export class TileRenderer implements ChunkListener {
@@ -48,6 +57,8 @@ export class TileRenderer implements ChunkListener {
   private readonly decoTextures: Texture[] = [];
   private readonly positions: Float32Array;
   private readonly indices: Uint32Array;
+  /** The camera's view in world pixels, padded; null until the first cull. */
+  private view: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
 
   constructor(
     private readonly atlas: Texture,
@@ -101,12 +112,38 @@ export class TileRenderer implements ChunkListener {
     return this.drawn.size;
   }
 
+  /** Shows only chunks overlapping the camera's view (world pixels). */
+  cull(minX: number, minY: number, maxX: number, maxY: number): void {
+    this.view = { minX: minX - CULL_PAD, minY: minY - CULL_PAD, maxX: maxX + CULL_PAD, maxY: maxY + CULL_PAD };
+    for (const d of this.drawn.values()) this.setInView(d, this.overlaps(d));
+  }
+
+  private overlaps(d: Drawn): boolean {
+    const v = this.view;
+    if (!v) return true;
+    const x = d.cx * CHUNK_PX;
+    const y = d.cy * CHUNK_PX;
+    return x < v.maxX && x + CHUNK_PX > v.minX && y < v.maxY && y + CHUNK_PX > v.minY;
+  }
+
+  private setInView(d: Drawn, inView: boolean): void {
+    if (d.inView === inView) return;
+    d.inView = inView;
+    d.mesh.visible = inView;
+    for (const s of d.sprites) {
+      if (inView) this.entities.addChild(s);
+      else this.entities.removeChild(s);
+    }
+  }
+
   show(chunk: Chunk): void {
     const mesh = this.meshPool.pop() ?? this.createMesh();
     this.writeUVs(mesh, chunk);
     mesh.position.set(chunk.cx * CHUNK_SIZE * TILE_SIZE, chunk.cy * CHUNK_SIZE * TILE_SIZE);
     this.ground.addChild(mesh);
-    const d: Drawn = { mesh, sprites: [], lights: [] };
+    const d: Drawn = { mesh, sprites: [], lights: [], inView: true, cx: chunk.cx, cy: chunk.cy };
+    d.inView = this.overlaps(d);
+    mesh.visible = d.inView;
     this.addDecos(d, chunk);
     this.collectLights(d, chunk);
     // The chunk above may have walls whose faces depended on this one.
@@ -143,9 +180,12 @@ export class TileRenderer implements ChunkListener {
     return new Mesh({ geometry, texture: this.atlas });
   }
 
-  /** Every light source in drawn chunks, in world pixels. */
+  /** Every light source in chunks in view, in world pixels. */
   lights(out: Light[]): void {
-    for (const d of this.drawn.values()) out.push(...d.lights);
+    for (const d of this.drawn.values()) {
+      if (!d.inView) continue;
+      for (const l of d.lights) out.push(l);
+    }
   }
 
   private collectLights(d: Drawn, chunk: Chunk): void {
@@ -213,7 +253,7 @@ export class TileRenderer implements ChunkListener {
       const y = oy + (Math.floor(i / CHUNK_SIZE) + 1) * TILE_SIZE;
       s.position.set(ox + (i % CHUNK_SIZE) * TILE_SIZE + TILE_SIZE / 2, y);
       s.zIndex = y;
-      this.entities.addChild(s);
+      if (d.inView) this.entities.addChild(s);
       d.sprites.push(s);
     }
   }
@@ -221,7 +261,7 @@ export class TileRenderer implements ChunkListener {
   private releaseSprites(d: Drawn): void {
     for (const s of d.sprites) {
       s.alpha = 1;
-      this.entities.removeChild(s);
+      if (d.inView) this.entities.removeChild(s);
       this.spritePool.push(s);
     }
     d.sprites.length = 0;

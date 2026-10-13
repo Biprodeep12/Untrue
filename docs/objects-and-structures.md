@@ -33,7 +33,7 @@ When an object the player had discovered is discarded, `WorldManager.onForget` f
 | Tier | Behaviour |
 | --- | --- |
 | `temporary` | Discarded when its chunks unload; may regenerate differently. The default. |
-| `semi-persistent` | Behaves as temporary until discovered. Once discovered, it is kept when its chunks unload, for 3 in-game days (`SEMI_KEEP_MINUTES`) after the player last left it, so coming back soon finds it as it was: same layout, chests still looted, mined rock still gone. After that it is forgotten like a temporary object (and the lantern remembers it). Kept objects are saved with their idle time. Used by villages, castles and mines. |
+| `semi-persistent` | Behaves as temporary until discovered. Once discovered, it is kept when its chunks unload, for 3 in-game days (`SEMI_KEEP_MINUTES`) after the player last left it, so coming back soon finds it as it was: same layout, chests still looted, mined rock still gone. After that it is forgotten like a temporary object (and the lantern remembers it). Kept objects are saved with their idle time. Used by villages, castles, mines and nomad camps. |
 | `persistent` | Never discarded, saved with its full layout, and restored on load. |
 
 Generated objects that are persistent: the extremely rare structures and the rare events below. The story's landmarks are persistent too.
@@ -74,8 +74,9 @@ From `STRUCTURES`. Rotation "free" means any quarter turn; "mirror" means flippe
 | `tower` | Tower | Uncommon | 2 | All | 0 | 150 | Yes | Mirror | Temporary | 9–11 × 10–12 |
 | `cabin` | Cabin | Uncommon | 2 | Forest, Snow | 0 | 100 | Yes | Mirror | Temporary | 14–16 × 8–9 |
 | `abandoned-camp` | Abandoned Camp | Uncommon | 2 | All | 0 | 80 | Yes | Free | Temporary | 8–10 |
-| `mine` | Mine | Uncommon | 1 | All | 0 | 150 | No | Mirror | Temporary | 17 × 14 |
-| `village` | Village | Rare | 3 | Forest, Snow | 150 | 500 | Yes | Mirror | Temporary | 40–54 |
+| `nomad-camp` | Nomad Camp | Uncommon | 3 | Desert | 120 | 260 | Yes | Mirror | Semi-persistent | 11 |
+| `mine` | Mine | Uncommon | 1 | All | 0 | 150 | No | Mirror | Semi-persistent | 17 × 14 |
+| `village` | Village | Rare | 3 | Forest, Snow | 150 | 500 | Yes | Mirror | Semi-persistent | 46–56 |
 | `temple` | Temple | Rare | 2 | All | 300 | 400 | Yes | Mirror | Temporary | 20–28 × 22–30 |
 | `castle` | Castle | Rare | 2 | Forest, Snow | 400 | 800 | Yes | Mirror | Semi-persistent | 66–76 |
 | `dungeon` | Dungeon | Rare | 2 | All | 250 | 300 | No | Free | Temporary | 12–16 |
@@ -94,13 +95,15 @@ Rare events (`RARE_EVENTS`), rolled per anchor chunk before the structure roll:
 
 **Mines** are cut into a ragged rocky hill (dark rock at its heart, lighter at the edges). A timber-framed entrance (a `mine` building) sits at the foot of the hill, with lamps either side. In front is a dirt yard with rails running out of the entrance to a mine cart, ore heaps, a crate, a barrel and a stone. The entrance leads into a cave; see [buildings-and-interiors.md](buildings-and-interiors.md#mines).
 
+**Nomad camps** (`nomadCamp()`, 11 tiles square) are the desert's travellers, since the desert has no villages: a round patch of path cleared of plants, a campfire in the middle, three tents, an anvil and two barrels. Two people live there: a quest giver and a trader by the fire ([living-world.md](living-world.md#npcs)).
+
 **Villages** (`village()`, 46–56 tiles square) are laid out along streets: a main street right across, through a cobbled square with the well, an anvil, two benches and four lamps; a cross street north to south; and back lanes 12–13 tiles above and below the main street. Houses (6–8 × 5–6) stand in rows on the north side of each street with 2–4 tiles between them, each with a path from its door to the street, flowers or a barrel by the door, and room cleared around it. Lamps line the main and cross streets. Three to five fenced gardens of tilled soil with rows of vegetables fill open ground. Trees are cleared only on the streets, the square and around houses, so the village sits among trees.
 
 **Castles** (`castle()`) stand in a moat (shallow at the banks, deep in the middle) crossed by a two-tile drawbridge. Inside it, a curtain wall two tiles thick has round towers at the corners and midway along the east and west walls, and two towers flank the gatehouse. A paved road runs from the gate past lamps to a square before the keep, with a well, a statue and banners. The keep (a `keep` building, 18–22 × 7) stands at the head of the courtyard, with banners along the north wall and a fenced kitchen garden on each side. Two barracks (`stone`) face the road with paths to it; below them are a training yard (three dummies, a weapon rack and an armour stand), a smithy (an anvil, a crate and a barrel) and a stable (a `cabin`). The paved parts are cleared of trees; the rest of the courtyard keeps its own.
 
 Building footprints keep the ground they stand on: `building()` marks the footprint with an invisible solid decoration (`Deco.Footprint`) instead of a tile, so nothing but the sprite and its own ground ever shows around a building's outline. `clearDecos()` only clears where the layout has not placed anything, and `areaFree()` treats footprints as taken.
 
-Villages and castles hold an anvil, a crafting station. Camps have a campfire, the other station and a place to rest, beside a canvas tent (abandoned camps keep the tent but not the fire). Villages have lamp posts along their roads that light up at night.
+Villages, castles and nomad camps hold an anvil, a crafting station. Camps and nomad camps have a campfire, the other station and a place to rest, beside a canvas tent (abandoned camps keep the tent but not the fire). Villages have lamp posts along their roads that light up at night.
 
 **Ruins** are the shell of an old stone hall: outer walls that stand in runs and collapse in others (switching about every six tiles, with fallen stones spilling inward), a gap in the south wall, an inner wall with a doorway, a colonnade with some pillars fallen to rubble, overgrown patches where the floor has given way, and bushes and flowers creeping in. Chests are always found in castles, dungeons, the Sun Temple, ancient temples and lost cities, and sometimes in villages, temples, towers, ruins, cabins and abandoned camps.
 

@@ -187,7 +187,7 @@ export class StorySystem {
       bell: 'Follow the bell',
       village: this.villageTalked() < 3 ? `Talk to the villagers (${this.villageTalked()}/3)` : 'Visit the cemetery',
       night: 'Rest by the village fire tonight',
-      observatory: 'Seek the observatory',
+      observatory: 'Seek the observatory and speak to the old man',
       archive: this.pedestals() < 3 ? `Read the memories in the Sunken Archive (${this.pedestals()}/3)` : 'Enter the Hall of Lanterns',
       return: 'Return to the observatory',
       anchor: 'Find the Original Anchor',
@@ -291,8 +291,12 @@ export class StorySystem {
 
   /** NPCs with something new to say get a mark. */
   hasNews(npc: Npc): boolean {
-    const key = [...this.people].find(([, n]) => n === npc)?.[0];
-    return !!key && !this.flags.has(`talked-${key}`);
+    let key: string | undefined;
+    for (const [k, n] of this.people) if (n === npc) key = k;
+    if (!key) return false;
+    // The old man moves the story on at the observatory, even if met before.
+    if (key === 'oldman' && this.stage === 'observatory') return true;
+    return !this.flags.has(`talked-${key}`);
   }
 
   /** The night in the Village of Graves. Returns true if resting here moved the story. */

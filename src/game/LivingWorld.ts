@@ -11,7 +11,7 @@ import { pickSpecies } from '../generation/EnemyGenerator';
 import { hashString, Rng } from '../generation/Random';
 import { BiomeType, Deco } from '../generation/Tiles';
 import { difficultyBand } from '../generation/WorldRules';
-import { itemById, Items } from '../items/Items';
+import { itemById, Items, type ItemDef } from '../items/Items';
 import { Effects } from '../rendering/Effects';
 import type { Light } from '../rendering/Lighting';
 import { Lighting } from '../rendering/Lighting';
@@ -37,6 +37,7 @@ import type { Player } from './Player';
 import type { Settings } from './Settings';
 
 const TALK_RANGE = 1.8;
+const NO_LIGHTS: readonly Light[] = [];
 /** Light around the player at night with nothing to carry, in tiles. */
 const NIGHT_EYES = 2.4;
 /** A torch burns out after this many hours of darkness. */
@@ -66,6 +67,8 @@ export interface LivingDeps {
   /** Moves the player off anything solid. */
   unstick(): void;
   audio: AudioSystem;
+  /** Puts what does not fit in the bag on the ground by the player. */
+  overflow(item: ItemDef, count: number): void;
 }
 
 export class LivingWorld {
@@ -78,6 +81,8 @@ export class LivingWorld {
   readonly lighting: Lighting;
   readonly particles: ParticleSystem;
   readonly effects = new Effects();
+  private readonly marksCache = new Map<number, string>();
+  private marksAt = -Infinity;
   readonly dialog: Dialog;
   /** The NPC the player is talking to. */
   private listener: Npc | null = null;
@@ -140,7 +145,8 @@ export class LivingWorld {
     d.combat.onCleared = (kind) => {
       this.quests.onCleared(kind);
       if (kind === 'invasion') {
-        d.inventory.add(Items.coin, INVASION_REWARD);
+        const left = d.inventory.add(Items.coin, INVASION_REWARD);
+        if (left > 0) d.overflow(Items.coin, left);
         d.hud.notify(`The villagers thank you: +${INVASION_REWARD} coins`);
       }
     };
@@ -224,7 +230,15 @@ export class LivingWorld {
     this.effects.update(dt, this.hazards.fires, this.hazards.strikes, this.story.memories, this.d.player.x, this.d.player.y, sight);
 
     const storm = this.shown === 'storm' ? 0.45 * this.strength : 0;
-    const darkness = settings.values.lighting ? Math.min(1, this.time.darkness + storm) : 0;
+    // The far lands feel grimmer: a faint gloom that deepens with each band.
+    const gloom = Math.min(3, difficultyBand(Math.floor(this.d.player.x), Math.floor(this.d.player.y))) * 0.03;
+    const darkness = Math.min(1, this.time.darkness + storm + gloom);
+    // Lights only matter at night: daytime gloom is a plain tint.
+    const flat = !settings.values.lighting || this.time.darkness + storm <= 0.01;
+    if (darkness <= 0.01 || flat) {
+      this.lighting.update(dt, darkness, NO_LIGHTS, toScreen, zoom, flat);
+      return;
+    }
     const lights: Light[] = [];
     const { player } = this.d;
     lights.push({ x: player.x * TILE_SIZE, y: (player.y - 0.5) * TILE_SIZE, radius: this.playerLight() * TILE_SIZE, warmth: this.playerLight() > NIGHT_EYES ? 0.7 : 0 });
@@ -274,13 +288,19 @@ export class LivingWorld {
 
   /** Symbols over NPCs: '!' for open work, '$' for trade, '?' for the lost. */
   marks(): Map<number, string> {
-    const m = new Map<number, string>();
+    // Asked every frame but changes rarely: worked out four times a second.
+    const now = performance.now();
+    if (now - this.marksAt < 250) return this.marksCache;
+    this.marksAt = now;
+    const m = this.marksCache;
+    m.clear();
+    const handIn = this.quests.readyToHandIn(this.d.inventory).length > 0;
     for (const n of this.npcs.npcs) {
       if (this.story.hasNews(n)) m.set(n.id, '!');
       else if (n.role === 'trader' || n.role === 'merchant') m.set(n.id, '$');
       else if (n.role === 'lost' && !n.following) m.set(n.id, '?');
       else if (n.questGiver && !this.quests.hasOffered(this.offerKey(n)) && !this.quests.full) m.set(n.id, '!');
-      else if (this.quests.readyToHandIn(this.d.inventory).length) m.set(n.id, '✓');
+      else if (handIn) m.set(n.id, '✓');
     }
     return m;
   }
@@ -299,6 +319,11 @@ export class LivingWorld {
     const goal = this.story.objective();
     if (goal) lines.unshift({ text: `★ ${goal.text}`, angle: toward(goal.x, goal.y) });
     return lines;
+  }
+
+  abandonQuest(id: string): void {
+    const q = this.quests.quests.find((x) => x.id === id);
+    if (q && this.quests.abandon(id)) this.d.hud.notify(`Abandoned: ${q.title}`);
   }
 
   questViews(): QuestView[] {
@@ -334,8 +359,7 @@ export class LivingWorld {
     this.particles.view.visible = false;
     lights.push({ x: player.x * TILE_SIZE, y: (player.y - 0.5) * TILE_SIZE, radius: this.playerLight() * TILE_SIZE, warmth: 0.4 });
     const dark = cave ? Math.max(0.75, this.time.darkness) : this.time.darkness * 0.6;
-    const darkness = settings.values.lighting ? dark : 0;
-    this.lighting.update(dt, darkness, lights, toScreen, zoom);
+    this.lighting.update(dt, dark, lights, toScreen, zoom, !settings.values.lighting);
   }
 
   rest(message = 'You rest by the fire until morning'): void {
@@ -462,7 +486,8 @@ export class LivingWorld {
         return;
       }
       const biome = world.biomeAt(Math.floor(n.homeX), Math.floor(n.homeY))?.type ?? BiomeType.Forest;
-      const quest = generateQuest(new Rng(hashString(key)), { giver: n.name, homeX: n.homeX, homeY: n.homeY, biome, band: difficultyBand(n.homeX, n.homeY) }, key);
+      const home = this.villageAt(n.homeX, n.homeY);
+      const quest = generateQuest(new Rng(hashString(key)), { giver: n.name, homeX: n.homeX, homeY: n.homeY, biome, band: difficultyBand(n.homeX, n.homeY), village: !!home }, key);
       const rewards = `Reward: ${quest.reward.coins} coins and ${quest.reward.xp} XP.`;
       this.dialog.talk(n.name, `${quest.text} ${rewards}`, [
         ...options,
@@ -472,6 +497,11 @@ export class LivingWorld {
             this.quests.accept(quest, key);
             hud.notify(`New quest: ${quest.title}`);
             this.dialog.close();
+            // Defending starts at once: the beasts are already near.
+            if (quest.objective.kind === 'defend' && home) {
+              hud.notify('Beasts close in on the village!');
+              this.invade(home);
+            }
           },
         },
       ]);
@@ -516,8 +546,8 @@ export class LivingWorld {
           if (r === 'full') hud.notify('Bag full');
           show();
         },
-        (item) => {
-          sell(inventory, item);
+        (item, count) => {
+          sell(inventory, item, count);
           show();
         },
       );
@@ -566,10 +596,14 @@ export class LivingWorld {
 
   private reward(q: Quest): void {
     const { inventory, combat, hud } = this.d;
-    inventory.add(Items.coin, q.reward.coins);
+    const give = (item: ItemDef, n: number) => {
+      const left = inventory.add(item, n);
+      if (left > 0) this.d.overflow(item, left);
+    };
+    give(Items.coin, q.reward.coins);
     for (const [id, n] of q.reward.items) {
       const item = itemById(id);
-      if (item) inventory.add(item, n);
+      if (item) give(item, n);
     }
     combat.grantXp(q.reward.xp);
     hud.notify(`Quest complete: ${q.title} (+${q.reward.coins} coins)`);

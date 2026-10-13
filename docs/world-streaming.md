@@ -33,8 +33,8 @@ The render area grows and shrinks with the screen size and zoom, so the player n
 | --- | --- | --- |
 | Predict | The render area is extended by one chunk in the direction of travel. | `ChunkManager.schedule` |
 | Generate | Missing chunks in that area are queued and sent to the generator. | `ChunkManager.schedule` |
-| Activate | A finished chunk inside the render area is shown; inside the simulation area it is marked `simulated`. | `ChunkManager.receive`, `syncShown` |
-| Deactivate | Leaving the render area hides it; leaving the simulation area clears `simulated`. | `ChunkManager.update` |
+| Activate | A finished chunk inside the render area is queued to be shown (`pendingShow`); at most 2 are shown per frame (`SHOW_PER_FRAME`), nearest to the player first. Inside the simulation area it is marked `simulated`. | `ChunkManager.receive`, `syncShown`, `flushShows` |
+| Deactivate | Leaving the render area hides it (or drops it from the queue); leaving the simulation area clears `simulated`. | `ChunkManager.update` |
 | Dispose | Leaving the cache area removes it and returns it to the pool. | `ChunkManager.setCache` |
 
 When the cache rectangle changes, `setCache` reports the chunks that left (`cacheLeave`) and the chunks that entered (`cacheEnter`). `WorldManager` uses these to keep biome records, objects and region visit counters up to date (see [World generation](world-generation.md) and [Objects and structures](objects-and-structures.md)). Only chunks in the render area plus the predicted strip are generated; the rest of the cache area is tracked (biomes, objects, regions) without terrain.
@@ -70,6 +70,8 @@ A chunk keeps two copies of its data:
 
 `ChunkManager.refresh(chunk)` re-runs composition and tells the renderer when an object is added, removed or changed, a chest is opened, or something is harvested.
 
-`WorldManager.tileAt(gx, gy)` reads the composed data. It returns `null` for chunks that are not generated, and `isSolidAt` treats those as solid so the player cannot walk into unloaded ground.
+`WorldManager.tileAt(gx, gy)` reads the composed data. It returns `null` for chunks that are not generated, and `isSolidAt` treats those as solid so the player cannot walk into unloaded ground. `isSolidAt` is called many times a frame by every walker, so it reads the chunk's arrays directly instead of building a tile object.
+
+Spreading the shows out keeps a frame from stalling when several results land at once. Without a renderer listening (tests and tools), chunks are marked shown at once. The renderer also culls shown chunks outside the camera's view (see [Rendering](rendering.md#chunk-meshes)).
 
 See also: [World generation](world-generation.md), [Objects and structures](objects-and-structures.md), [Architecture](architecture.md)

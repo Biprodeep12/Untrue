@@ -27,20 +27,36 @@ A shared two-second white-noise buffer feeds the noise-based sounds.
 | `chest` | Chest or treasure opened | Two triangle notes |
 | `ui` | Any button, slot or tab clicked | A tiny click |
 | `thunder` | A lightning strike | Long low-passed noise |
+| `warn` | A vital gets worse (low or critical), except stamina | A two-note square alarm, played twice |
 | Bell | The Waking Monument crumbles | Three strikes of inharmonic sine partials |
 
 ## Music
 
-Music is generated one beat at a time (0.75 s per beat), scheduled slightly ahead so timing stays steady:
+Music is generated one beat at a time, scheduled slightly ahead so timing stays steady. A beat is 0.75 s, 0.62 s in the desert (brisker) and 0.9 s in the snow (slower).
 
 - **Scale** follows the mood: major pentatonic by day, minor pentatonic at night, a Phrygian-flavoured scale in the desert, a Lydian-flavoured one in the snow.
-- **Root** moves between four roots every 16 beats, an octave lower at night.
+- **Root** moves between four roots every 16 beats, an octave lower at night. Further out it drops 6% per difficulty band (up to band 3), so the far lands sound lower and darker.
 - **Pad:** a soft three-note chord at the start of every bar.
-- **Melody:** a plucked triangle note on about half the beats (fewer at night).
+- **Melody:** a plucked note on about half the beats (fewer at night). The voice follows the land: a triangle in the forest, a soft square in the desert, a long sine in the snow.
+- **Drone:** from band 2 out, a low sine two octaves under the root every 8 beats.
 - **Danger:** a low pulse every other beat while enemies are chasing or attacking the player.
 
 ## Ambience
 
-A looping filtered noise source plays the weather: low-passed rain for rain and storms (louder in storms), and band-passed wind for sandstorms and blizzards. Its volume follows how strongly the weather is felt, and fades when the game is paused.
+A looping filtered noise source plays the weather: low-passed rain for rain and storms (louder in storms), and band-passed wind for sandstorms and blizzards. Its volume follows how strongly the weather is felt, and fades when the game is paused. The volume is only rescheduled when it changes, and the noise stops once it has faded to silence.
+
+The land has its own sounds, rolled twice a second (`AudioSystem.ambience`):
+
+| Where | Sound |
+| --- | --- |
+| Forest, by day | Birds: two or three quick rising chirps (12% of rolls) |
+| Anywhere but snow, at night | Crickets: three short high clicks (25% of rolls) |
+| Desert | A gust of band-passed wind now and then |
+| Snow | A lower gust of wind now and then |
+| Mines | Water dripping, and now and then a low drone |
+
+Birds, crickets and gusts are quiet indoors and in strong rain or storms.
+
+**Creature calls.** When something hunts the player outdoors, its call sounds, at most every 18 seconds: wolves (and wolf-shaped creatures) howl, wraiths and skeletons wail, bears and golems growl (`Game.hunterCall`).
 
 See also: [README.md](README.md) · [living-world.md](living-world.md) · [rendering.md](rendering.md)

@@ -1,6 +1,7 @@
-// Items lying on the ground: their icons, bobbing gently over a shadow.
+// Items lying on the ground: their icons, bobbing gently over a shadow. Only
+// items near the screen are drawn; all share one shadow shape.
 
-import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, GraphicsContext, Rectangle, Sprite, Texture } from 'pixi.js';
 import { TILE_SIZE } from '../config';
 import type { GroundItem } from '../world/GroundItems';
 import { itemCell } from './Atlas';
@@ -8,6 +9,8 @@ import { itemCell } from './Atlas';
 export class GroundItemRenderer {
   private readonly drawn = new Map<number, Container>();
   private readonly icons = new Map<number, Texture>();
+  private readonly shadow = new GraphicsContext().ellipse(0, 0, 5, 1.5).fill({ color: 0x000000, alpha: 0.25 });
+  private readonly live = new Set<number>();
   private time = 0;
 
   constructor(
@@ -15,15 +18,18 @@ export class GroundItemRenderer {
     private readonly layer: Container,
   ) {}
 
-  update(dt: number, items: readonly GroundItem[]): void {
+  /** `view`: the drawn area in tiles; items outside it are not drawn. */
+  update(dt: number, items: readonly GroundItem[], view: { x0: number; y0: number; x1: number; y1: number }): void {
     this.time += dt;
-    const live = new Set<number>();
+    const live = this.live;
+    live.clear();
     for (const g of items) {
+      if (g.x < view.x0 || g.x > view.x1 || g.y < view.y0 || g.y > view.y1) continue;
       live.add(g.id);
       let c = this.drawn.get(g.id);
       if (!c) {
         c = new Container();
-        const shadow = new Graphics().ellipse(0, 0, 5, 1.5).fill({ color: 0x000000, alpha: 0.25 });
+        const shadow = new Graphics(this.shadow);
         const icon = new Sprite({ texture: this.icon(g.stack.item.icon), anchor: { x: 0.5, y: 1 } });
         icon.scale.set(0.75);
         c.addChild(shadow, icon);

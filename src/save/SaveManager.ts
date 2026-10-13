@@ -43,6 +43,10 @@ export interface PlayerSave {
   equipment?: Partial<Record<EquipSlot, SavedSlot>>;
   vitals: VitalValues | null;
   progression: ProgressionSave | null;
+  /** Where the player wakes after collapsing; missing in older saves (the start). */
+  respawn?: { x: number; y: number };
+  /** Moonwells already drunk from; missing in older saves. */
+  moonwells?: string[];
 }
 
 export interface SaveData {
@@ -175,6 +179,10 @@ function migrate(data: SaveData): SaveData | null {
   return data.version === SAVE_VERSION ? data : null;
 }
 
+/** A save is stored but cannot be used (e.g. from a newer version). It has
+ *  been backed up before this is thrown. */
+export class UnreadableSave extends Error {}
+
 const DB_NAME = 'untrue';
 const STORE = 'saves';
 const SLOT = 'main';
@@ -184,7 +192,17 @@ export class SaveManager {
 
   async load(): Promise<SaveData | null> {
     const data = await this.run<SaveData | undefined>('readonly', (s) => s.get(SLOT));
-    return data ? migrate(data) : null;
+    if (!data) return null;
+    let save: SaveData | null = null;
+    try {
+      if (typeof data === 'object' && typeof data.version === 'number') save = migrate(data);
+    } catch {
+      // Malformed: handled below like any unreadable save.
+    }
+    if (save) return save;
+    // Never let a new world autosave over a save it could not read.
+    await this.backup(data);
+    throw new UnreadableSave(`Save version ${String((data as { version?: unknown }).version)} cannot be read`);
   }
 
   async save(data: SaveData): Promise<void> {
@@ -219,7 +237,9 @@ export class SaveManager {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, mode);
       const req = op(tx.objectStore(STORE));
-      req.onsuccess = () => resolve(req.result as T);
+      // Writes count once the transaction commits, not when the request succeeds.
+      if (mode === 'readonly') req.onsuccess = () => resolve(req.result as T);
+      else tx.oncomplete = () => resolve(req.result as T);
       req.onerror = () => reject(req.error);
       tx.onabort = () => reject(tx.error ?? new Error('Save aborted'));
     });

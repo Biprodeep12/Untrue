@@ -36,12 +36,24 @@
 <td>Terrain and decorations</td>
 </tr>
 <tr>
-<td>Player position, inventory (with weapon durability), vitals, level and XP</td>
+<td>Player position, inventory (with weapon durability), worn equipment, vitals, level, XP and skill ranks</td>
 <td>Biome records</td>
+</tr>
+<tr>
+<td>Where the player wakes after collapsing (<code>respawn</code>) and the Moonwells already drunk from</td>
+<td>Semi-persistent objects not yet discovered</td>
+</tr>
+<tr>
+<td>Legends defeated (<code>trophies</code>) and rare recipes learned (<code>recipes</code>), inside progression</td>
+<td></td>
 </tr>
 <tr>
 <td>Every persistent object, with its full layout, buildings, discovered flag, anchor and opened chests</td>
 <td>Temporary objects (they regenerate)</td>
+</tr>
+<tr>
+<td>Semi-persistent objects the world is keeping (discovered villages, castles, mines and nomad camps), with the minute they were last left</td>
+<td></td>
 </tr>
 <tr>
 <td>Anchors whose chests were looted (<code>lootedAnchors</code>)</td>
@@ -82,10 +94,14 @@
   player: {
     x: number; y: number;
     inventory: SavedSlot[];              // { id, count, durability? } or null, 24 slots
+    equipment?: Partial&lt;Record&lt;EquipSlot, SavedSlot&gt;&gt;;  // head, chest, legs, feet, offhand
     vitals: VitalValues | null;          // health, stamina, hunger, thirst
-    progression: ProgressionSave | null; // xp, level
+    progression: ProgressionSave | null; // xp, level, skills?, trophies?, recipes?
+    respawn?: { x, y };                  // where the player wakes after collapsing
+    moonwells?: string[];                // ids of Moonwells already drunk from
   };
-  objects: SavedObject[];  // persistent objects: id, kind, name, persistence, x, y, w, h,
+  objects: SavedObject[];  // persistent objects, and semi-persistent ones being kept:
+                           // id, kind, name, persistence, x, y, w, h,
                            // tiles, decos (Uint8Array), discovered, anchor, opened[],
                            // buildings (building specs), idleSince (semi-persistent)
   lootedAnchors: string[];
@@ -107,7 +123,8 @@
   known?: { id, name, x, y, w, h, story }[];       // discovered places, for the map
 }
 </code></pre>
-<p><code>snapshot(world, player, living, exploration)</code> builds it; <code>restore(world, data)</code> puts the persistent objects, looted anchors and cleared anchors back into a fresh world built from the same seed. <code>Game</code> restores inventory, progression and vitals, and <code>LivingWorld.load</code> restores the clock, weather, quests and story.</p>
+<p><code>snapshot(world, player, living, exploration)</code> builds it; <code>restore(world, data)</code> puts the saved objects, looted anchors and cleared anchors back into a fresh world built from the same seed. <code>Game</code> restores inventory, equipment, progression, vitals, the waking spot and the used Moonwells, and <code>LivingWorld.load</code> restores the clock, weather, quests and story.</p>
+<p>Fields marked <code>?</code> are missing in older saves and load with defaults: the best armour carried is put on, there are no skills, trophies or recipes, the player wakes at the start, and no Moonwell has been used.</p>
 <h2 id="versions">Versions<a class="anchor" href="#versions" aria-label="Link to this section">#</a></h2>
 <p><code>migrate()</code> upgrades older saves one step at a time:</p>
 <div class="table-wrap"><table>
@@ -142,22 +159,49 @@
 <td>Adds <code>ground: []</code>.</td>
 </tr>
 </tbody></table></div>
-<p>A save without <code>living.story</code> starts the story from the prologue. Unknown versions load as no save.</p>
+<p>A save without <code>living.story</code> starts the story from the prologue.</p>
+<h2 id="saves-that-cannot-be-read">Saves that cannot be read<a class="anchor" href="#saves-that-cannot-be-read" aria-label="Link to this section">#</a></h2>
+<p>The game never lets a new world overwrite a save it could not use (<code>SaveManager.load()</code>, <code>Game.start()</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>The stored save has an unknown or newer version, or is malformed</td>
+<td>It is copied to a backup key (<code>backup-&lt;time&gt;</code>) in the same store and <code>UnreadableSave</code> is thrown. The game starts a new world and shows an alert saying the old save was kept.</td>
+</tr>
+<tr>
+<td>Storage fails to read at all</td>
+<td>A save may exist, so this session does not save (<code>saveLock</code>). An alert says to reload.</td>
+</tr>
+<tr>
+<td>The living-world part (story, quests, clock) fails to load</td>
+<td>The rest of the save loads and the living world starts afresh. The old save is backed up and an alert says so.</td>
+</tr>
+</tbody></table></div>
+<p>Alerts (<code>Hud.alert</code>) stay on screen until the player presses OK.</p>
 <h2 id="storage">Storage<a class="anchor" href="#storage" aria-label="Link to this section">#</a></h2>
 <ul>
 <li>IndexedDB database <code>untrue</code>, object store <code>saves</code>, one slot with key <code>main</code>.</li>
 <li>Autosave every 30 seconds, and whenever the page is hidden (tab switch or minimise).</li>
 <li>Ctrl+S saves now and confirms with a notification.</li>
-<li>Nothing is saved while the player is travelling (waiting to be placed after a jump or a collapse).</li>
+<li>Nothing is saved while the player is travelling (waiting to be placed after a jump or a collapse), or while a story vision is open, since a vision may be half way through changing the story.</li>
+<li>A write counts as done once its IndexedDB transaction completes, not when the request succeeds.</li>
 <li><code>?new</code> or <code>?seed=N</code> starts a fresh world; its first autosave replaces the slot.</li>
 </ul>
-<p>Settings are separate: they live in <code>localStorage</code> under <code>untrue.settings</code> (<code>lighting</code>, <code>weather</code>, <code>fps30</code>, <code>help</code>, <code>music</code>, <code>sfx</code>), per browser, and fall back to defaults if storage is blocked.</p>
+<h2 id="two-tabs">Two tabs<a class="anchor" href="#two-tabs" aria-label="Link to this section">#</a></h2>
+<p>Two tabs would save over the same slot. The first tab takes a Web Lock (<code>navigator.locks</code>, lock <code>untrue-save</code>) and holds it until it closes. A later tab cannot get the lock, so it plays without saving and shows an alert. Where Web Locks are missing, a <code>BroadcastChannel</code> named <code>untrue</code> does the same: a new tab says hello, and if an open tab answers, the new tab stops saving. The story playground never saves, so it does not take the lock.</p>
+<h2 id="settings-and-tips">Settings and tips<a class="anchor" href="#settings-and-tips" aria-label="Link to this section">#</a></h2>
+<p>Settings are separate: they live in <code>localStorage</code> under <code>untrue.settings</code> (<code>lighting</code>, <code>weather</code>, <code>particles</code>, <code>fps30</code>, <code>flashes</code>, <code>help</code>, <code>music</code>, <code>sfx</code>, <code>uiScale</code>, <code>keys</code>), per browser, and fall back to defaults if storage is blocked. First-time tips already shown are kept under <code>untrue.hints</code> (<code>src/ui/Hints.ts</code>).</p>
 <p>The pause menu&#39;s &quot;New world&quot; clears the save slot and reloads with <code>?new</code>.</p>
 <p>See also: <a href="objects-and-structures.html">Objects and structures</a>, <a href="architecture.html">Architecture</a></p>
 </article>
     <nav class="pager"><a class="prev" href="rendering.html"><small>Previous</small>Rendering</a><a class="next" href="survival.html"><small>Next</small>Survival</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#what-is-saved">What is saved</a></li><li class="l2"><a href="#format">Format</a></li><li class="l2"><a href="#versions">Versions</a></li><li class="l2"><a href="#storage">Storage</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#what-is-saved">What is saved</a></li><li class="l2"><a href="#format">Format</a></li><li class="l2"><a href="#versions">Versions</a></li><li class="l2"><a href="#saves-that-cannot-be-read">Saves that cannot be read</a></li><li class="l2"><a href="#storage">Storage</a></li><li class="l2"><a href="#two-tabs">Two tabs</a></li><li class="l2"><a href="#settings-and-tips">Settings and tips</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

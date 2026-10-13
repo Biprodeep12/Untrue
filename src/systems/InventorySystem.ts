@@ -1,6 +1,6 @@
 // Slot inventory (spec 5): stacking, quantities, a hotbar row and moving items.
 
-import { EQUIP_SLOTS, itemById, weightOf, type EquipSlot, type ItemDef, type ToolKind } from '../items/Items';
+import { EQUIP_SLOTS, itemById, ItemRarity, weightOf, type EquipSlot, type ItemDef, type ToolKind } from '../items/Items';
 
 export const INVENTORY_SIZE = 24;
 /** The first row doubles as the hotbar. */
@@ -51,6 +51,30 @@ export class Inventory {
       count -= n;
     }
     return count;
+  }
+
+  /** Tidies the bag below the hotbar: like items merged, then weapons,
+   *  tools, armour, food, materials and treasure, rarest first. */
+  sort(): void {
+    const kind = (i: ItemDef) =>
+      i.weapon ? 0 : i.tool ? 1 : i.equip ? 2 : i.food ? 3 : i.rarity >= ItemRarity.Epic ? 5 : 4;
+    const loose: Stack[] = [];
+    for (let i = HOTBAR_SIZE; i < this.slots.length; i++) {
+      const s = this.slots[i];
+      this.slots[i] = null;
+      if (!s) continue;
+      // Merge into an open stack of the same item (worn weapons never stack).
+      const same = s.item.stack > 1 ? loose.find((o) => o.item === s.item && o.count < s.item.stack) : undefined;
+      if (same) {
+        const n = Math.min(s.count, s.item.stack - same.count);
+        same.count += n;
+        s.count -= n;
+      }
+      if (s.count > 0) loose.push(s);
+    }
+    loose.sort((a, b) => kind(a.item) - kind(b.item) || b.item.rarity - a.item.rarity || a.item.name.localeCompare(b.item.name));
+    loose.forEach((s, k) => (this.slots[HOTBAR_SIZE + k] = s));
+    this.version++;
   }
 
   /** Removes `count` if all of it is there, from the bag first and then

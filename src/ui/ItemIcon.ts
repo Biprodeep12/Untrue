@@ -17,7 +17,8 @@ export function itemIcon(atlas: HTMLCanvasElement, item: ItemDef | null, size = 
 }
 
 /** One inventory slot: icon plus stack count. */
-export function slotContent(atlas: HTMLCanvasElement, item: ItemDef | null, count: number): DocumentFragment {
+/** `durability`: uses left, drawn as a bar for weapons. */
+export function slotContent(atlas: HTMLCanvasElement, item: ItemDef | null, count: number, durability?: number): DocumentFragment {
   const f = document.createDocumentFragment();
   f.appendChild(itemIcon(atlas, item));
   if (item && count > 1) {
@@ -25,6 +26,15 @@ export function slotContent(atlas: HTMLCanvasElement, item: ItemDef | null, coun
     n.className = 'count';
     n.textContent = String(count);
     f.appendChild(n);
+  }
+  const max = item?.weapon?.durability;
+  if (max && durability !== undefined && durability < max) {
+    const bar = document.createElement('span');
+    bar.className = 'durability';
+    const share = Math.max(0, durability / max);
+    bar.style.setProperty('--left', `${share * 100}%`);
+    bar.classList.toggle('low', share < 0.25);
+    f.appendChild(bar);
   }
   return f;
 }

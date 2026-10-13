@@ -885,11 +885,16 @@ function paintMine(spec: BuildingSpec): Art {
 const ART_CACHE = 48;
 /** New buildings painted per frame, so entering a village never stutters. */
 const PAINT_BUDGET = 2;
+/** Frames between full rescans of which buildings to show. */
+const RESCAN_FRAMES = 30;
 
 /** Buildings of live objects that touch the render area, as y-sorted sprites. */
 export class BuildingRenderer {
   private readonly art = new Map<string, Art>();
   private readonly shown = new Map<string, { sprite: Sprite; art: Art }>();
+  private readonly live = new Set<string>();
+  private scannedRect = '';
+  private rescanIn = 0;
 
   constructor(
     private readonly entities: Container,
@@ -898,7 +903,21 @@ export class BuildingRenderer {
   ) {}
 
   update(objects: Iterable<WorldObject>, render: ChunkRect | null, px: number, py: number): void {
-    const live = new Set<string>();
+    // Which buildings are shown only changes with the render area (or the odd
+    // object coming and going): rescan then, and every half second; otherwise
+    // only fade the ones the player walks behind.
+    const rect = render ? `${render.x0},${render.y0},${render.x1},${render.y1}` : '';
+    if (rect === this.scannedRect && --this.rescanIn > 0) {
+      for (const { sprite, art } of this.shown.values()) {
+        const behind = px > sprite.x && px < sprite.x + art.width && py < sprite.y && py > sprite.y - art.height;
+        sprite.alpha = behind ? 0.5 : 1;
+      }
+      return;
+    }
+    this.scannedRect = rect;
+    this.rescanIn = RESCAN_FRAMES;
+    const live = this.live;
+    live.clear();
     let budget = PAINT_BUDGET;
     if (render) {
       const x0 = render.x0 * CHUNK_SIZE;
@@ -916,7 +935,11 @@ export class BuildingRenderer {
             const artKey = `${b.seed}:${this.snowAt(bx, by) ? 1 : 0}`;
             let art = this.art.get(artKey);
             if (!art) {
-              if (budget-- <= 0) return;
+              if (budget-- <= 0) {
+                // Painting is spread over frames: look again next frame.
+                this.rescanIn = 1;
+                return;
+              }
               art = paint(b, artKey.endsWith(':1'));
             }
             // Most recently used last.
@@ -947,7 +970,8 @@ export class BuildingRenderer {
   /** Frees the least recently used paintings that are not on screen. */
   private evict(): void {
     if (this.art.size <= ART_CACHE) return;
-    const inUse = new Set<Art>([...this.shown.values()].map((s) => s.art));
+    const inUse = new Set<Art>();
+    for (const s of this.shown.values()) inUse.add(s.art);
     for (const [key, art] of this.art) {
       if (this.art.size <= ART_CACHE) break;
       if (inUse.has(art)) continue;

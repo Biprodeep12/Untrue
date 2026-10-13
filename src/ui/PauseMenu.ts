@@ -1,23 +1,42 @@
 // The pause menu: resume, save, settings, full screen, controls, or start a
 // new world.
 
+import { keyName, type Action, type Bindings } from '../game/Keys';
 import { fullscreenSupported, isFullscreen, onFullscreenChange, toggleFullscreen } from './Fullscreen';
 
-const CONTROLS: Array<[string, string]> = [
-  ['WASD / arrows', 'Move'],
-  ['Shift', 'Run'],
-  ['Click / J', 'Attack'],
-  ['Right-click / K', 'Block'],
-  ['Space', 'Dodge roll'],
-  ['E', 'Talk, gather, open, read'],
-  ['1–8', 'Select hotbar slot'],
-  ['F', 'Use the selected item'],
-  ['Tab / I', 'Bag, crafting, quests, map'],
-  ['M', 'Map'],
-  ['Wheel / + −', 'Zoom'],
-  ['Ctrl+S', 'Save'],
-  ['Esc', 'Pause'],
-  ['F3', 'Debug overlay'],
+/** Keyboard controls, naming the player's own keys. */
+function controls(keys: Bindings): Array<[string, string]> {
+  const k = (a: Action) => keyName(keys[a][0]);
+  return [
+    [`${k('up')}${k('left')}${k('down')}${k('right')} / arrows`, 'Move'],
+    [k('run'), 'Run'],
+    [`Click / ${k('attack')}`, 'Attack'],
+    [`Right-click / ${k('block')}`, 'Block'],
+    [k('dodge'), 'Dodge roll'],
+    [k('interact'), 'Talk, gather, open, read'],
+    ['1–8', 'Select hotbar slot'],
+    [k('use'), 'Use the selected item'],
+    [k('drop'), 'Drop the selected item'],
+    [`${k('bag')} / I`, 'Bag, crafting, quests, map'],
+    [k('map'), 'Map'],
+    [`Wheel / ${k('zoomIn')} ${k('zoomOut')}`, 'Zoom'],
+    ['Ctrl+S', 'Save'],
+    ['Esc', 'Pause'],
+    ['F3', 'Debug overlay'],
+  ];
+}
+
+const TOUCH_CONTROLS: Array<[string, string]> = [
+  ['Drag on the left half', 'Move (push far to run)'],
+  ['Tap the game or the prompt', 'Talk, gather, open, read'],
+  ['Hit', 'Attack the nearest enemy'],
+  ['Hold Block', 'Block'],
+  ['Roll', 'Dodge roll'],
+  ['Tap a hotbar slot', 'Select it; tap again to use it'],
+  ['Bag', 'Bag, crafting, quests, map'],
+  ['Pinch', 'Zoom'],
+  ['Full', 'Full screen'],
+  ['Pause', 'This menu'],
 ];
 
 export interface PauseActions {
@@ -61,15 +80,21 @@ export class PauseMenu {
     add('New world', () => {
       if (confirm('Start a new world? Your current world will be lost.')) actions.newWorld();
     });
+    parent.appendChild(this.root);
+  }
+
+  /** Lists the controls: touch ones on touch screens, else the player's keys. */
+  setKeys(keys: Bindings): void {
     const table = this.root.querySelector('.controls')!;
-    for (const [key, what] of CONTROLS) {
+    const touch = matchMedia('(pointer: coarse)').matches;
+    table.replaceChildren();
+    for (const [key, what] of touch ? TOUCH_CONTROLS : controls(keys)) {
       const row = document.createElement('tr');
       row.innerHTML = '<td></td><td></td>';
       row.children[0].textContent = key;
       row.children[1].textContent = what;
       table.appendChild(row);
     }
-    parent.appendChild(this.root);
   }
 
   toggle(): void {

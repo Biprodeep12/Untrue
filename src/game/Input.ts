@@ -11,6 +11,12 @@ export const STICK_ZONE = 0.5;
 /** A touch shorter and stiller than this is a tap (ms, CSS pixels). */
 const TAP_TIME = 300;
 const TAP_SLOP = 12;
+/** A second finger this soon after the first makes a pinch, not stick + tap (ms). */
+const PINCH_WINDOW = 250;
+/** Pinch spread change per zoom step. */
+const PINCH_STEP = 1.2;
+
+import { bindings, type Action, type Bindings } from './Keys';
 
 export interface Stick {
   active: boolean;
@@ -25,12 +31,20 @@ export interface Stick {
 export class Input {
   private readonly down = new Set<string>();
   private readonly pressed = new Set<string>();
+  /** Actions done by touch this frame (a tap interacts). */
+  private readonly touched = new Set<Action>();
+  /** The keys of each action; Settings can change the main ones. */
+  keys: Bindings = bindings();
   wheel = 0;
 
   readonly stick: Stick = { active: false, originX: 0, originY: 0, dx: 0, dy: 0 };
   private stickId: number | null = null;
   /** Touches that may still turn out to be taps. */
   private readonly taps = new Map<number, { x: number; y: number; t: number }>();
+  /** Fingers on the game, for pinching. */
+  private readonly touches = new Map<number, { x: number; y: number; t: number }>();
+  /** Finger spread at the last pinch zoom step; 0 when not pinching. */
+  private pinch = 0;
   /** Mouse position in CSS pixels, once the mouse has moved over the game. */
   mouse: { x: number; y: number } | null = null;
   /** Left button pressed this frame. */
@@ -40,7 +54,10 @@ export class Input {
 
   constructor(target: Window, surface: HTMLElement) {
     target.addEventListener('keydown', (e) => {
-      if (e.code === 'F3' || e.code === 'Tab' || e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+      // Keys the browser would act on (scroll, focus, find) belong to the game.
+      if (e.code === 'F3' || e.code === 'Tab' || e.code.startsWith('Arrow') || e.code === 'Space' || this.bound(e.code)) {
+        if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+      }
       if (e.code === 'KeyS' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         this.pressed.add('Save');
@@ -73,25 +90,41 @@ export class Input {
     return this.pressed.has(code);
   }
 
+  /** An action's key was pressed this frame (or, for interact, a tap). */
+  act(a: Action): boolean {
+    return this.touched.has(a) || this.keys[a].some((c) => this.pressed.has(c));
+  }
+
+  /** An action's key is held. */
+  holding(a: Action): boolean {
+    return this.keys[a].some((c) => this.down.has(c));
+  }
+
+  private bound(code: string): boolean {
+    for (const codes of Object.values(this.keys)) if (codes.includes(code)) return true;
+    return false;
+  }
+
   /** Movement direction from the keys or the touch stick, normalised. */
   axis(): { x: number; y: number } {
     if (this.stick.active && Math.hypot(this.stick.dx, this.stick.dy) > 0.2) {
       const len = Math.hypot(this.stick.dx, this.stick.dy);
       return { x: this.stick.dx / len, y: this.stick.dy / len };
     }
-    const x = (this.held('KeyD', 'ArrowRight') ? 1 : 0) - (this.held('KeyA', 'ArrowLeft') ? 1 : 0);
-    const y = (this.held('KeyS', 'ArrowDown') ? 1 : 0) - (this.held('KeyW', 'ArrowUp') ? 1 : 0);
+    const x = (this.holding('right') ? 1 : 0) - (this.holding('left') ? 1 : 0);
+    const y = (this.holding('down') ? 1 : 0) - (this.holding('up') ? 1 : 0);
     const len = Math.hypot(x, y) || 1;
     return { x: x / len, y: y / len };
   }
 
   running(): boolean {
     if (this.stick.active) return Math.hypot(this.stick.dx, this.stick.dy) > RUN_DEFLECTION;
-    return this.held('ShiftLeft', 'ShiftRight');
+    return this.holding('run');
   }
 
   endFrame(): void {
     this.pressed.clear();
+    this.touched.clear();
     this.wheel = 0;
     this.mouseAttack = false;
   }
@@ -104,14 +137,57 @@ export class Input {
       return;
     }
     if (e.pointerType !== 'touch') return;
-    this.taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
+    const now = performance.now();
+    this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY, t: now });
+    if (this.touches.size === 2 && this.startsPinch(e.pointerId, now)) {
+      // Two fingers together zoom: no stick, no taps.
+      this.taps.clear();
+      this.stickId = null;
+      Object.assign(this.stick, { active: false, dx: 0, dy: 0 });
+      this.pinch = this.spread();
+      return;
+    }
+    if (this.pinch) return;
+    this.taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: now });
     if (this.stickId !== null || e.clientX > window.innerWidth * STICK_ZONE) return;
     this.stickId = e.pointerId;
     Object.assign(this.stick, { active: true, originX: e.clientX, originY: e.clientY, dx: 0, dy: 0 });
   }
 
+  /** A second finger starts a pinch unless the first is already steering. */
+  private startsPinch(second: number, now: number): boolean {
+    for (const [id, f] of this.touches) {
+      if (id === second) continue;
+      if (id !== this.stickId) return true;
+      return now - f.t < PINCH_WINDOW && Math.hypot(this.stick.dx, this.stick.dy) < 0.2;
+    }
+    return false;
+  }
+
+  private spread(): number {
+    const [a, b] = [...this.touches.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  }
+
   private pointerMove(e: PointerEvent): void {
     if (e.pointerType === 'mouse') this.mouse = { x: e.clientX, y: e.clientY };
+    const finger = this.touches.get(e.pointerId);
+    if (finger) {
+      finger.x = e.clientX;
+      finger.y = e.clientY;
+    }
+    if (this.pinch && this.touches.size === 2) {
+      const d = this.spread();
+      // Fingers apart zoom in, like the wheel rolled forward.
+      if (d > this.pinch * PINCH_STEP) {
+        this.wheel -= 1;
+        this.pinch = d;
+      } else if (d < this.pinch / PINCH_STEP) {
+        this.wheel += 1;
+        this.pinch = d;
+      }
+      return;
+    }
     const tap = this.taps.get(e.pointerId);
     if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP) this.taps.delete(e.pointerId);
     if (e.pointerId !== this.stickId) return;
@@ -128,9 +204,14 @@ export class Input {
 
   private pointerUp(e: PointerEvent): void {
     if (e.pointerType === 'mouse' && e.button === 2) this.mouseBlock = false;
+    this.touches.delete(e.pointerId);
+    if (this.pinch) {
+      if (!this.touches.size) this.pinch = 0;
+      return;
+    }
     const tap = this.taps.get(e.pointerId);
     this.taps.delete(e.pointerId);
-    if (tap && e.type === 'pointerup' && performance.now() - tap.t < TAP_TIME) this.pressed.add('KeyE');
+    if (tap && e.type === 'pointerup' && performance.now() - tap.t < TAP_TIME) this.touched.add('interact');
     if (e.pointerId !== this.stickId) return;
     this.stickId = null;
     Object.assign(this.stick, { active: false, dx: 0, dy: 0 });

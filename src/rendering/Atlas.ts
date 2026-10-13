@@ -105,6 +105,8 @@ const CREATURE_Y = ITEM_Y + Math.ceil(ITEM_LIST.length / 16) * 16;
 export const Dir = { Down: 0, Left: 1, Right: 2, Up: 3 } as const;
 
 type RGB = number;
+/** Starforged plate, on icons and on the player. */
+const STAR_PLATE: RGB = 0x7a70c8;
 
 export function shade(c: RGB, f: number): RGB {
   const r = Math.min(255, Math.round(((c >> 16) & 255) * f));
@@ -1384,6 +1386,33 @@ function paintItem(p: Painter, icon: number): void {
       p.rect(4, 6, 8, 1, 0xb8b8c4);
       p.rect(3, 11, 10, 1, 0x5c5c66);
       break;
+    case Items.starIngot.icon:
+      p.rect(3, 7, 10, 5, 0x6a5aa8);
+      p.rect(4, 6, 8, 1, 0xb0a0f0);
+      p.rect(3, 11, 10, 1, 0x40306a);
+      p.set(6, 8, 0xfff0c0);
+      p.set(10, 9, 0xfff0c0);
+      break;
+    case Items.starAxe.icon:
+      toolIcon(p, 0x9f8ff0, false);
+      break;
+    case Items.starPickaxe.icon:
+      toolIcon(p, 0x9f8ff0, true);
+      break;
+    case Items.schematic.icon:
+      // A rolled blueprint, tied with a red cord.
+      p.rect(3, 4, 10, 8, 0x5a8ac8);
+      p.rect(3, 4, 10, 1, 0x8ab8f0);
+      for (let k = 0; k < 3; k++) p.rect(5, 6 + k * 2, 6 - k, 1, 0xd8f4ff);
+      p.ellipse(3, 8, 1.5, 4, 0x3a6aa8);
+      p.ellipse(13, 8, 1.5, 4, 0x3a6aa8);
+      p.rect(7, 4, 1, 8, 0xc8402c);
+      break;
+    case Items.frostDraught.icon:
+      p.rect(7, 2, 2, 3, 0xc9c0b0);
+      p.ellipse(8, 10, 5, 4.5, 0x7fc8e8);
+      p.ellipse(6.5, 8.5, 1.5, 1.5, 0xe0f6ff);
+      break;
     case Items.stoneAxe.icon:
       toolIcon(p, 0x9a9389, false);
       break;
@@ -1413,8 +1442,20 @@ function paintItem(p: Painter, icon: number): void {
       p.set(9, 4, 0x6a4a10);
       break;
     case Items.woodenSword.icon:
-    case Items.ironSword.icon: {
-      const blade = icon === Items.ironSword.icon ? 0xd0d0dc : 0xb8864e;
+    case Items.ironSword.icon:
+    case Items.starSword.icon:
+    case Items.frostBlade.icon:
+    case Items.venomBlade.icon:
+    case Items.spiritBlade.icon: {
+      const blades: Record<number, RGB> = {
+        [Items.woodenSword.icon]: 0xb8864e,
+        [Items.ironSword.icon]: 0xd0d0dc,
+        [Items.starSword.icon]: 0xa898f8,
+        [Items.frostBlade.icon]: 0x9fdcf8,
+        [Items.venomBlade.icon]: 0x8ad05a,
+        [Items.spiritBlade.icon]: 0xe8f4ff,
+      };
+      const blade = blades[icon];
       for (let k = 0; k < 9; k++) p.rect(5 + k, 10 - k, 2, 2, blade);
       for (let k = 0; k < 8; k++) p.set(6 + k, 9 - k, shade(blade, 1.25));
       p.rect(3, 10, 5, 2, 0x6b4a2b);
@@ -1423,10 +1464,14 @@ function paintItem(p: Painter, icon: number): void {
       break;
     }
     case Items.bow.icon:
-      for (let k = 0; k <= 12; k++) p.set(4 + Math.sin((k / 12) * Math.PI) * 6, 2 + k, 0x8a5a2b);
-      for (let k = 0; k <= 12; k++) p.set(5 + Math.sin((k / 12) * Math.PI) * 6, 2 + k, 0xa87442);
+    case Items.crystalBow.icon: {
+      const crystal = icon === Items.crystalBow.icon;
+      for (let k = 0; k <= 12; k++) p.set(4 + Math.sin((k / 12) * Math.PI) * 6, 2 + k, crystal ? 0x5a8ac8 : 0x8a5a2b);
+      for (let k = 0; k <= 12; k++) p.set(5 + Math.sin((k / 12) * Math.PI) * 6, 2 + k, crystal ? 0x9fdcf8 : 0xa87442);
       p.rect(4, 2, 1, 13, 0xf2ece0);
+      if (crystal) p.rect(10, 7, 2, 3, 0xd8f4ff);
       break;
+    }
     case Items.arrow.icon:
       for (let k = 0; k < 10; k++) p.set(3 + k, 12 - k, 0x8a5a2b);
       p.rect(12, 2, 2, 2, 0xb8b8c4);
@@ -1434,8 +1479,9 @@ function paintItem(p: Painter, icon: number): void {
       p.rect(3, 13, 1, 1, 0xd8402c);
       break;
     case Items.leatherArmor.icon:
-    case Items.ironArmor.icon: {
-      const c = icon === Items.ironArmor.icon ? 0xa8a8b4 : 0x9a6a3e;
+    case Items.ironArmor.icon:
+    case Items.starArmor.icon: {
+      const c = icon === Items.starArmor.icon ? STAR_PLATE : icon === Items.ironArmor.icon ? 0xa8a8b4 : 0x9a6a3e;
       p.rect(4, 4, 8, 10, c);
       p.rect(2, 4, 3, 4, c);
       p.rect(11, 4, 3, 4, c);
@@ -1445,9 +1491,10 @@ function paintItem(p: Painter, icon: number): void {
       break;
     }
     case Items.leatherCap.icon:
-    case Items.ironHelmet.icon: {
-      const iron = icon === Items.ironHelmet.icon;
-      const c = iron ? 0xa4a8b4 : 0x8a5a2b;
+    case Items.ironHelmet.icon:
+    case Items.starHelmet.icon: {
+      const iron = icon !== Items.leatherCap.icon;
+      const c = icon === Items.starHelmet.icon ? STAR_PLATE : iron ? 0xa4a8b4 : 0x8a5a2b;
       p.ellipse(8, 8, 6, 5, c);
       p.rect(2, 8, 12, 3, c);
       p.ellipse(6, 6, 2.5, 2, shade(c, 1.3));
@@ -1461,8 +1508,9 @@ function paintItem(p: Painter, icon: number): void {
       break;
     }
     case Items.leatherPants.icon:
-    case Items.ironGreaves.icon: {
-      const c = icon === Items.ironGreaves.icon ? 0xa4a8b4 : 0x8a5a2b;
+    case Items.ironGreaves.icon:
+    case Items.starGreaves.icon: {
+      const c = icon === Items.starGreaves.icon ? STAR_PLATE : icon === Items.ironGreaves.icon ? 0xa4a8b4 : 0x8a5a2b;
       p.rect(4, 2, 8, 4, c);
       p.rect(4, 6, 3, 9, c);
       p.rect(9, 6, 3, 9, c);
@@ -1473,8 +1521,9 @@ function paintItem(p: Painter, icon: number): void {
       break;
     }
     case Items.leatherBoots.icon:
-    case Items.ironBoots.icon: {
-      const c = icon === Items.ironBoots.icon ? 0xa4a8b4 : 0x8a5a2b;
+    case Items.ironBoots.icon:
+    case Items.starBoots.icon: {
+      const c = icon === Items.starBoots.icon ? STAR_PLATE : icon === Items.ironBoots.icon ? 0xa4a8b4 : 0x8a5a2b;
       for (const x of [2, 9]) {
         p.rect(x, 4, 4, 8, c);
         p.rect(x, 10, 6, 3, c);
@@ -1484,9 +1533,10 @@ function paintItem(p: Painter, icon: number): void {
       break;
     }
     case Items.woodenShield.icon:
-    case Items.ironShield.icon: {
+    case Items.ironShield.icon:
+    case Items.chitinShield.icon: {
       const iron = icon === Items.ironShield.icon;
-      const face = iron ? 0xa4a8b4 : 0x9a6634;
+      const face = iron ? 0xa4a8b4 : icon === Items.chitinShield.icon ? 0xc8a060 : 0x9a6634;
       // A heater shield: straight top, rounded to a point below.
       for (let y = 1; y < 15; y++) {
         const half = y < 8 ? 6 : Math.max(0, 6 - (y - 8) * 0.9);
@@ -1932,6 +1982,8 @@ const ARMOR_COLORS = [
   { base: 0x8a5a2b, light: 0xb07a44, dark: 0x5c3a1c, trim: 0xd8a848 },
   // Iron.
   { base: 0xa4a8b4, light: 0xdadee6, dark: 0x6a6f78, trim: 0x4a4f58 },
+  // Starforged: violet plate with gold trim.
+  { base: STAR_PLATE, light: 0xb8b0f0, dark: 0x4a4088, trim: 0xe8c050 },
 ];
 
 /** Paints one armour piece over the human figure (see `paintHuman`). */
@@ -1939,7 +1991,8 @@ function paintArmor(p: Painter, set: number, part: number, dir: number, frame: n
   const { base, light, dark, trim } = ARMOR_COLORS[set];
   const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
   const side = dir === Dir.Left || dir === Dir.Right;
-  const iron = set === 1;
+  // Iron and starforged are plate; leather is soft.
+  const iron = set >= 1;
   switch (part) {
     case 0: // Head.
       if (dir === Dir.Up) {

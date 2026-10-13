@@ -227,6 +227,23 @@ function camp({ rng }: BuildContext): Layout {
   return l;
 }
 
+/** The desert's travellers: tents round a fire, an anvil, a trader and work
+ *  to be had. The desert has no villages, so this is where it trades. */
+function nomadCamp({ rng }: BuildContext): Layout {
+  const s = 11;
+  const l = new Layout(s, s);
+  const c = (s - 1) / 2;
+  l.disc(c, c, c, Tile.Path);
+  l.clearDecos(0, 0, s, s);
+  l.deco(c, c, Deco.Campfire);
+  l.deco(c - 3, c - 3, Deco.Tent);
+  l.deco(c + 3, c - 3, Deco.Tent);
+  l.deco(c - 3, c + 2, Deco.Tent);
+  l.deco(c + 3, c + 2, Deco.Anvil);
+  scatter(l, rng, 2, Deco.Barrel, Tile.Path);
+  return l;
+}
+
 function abandonedCamp({ rng }: BuildContext): Layout {
   const s = rng.int(8, 10);
   const l = new Layout(s, s);
@@ -890,6 +907,7 @@ export const STRUCTURES: readonly StructureDef[] = [
   def({ kind: 'tower', name: 'Tower', rarity: Rarity.Uncommon, weight: 2, minDistance: 0, spacing: 150, flatGround: true, rotate: false, build: tower }),
   def({ kind: 'cabin', name: 'Cabin', rarity: Rarity.Uncommon, weight: 2, biomes: FOREST_SNOW, minDistance: 0, spacing: 100, flatGround: true, rotate: false, build: cabin }),
   def({ kind: 'abandoned-camp', name: 'Abandoned Camp', rarity: Rarity.Uncommon, weight: 2, minDistance: 0, spacing: 80, flatGround: true, rotate: true, build: abandonedCamp }),
+  def({ kind: 'nomad-camp', name: 'Nomad Camp', rarity: Rarity.Uncommon, weight: 3, biomes: [BiomeType.Desert], minDistance: 120, spacing: 260, flatGround: true, rotate: false, persistence: 'semi-persistent', build: nomadCamp }),
   def({ kind: 'mine', name: 'Mine', rarity: Rarity.Uncommon, weight: 1, minDistance: 0, spacing: 150, flatGround: false, rotate: false, persistence: 'semi-persistent', build: mine }),
   def({ kind: 'village', name: 'Village', rarity: Rarity.Rare, weight: 3, biomes: FOREST_SNOW, minDistance: 150, spacing: 500, flatGround: true, rotate: false, persistence: 'semi-persistent', build: village }),
   def({ kind: 'temple', name: 'Temple', rarity: Rarity.Rare, weight: 2, minDistance: 300, spacing: 400, flatGround: true, rotate: false, build: (c) => temple(c, [20, 28], false) }),

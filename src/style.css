@@ -232,10 +232,9 @@ body {
 
 .vital-fill {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transition: height 0.25s;
+  inset: 0;
+  transform-origin: bottom;
+  transition: transform 0.25s;
 }
 
 .vital-health .vital-fill { background: #d8402c; }
@@ -515,6 +514,7 @@ body {
 .xp-fill {
   height: 100%;
   background: #c8a0ff;
+  transform-origin: left;
 }
 
 .hud-status {
@@ -574,7 +574,8 @@ body {
 .boss-fill {
   height: 100%;
   background: #d8402c;
-  transition: width 0.2s;
+  transform-origin: left;
+  transition: transform 0.2s;
 }
 
 .hud-hurt {
@@ -926,9 +927,13 @@ body {
   }
 }
 
-/* Virtual stick for touch screens. */
+/* Virtual stick for touch screens: placed in screen pixels by transform, so
+   it undoes the HUD size setting. */
 .stick {
   position: absolute;
+  left: 0;
+  top: 0;
+  zoom: calc(1 / var(--ui-scale, 1));
   display: none;
   width: 96px;
   height: 96px;
@@ -1117,7 +1122,7 @@ body {
     top: auto;
     left: auto;
     right: 12px;
-    bottom: calc(212px + env(safe-area-inset-bottom));
+    bottom: calc(260px + env(safe-area-inset-bottom));
     transform: none;
     width: auto;
     padding: 4px 10px;
@@ -1172,7 +1177,8 @@ body {
     right: calc(12px + env(safe-area-inset-right));
     grid-template-columns: repeat(3, 54px);
     grid-template-areas:
-      'full act bag'
+      '. pause full'
+      '. act bag'
       'block dodge attack';
   }
 
@@ -1189,7 +1195,17 @@ body {
   .touch-btn.block { grid-area: block; grid-column: auto; justify-self: auto; }
   .touch-btn.dodge { grid-area: dodge; }
   .touch-btn.attack { grid-area: attack; }
-  .touch-btn.full { grid-area: full; font-size: 12px; }
+  .touch-btn.full { grid-area: full; }
+  .touch-btn.pause { grid-area: pause; }
+
+  /* Pause and full screen: small, above the action buttons. */
+  .touch-btn.full,
+  .touch-btn.pause {
+    height: 34px;
+    border-radius: 17px;
+    font-size: 12px;
+    align-self: end;
+  }
   .touch-btn[hidden] { display: none; }
 
   .touch-btn:active {
@@ -1334,4 +1350,160 @@ body {
   background: #fbefcf;
   border: 2px solid var(--wood);
   border-radius: 3px;
+}
+
+/* Important messages: stay until dismissed. */
+.hud-alerts {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(460px, calc(100vw - 32px));
+  pointer-events: none;
+  z-index: 6;
+}
+
+.hud-alert {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.hud-alert span {
+  flex: 1;
+}
+
+.quest-abandon {
+  margin-top: 4px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+.map-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* The selected hotbar item's name, shown briefly. */
+.hotbar-name {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--paper);
+  background: rgba(40, 26, 14, 0.85);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.hotbar-name.show {
+  opacity: 1;
+}
+
+/* Weapon wear: a bar along the bottom of the slot. */
+.slot .durability {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  height: 3px;
+  background: rgba(59, 36, 18, 0.6);
+}
+
+.slot .durability::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--left);
+  background: #5fae3c;
+}
+
+.slot .durability.low::after {
+  background: #d8402c;
+}
+
+/* Text and HUD size setting. */
+#ui {
+  zoom: var(--ui-scale, 1);
+}
+
+/* Reduced motion: no animation anywhere in the HUD and menus. */
+@media (prefers-reduced-motion: reduce) {
+  #ui *,
+  #ui *::before,
+  #ui *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.hud-tip {
+  max-width: min(420px, 60vw);
+  font-size: 14px;
+  background: #fff3c8;
+}
+
+/* Legendary creatures in the Quests tab. */
+.legends ul {
+  margin: 4px 0 12px;
+  padding-left: 4px;
+  list-style: none;
+  font-size: 13px;
+}
+
+.legends li.have {
+  color: #2f6b2e;
+  font-weight: 600;
+}
+
+.inv-sort {
+  margin-left: 10px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+/* Key bindings in Settings. */
+.keys h4 {
+  margin: 14px 0 4px;
+}
+
+.key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(107, 66, 32, 0.15);
+}
+
+.key-btn {
+  min-width: 96px;
+}
+
+.keys > .btn {
+  margin-top: 8px;
+}
+
+/* Menus open above everything else on screen. */
+.menu-backdrop.open {
+  z-index: 8;
+}
+
+/* Phones held sideways: the folded playground sits lower, under the tracker. */
+@media (pointer: coarse) and (max-height: 500px) {
+  .playground.hidden {
+    bottom: calc(190px + env(safe-area-inset-bottom));
+  }
 }

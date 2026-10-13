@@ -67,6 +67,9 @@ Facing a building's door outdoors shows **E Enter**. Pressing E builds an `Inter
 - The world keeps streaming around the door outside, so nothing unloads.
 - The clock, events, NPC schedules and vitals keep running (`LivingWorld.updateIndoors`). Weather does not reach indoors, and enemies outside wait.
 - Lighting is dimmer than outdoors at night (60% of the night's darkness), lit by the room's fireplace and lamps.
+- There is no fighting indoors: attacks do nothing, since combat still runs at the door outside.
+- Crafting stations count only if the room itself has them, not the world outside the door.
+- What does not fit in the bag (loot, rewards) is left on the ground outside the door.
 - Walking out over the doormat leaves, onto the doorstep outside.
 - Saving indoors records the spot outside the door, so a reload starts outside.
 
@@ -89,7 +92,7 @@ The walk from the door is always kept clear.
 
 | Thing | E does |
 | --- | --- |
-| Bed | Sleep until morning, at dusk or night (or during the story's night in the village); otherwise "too early" |
+| Bed | Sleep until morning, at dusk or night (or during the story's night in the village); otherwise "too early". The spot outside the door becomes the waking spot after a collapse. |
 | Bookshelf | Read a line from one of the books (`BOOKS` in `src/story/StoryScript.ts`) |
 | Chest | Loot it once. Interior chests use ids from 1,000,000 up in the object's opened set, and follow the never-refill rule with the rest. |
 | Resident | Talk to them |
@@ -109,7 +112,7 @@ A `mine` entrance leads into a cave instead of a room (`Interior.dig`):
 
 Anything the player could not walk up to from the entrance is removed. Caves are always dark (at least 75% darkness, more at night), lit by the lamps, the player's light, and daylight from the entrance.
 
-Ore, crystals and stones are mined as outdoors (same tools, times and drops; see [survival.md](survival.md#gathering)), with a progress bar over the rock. `GatheringSystem.ground` is the `Interior` while inside, so drops are seeded per mine and tile. Mined rock is recorded in the object's opened set (ids from 2,000,000 up) and stays gone for as long as the mine stands.
+Ore, crystals and stones are mined as outdoors (same tools, times and drops; see [survival.md](survival.md#gathering)), with a progress bar over the rock. `GatheringSystem.ground` is the `Interior` while inside, so drops are seeded per mine and tile. Rarer finds depend on the difficulty band of the mine's door outside (`GatheringSystem.bandAt`). Mined rock is recorded in the object's opened set (ids from 2,000,000 up) and stays gone for as long as the mine stands.
 
 ## Castle keeps
 

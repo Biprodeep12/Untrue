@@ -1,7 +1,7 @@
 // Night lighting (spec 6.1, 7.3): a darkness layer with soft holes cut out
 // for every light, plus a warm additive glow around fires and windows.
 
-import { Container, Graphics, RenderTexture, Sprite, Texture, type Renderer } from 'pixi.js';
+import { Container, RenderTexture, Sprite, Texture, type Renderer } from 'pixi.js';
 
 export interface Light {
   /** World position in pixels. */
@@ -35,7 +35,10 @@ export class Lighting {
   /** The finished darkness layer; add above the world. */
   readonly view = new Container();
   private readonly mask = new Container();
-  private readonly dark = new Graphics();
+  /** The darkness itself: a tinted white sprite, cheaper to change than a Graphics. */
+  private readonly dark = new Sprite(Texture.WHITE);
+  /** With lighting off, night is only this flat tint: no light holes, no render pass. */
+  private readonly flat = new Sprite(Texture.WHITE);
   private readonly glow: Texture;
   private readonly holes: Sprite[] = [];
   private readonly warm: Sprite[] = [];
@@ -49,7 +52,7 @@ export class Lighting {
     this.rt = RenderTexture.create({ width: 2, height: 2 });
     this.sprite = new Sprite(this.rt);
     this.mask.addChild(this.dark);
-    this.view.addChild(this.sprite, this.warmLayer);
+    this.view.addChild(this.sprite, this.warmLayer, this.flat);
   }
 
   resize(width: number, height: number): void {
@@ -57,13 +60,25 @@ export class Lighting {
   }
 
   /** `toScreen` maps world pixels to screen pixels; `scale` is the camera zoom. */
-  update(dt: number, darkness: number, lights: readonly Light[], toScreen: (x: number, y: number) => [number, number], scale: number): void {
+  /** `flat`: the cheap night of the low-quality setting, a plain tint. */
+  update(dt: number, darkness: number, lights: readonly Light[], toScreen: (x: number, y: number) => [number, number], scale: number, flat = false): void {
     this.time += dt;
     const on = darkness > 0.01;
     this.view.visible = on;
     if (!on) return;
     const { width, height } = this.rt;
-    this.dark.clear().rect(0, 0, width, height).fill({ color: darkness > 0.6 ? NIGHT : DUSK, alpha: darkness * MAX_ALPHA });
+    const tint = darkness > 0.6 ? NIGHT : DUSK;
+    this.flat.visible = flat;
+    this.sprite.visible = this.warmLayer.visible = !flat;
+    if (flat) {
+      this.flat.setSize(width, height);
+      this.flat.tint = tint;
+      this.flat.alpha = darkness * MAX_ALPHA * 0.85;
+      return;
+    }
+    this.dark.setSize(width, height);
+    this.dark.tint = tint;
+    this.dark.alpha = darkness * MAX_ALPHA;
 
     this.ensure(this.holes, lights.length, this.mask, 'erase');
     this.ensure(this.warm, lights.length, this.warmLayer, 'add');

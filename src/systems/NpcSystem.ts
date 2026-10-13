@@ -57,7 +57,7 @@ export class NpcSystem {
     for (let cy = sim.y0; cy <= sim.y1; cy++) {
       for (let cx = sim.x0; cx <= sim.x1; cx++) {
         for (const o of this.world.objects.inChunk(chunkKey(cx, cy))) {
-          if (o.kind === 'village' && !this.populated.has(o.id)) this.populate(o);
+          if ((o.kind === 'village' || o.kind === 'nomad-camp') && !this.populated.has(o.id)) this.populate(o);
         }
       }
     }
@@ -109,6 +109,12 @@ export class NpcSystem {
       return npc;
     };
     const centre: [number, number] = [village.x + village.w / 2, village.y + village.h / 2];
+    // A nomad camp: one traveller with work, and a trader by the fire.
+    if (village.kind === 'nomad-camp') {
+      make('villager', rng.pick(VILLAGER_OUTFITS), centre).questGiver = true;
+      make('trader', 'trader', [centre[0] + 1.5, centre[1] + 1]);
+      return;
+    }
     for (let k = 0; k < 3; k++) make('villager', rng.pick(VILLAGER_OUTFITS), centre).questGiver = k === 0;
     make('trader', 'trader', [well[0] + 1.5, well[1] + 2]);
   }

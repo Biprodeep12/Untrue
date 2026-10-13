@@ -4,7 +4,7 @@ How the player stays alive: vitals, stamina, gathering, items, the inventory, cr
 
 ## Vitals
 
-`src/systems/Vitals.ts` keeps four bars: health, stamina, hunger and thirst. Hunger, thirst and stamina run from 0 to 100. Health runs from 0 to `maxHealth`, which starts at 100 and grows with level (see [combat.md](combat.md#progression)).
+`src/systems/Vitals.ts` keeps four bars: health, stamina, hunger and thirst. Hunger, thirst and stamina run from 0 to 100. Health runs from 0 to `maxHealth`, which starts at 100 and grows with level and the Toughness skill (see [combat.md](combat.md#progression)).
 
 ### Drain
 
@@ -49,21 +49,27 @@ The HUD (`src/ui/Hud.ts`) warns when a bar runs low. Each bar is low or critical
 - A banner at the top centre lists the warnings, worst first; critical ones are red and blink.
 - The bar's frame glows and pulses, its label turns red, and a critical bar shakes.
 - Low health tints the screen edges red; critical health makes them throb like a heartbeat.
-- Each time a bar gets worse an alarm sounds (not for stamina, which runs out often).
+- Each time a bar gets worse an alarm sounds (`warn`; not for stamina, which runs out often).
 - Animations stop under the system's reduced-motion setting.
 
 ### Status effects
 
 | Status | Effect | Source | Cure |
 | --- | --- | --- | --- |
-| `poison` | −2.5 HP/s, stops healing | Scorpion hits | Antidote, or wait it out |
+| `poison` | −2.5 HP/s, stops healing | Hits from scorpions, Emperor Scorpions, Thorn Spiders (their webs), Ghouls and the Dune Tyrant | Antidote, a Moonwell, or wait it out |
 | `slow` | Movement speed ×0.55 (`SLOW_FACTOR`) | Spider webs, Frost Golem ice | Wait it out |
 
 Each status lasts a set number of seconds. A new hit refreshes it to whichever is longer.
 
 ### Collapse
 
-When health reaches 0 the player collapses. `Game.collapse()` cancels gathering, calls `Vitals.revive()` and sends the player back to the origin. Revival sets:
+When health reaches 0 the player collapses. `Game.collapse()` leaves any building, cancels gathering, calls `Vitals.revive()` and sends the player to their waking spot, with an alert that stays until dismissed. The waking spot (`Game.respawn`) is the start (0, 0) until the player:
+
+- rests at a campfire or in a bed (the spot outside the door, if indoors),
+- drinks from a Moonwell, or
+- reaches a new story stage.
+
+Each of these moves it to where the player stands (`Game.setRespawn`). It is saved as `player.respawn` ([saves.md](saves.md)). Revival sets:
 
 - health to 60% of `maxHealth`
 - stamina to 100
@@ -77,7 +83,7 @@ The player keeps everything they carry.
 | Use | Cost | Notes |
 | --- | --- | --- |
 | Running | 18/s | Needs stamina above 1. Blocking also stops running. |
-| Dodge roll | 20 | Needs 20 or more. |
+| Dodge roll | 20, 12% less per Nimble rank | Needs the full cost. |
 | Blocking a hit | 8 per blocked hit | No stamina means the block fails. |
 | Gathering | 4 per completed gather | Below 4 stamina, gathering takes twice as long. |
 
@@ -101,17 +107,19 @@ Time is `seconds ÷ (1 + tool tier)`, doubled when stamina is below 4. Tools wor
 | Garden vegetables (villages) | 0.7 s | – | 0 | Vegetables ×1–2, Herb (20%) |
 | Cactus | 1.2 s | – | 0 | Cactus Fruit ×1–2 |
 | Stone, red rock, snowy rock | 3.5 s | pickaxe | 0 | Stone ×(1–2 + tier) |
-| Ore | 4 s | pickaxe | 1 | 1–2 of: Coal (55%) or Iron Ore (45%); with tier 2, 15% become Gold Ore |
-| Crystal | 5 s | pickaxe | 2 | Crystal ×1; 8% chance of a Gemstone too |
+| Ore | 4 s | pickaxe | 1 | 1–2 of: Gold Ore (12% + 5% per band, with tier 2 or more), Coal (the next 40%, plus the gold share below tier 2), else Iron Ore |
+| Crystal | 5 s | pickaxe | 2 | Crystal ×1 (×2 with a 15% chance per band); a Gemstone too, 6% + 3% per band |
 | Barrel | 0.8 s | – | 0 | Barrel loot (below) |
 | Buried treasure (X mark) | 1.6 s | – | 0 | Coin ×10–40 plus a chest roll at band 2 |
 | Meteorite | 5 s | pickaxe | 1 | Star Metal ×(2–3 + tier) |
 
-Below the minimum tier the prompt reads "Needs a pickaxe" or "Needs an iron pickaxe".
+Below the minimum tier the prompt reads "Needs a pickaxe" or "Needs an iron pickaxe". Tiers run from stone (1) through iron (2) to starforged (3).
+
+Rare finds get likelier further out: the band is the difficulty band where the rock stands. In a mine it is the band of the mine's door outside (`GatheringSystem.bandAt`).
 
 Drops are seeded by the tile and the region's visit counter, so the same plant gives the same drop until its region regenerates. Gathered decorations are removed through `WorldManager.harvest()`. They stay gone until the region regenerates, except plants that regrow ([living-world.md](living-world.md#regrowth)).
 
-If the bag is full, the overflow is lost and a notice says so.
+If the bag is full, what does not fit is left on the ground at the player's feet (outside the door, if indoors) and a notice says so. The same goes for enemy drops (where the enemy fell), quest rewards and the village defence reward.
 
 ### Drinking
 
@@ -147,9 +155,9 @@ Rivers and lakes can be swum (`Game.walker` lets the player through water tiles 
 | Stone | Common | 99 | Crafting |
 | Coal | Common | 99 | Iron ingots, torches |
 | Iron Ore | Uncommon | 99 | Iron ingots |
-| Gold Ore | Rare | 99 | Sell (12c) |
-| Crystal | Epic | 99 | Sell (35c) |
-| Herb | Common | 99 | Bandages, stew, antidote |
+| Gold Ore | Rare | 99 | Star ingots; sell (12c) |
+| Crystal | Epic | 99 | Crystal Bow, Frost and Spirit Blades; sell (35c) |
+| Herb | Common | 99 | Bandages, stew, antidote, Health Potion, Frost Draught |
 | Berries | Common | 99 | Food: +12 hunger, +4 thirst |
 | Mushroom | Common | 99 | Food: +10 hunger |
 | Vegetables | Common | 99 | Food: +14 hunger, +4 thirst; sells for 2c |
@@ -158,16 +166,23 @@ Rivers and lakes can be swum (`Game.walker` lets the player through water tiles 
 | Forest Stew | Uncommon | 99 | Food: +45 hunger, +15 thirst |
 | Herbal Bandage | Uncommon | 99 | +25 health |
 | Health Potion | Rare | 99 | +60 health |
+| Frost Draught | Uncommon | 99 | +45 thirst, +10 health |
 | Iron Ingot | Uncommon | 99 | Iron tools, weapons, armor, lantern |
+| Star Ingot | Epic | 99 | Starforged tools, weapons and armour; sell (120c) |
 | Stone Axe | Common | 1 | Axe tier 1 |
 | Stone Pickaxe | Common | 1 | Pickaxe tier 1 |
 | Iron Axe | Uncommon | 1 | Axe tier 2 |
 | Iron Pickaxe | Rare | 1 | Pickaxe tier 2 |
-| Gemstone | Epic | 99 | Sell (60c) |
+| Starforged Axe | Epic | 1 | Axe tier 3 |
+| Starforged Pickaxe | Epic | 1 | Pickaxe tier 3 |
+| Gemstone | Epic | 99 | Starforged Sword; sell (60c) |
 | Golden Idol | Legendary | 99 | Sell (250c) |
 | Wooden Sword | Common | 1 | Weapon (see [combat.md](combat.md#weapons)) |
 | Iron Sword | Rare | 1 | Weapon |
+| Frost Blade, Venom Blade, Spirit Blade | Epic | 1 | Weapons with a damage type |
+| Starforged Sword | Legendary | 1 | Weapon |
 | Hunting Bow | Uncommon | 1 | Weapon, uses arrows |
+| Crystal Bow | Epic | 1 | Weapon, uses arrows |
 | Arrow | Common | 99 | Bow ammunition |
 | Leather Cap | Common | 1 | Head armour, 4% |
 | Leather Tunic | Uncommon | 1 | Chest armour, 8% |
@@ -177,25 +192,31 @@ Rivers and lakes can be swum (`Game.walker` lets the player through water tiles 
 | Iron Chestplate | Epic | 1 | Chest armour, 16% |
 | Iron Greaves | Rare | 1 | Leg armour, 10% |
 | Iron Boots | Rare | 1 | Foot armour, 6% |
+| Starforged Helm | Epic | 1 | Head armour, 11% |
+| Starforged Plate | Legendary | 1 | Chest armour, 22% |
+| Starforged Greaves | Epic | 1 | Leg armour, 14% |
+| Starforged Boots | Epic | 1 | Foot armour, 9% |
 | Wooden Shield | Common | 1 | Off hand: blocks 85% of a blow for 6 stamina |
+| Chitin Shield | Uncommon | 1 | Off hand: blocks 90% of a blow for 5 stamina |
 | Iron Shield | Rare | 1 | Off hand: blocks 95% of a blow for 4 stamina |
 | Raw Meat | Common | 99 | Food: +8 hunger |
 | Cooked Meat | Uncommon | 99 | Food: +35 hunger, +5 health |
-| Hide | Common | 99 | Leather armor, iron armor |
-| Spider Silk | Common | 99 | Bow |
-| Chitin | Common | 99 | Sell (3c) |
-| Venom Sac | Uncommon | 99 | Sell (6c) |
-| Ice Shard | Uncommon | 99 | Sell (6c) |
-| Bone | Common | 99 | Sell (1c) |
+| Hide | Common | 99 | Leather, iron and starforged armour |
+| Spider Silk | Common | 99 | Bows |
+| Chitin | Common | 99 | Chitin Shield, Starforged Plate; sell (3c) |
+| Venom Sac | Uncommon | 99 | Venom Blade; sell (6c) |
+| Ice Shard | Uncommon | 99 | Frost Draught, Frost Blade; sell (6c) |
+| Bone | Common | 99 | Arrows; sell (1c) |
 | Antidote | Uncommon | 99 | +5 health, cures poison |
 | Coin | Common | 999 | Currency |
 | Torch | Common | 99 | Light, radius 5 |
 | Lantern | Rare | 1 | Light, radius 7, never burns out |
-| Spirit Essence | Uncommon | 99 | Lantern |
+| Spirit Essence | Uncommon | 99 | Lantern, Health Potion, Spirit Blade; sell (8c) |
 | Wanderer's Lantern | Legendary | 1 | Light, radius 6, and lantern sight (see [story.md](story.md#lantern-memories)) |
-| Star Metal | Epic | 99 | Sell (45c) |
+| Star Metal | Epic | 99 | Star ingots; sell (45c) |
+| Forgotten Schematic | Epic | 99 | Use it to learn a rare recipe |
 
-Sell prices come from `SELL_PRICES` in `src/systems/TradeSystem.ts`. Items without a price can't be sold.
+Every rare material now has a use in a recipe. Sell prices come from `SELL_PRICES` in `src/systems/TradeSystem.ts`. Items without a price can't be sold.
 
 ## Inventory and hotbar
 
@@ -204,11 +225,12 @@ Sell prices come from `SELL_PRICES` in `src/systems/TradeSystem.ts`. Items witho
 - `add()` tops up existing stacks first, then fills empty slots, and returns what didn't fit.
 - `remove()` takes from the last slots first, and only if the whole amount is there.
 - In the menu, click a slot and then another to move it. Equal stacks merge; anything else swaps.
-- Weapons carry `durability`, which drops by one per attack. At 0 the weapon breaks and its slot empties.
+- Weapons carry `durability`, which drops by one per attack. At 0 the weapon breaks and its slot empties. A worn weapon shows a durability bar in its slot.
+- **Sort bag** (beside the load line) tidies every slot below the hotbar (`Inventory.sort()`): like items merge into full stacks (worn weapons never stack), then weapons, tools, armour, food, materials and treasure (Epic and above) follow in that order, rarest first, then by name. The hotbar is left alone.
 
 ### Weight
 
-Every item has a carry weight (`weightOf` in `src/items/Items.ts`): set per item for some (coin 0.01, arrow 0.1, herb 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, lantern 1, star metal 1.5, idol 2, the Wanderer's Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10) and shields (wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.
+Every item has a carry weight (`weightOf` in `src/items/Items.ts`): set per item for some (coin 0.01, arrow 0.1, herb 0.1, schematic 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, star ingot 1, lantern 1, star metal 1.5, idol 2, the Wanderer's Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10; starforged boots 2, helm 3, greaves 4, plate 7) and shields (chitin 2, wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.
 
 The player can carry 100, plus 25 per Pack Mule rank. Over that the player is **overloaded**: 60% speed and no running, with an "overloaded" badge on the HUD. The bag shows the load under the grid.
 
@@ -226,21 +248,21 @@ The bag's left panel holds the **equipment**: head, chest, legs and feet down on
 - **Equip:** select an item in the bag and press **Equip** (or **Hold in off hand**), or select it and click its slot. Whatever was there goes back to the bag. Click a filled slot to take it off.
 - **Armour** only protects while worn: every piece adds its share, up to 60% in all (`armor()`). Equipped items still count toward carry weight.
 - **Off hand:** a shield (stronger blocks, see [combat.md](combat.md#taking-damage)), or a torch or lantern. A whole stack of torches goes into the off hand, and burns down from there.
-- **On the player:** each worn piece is drawn over the figure in every direction and walk frame: leather in browns, iron in steel with a red crest. The off-hand item is held in the other hand (a shield at the side, a torch up, a lantern hanging), and the shield comes up in front while blocking.
+- **On the player:** each worn piece is drawn over the figure in every direction and walk frame: leather in browns, iron in steel with a red crest, starforged in violet plate with gold trim (`ARMOR_SETS` = 3). The off-hand item is held in the other hand (a shield at the side, a torch up, a lantern hanging), and the shield comes up in front while blocking.
 - Saves keep what is worn. Older saves put on the best armour carried for each slot.
 
-Keys 1–8 select a hotbar slot. F, or tapping the selected slot again, uses it. Food is eaten; tools and other items just show a notice. The selected slot is also the weapon used for attacks.
+Keys 1–8 select a hotbar slot, and its name (and a weapon's durability) shows above the bar for a moment. F, or tapping the selected slot again, uses it. Food is eaten, a Forgotten Schematic is read; tools and other items just show a notice. The selected slot is also the weapon used for attacks.
 
 ## Crafting
 
 `src/systems/CraftingSystem.ts`. The player never builds, so stations are found in the world instead:
 
 - **Campfire:** found in camps and the Village of Graves.
-- **Anvil:** found in villages and castles.
+- **Anvil:** found in villages, castles and nomad camps.
 
-A station counts if its decoration is within 3 tiles of the player (`STATION_RANGE`). "By hand" recipes work anywhere. The menu's Crafting tab lists every recipe, what you have against what you need, and the station each requires.
+A station counts if its decoration is within 3 tiles of the player (`STATION_RANGE`). Indoors, only the room's own furniture counts, not the world outside the door. "By hand" recipes work anywhere. The menu's Crafting tab lists every known recipe, what you have against what you need, and the station each requires.
 
-Crafting removes the inputs, then adds the output. If the output doesn't fit, everything is put back and the result is `full`.
+Crafting removes the inputs, then adds the output. If the output doesn't fit, everything is put back and the result is `full`. Next to Craft, a ×N button crafts as many as the bag's materials allow, up to 20, when that is more than one.
 
 | Output | Count | Station | Inputs |
 | --- | --- | --- | --- |
@@ -270,6 +292,31 @@ Crafting removes the inputs, then adds the output. If the output doesn't fit, ev
 | Iron Shield | 1 | Anvil | 3 Iron Ingot, 2 Wood |
 | Torch | 3 | By hand | 1 Wood, 1 Coal |
 | Lantern | 1 | Anvil | 1 Iron Ingot, 2 Spirit Essence |
+| Health Potion | 1 | By hand | 2 Herb, 1 Spirit Essence, 1 Berries |
+| Frost Draught | 1 | By hand | 2 Ice Shard, 1 Herb |
+| Arrow | 8 | By hand | 1 Bone, 1 Wood |
+| Chitin Shield | 1 | By hand | 4 Chitin, 2 Wood |
+| Star Ingot | 1 | Anvil | 1 Star Metal, 2 Gold Ore, 1 Coal |
+| Starforged Axe | 1 | Anvil | 2 Star Ingot, 2 Wood |
+| Starforged Pickaxe | 1 | Anvil | 2 Star Ingot, 2 Wood |
+| Starforged Helm | 1 | Anvil | 2 Star Ingot |
+| Starforged Greaves | 1 | Anvil | 3 Star Ingot, 1 Hide |
+| Starforged Boots | 1 | Anvil | 2 Star Ingot |
+
+Star metal comes from meteorites (and some legends), so the starforged tier is for the far lands.
+
+### Rare recipes
+
+Recipes marked `rare` in `RECIPES` stay hidden until learned. The Crafting tab says how many are still to discover. Using a **Forgotten Schematic** (from the hotbar or the bag) teaches one unknown rare recipe at random and says where to make it; with none left to learn, the schematic is kept. Schematics are in the Epic chest pool and are dropped by every legend and the Arena Guardian. Learned recipes are saved in progression (`recipes`).
+
+| Output | Count | Station | Inputs |
+| --- | --- | --- | --- |
+| Crystal Bow | 1 | Anvil | 2 Crystal, 3 Spider Silk, 2 Wood |
+| Frost Blade | 1 | Anvil | 1 Iron Sword, 4 Ice Shard, 1 Crystal |
+| Venom Blade | 1 | Anvil | 1 Iron Sword, 4 Venom Sac |
+| Spirit Blade | 1 | Anvil | 1 Iron Sword, 4 Spirit Essence, 1 Crystal |
+| Starforged Sword | 1 | Anvil | 3 Star Ingot, 1 Gemstone |
+| Starforged Plate | 1 | Anvil | 4 Star Ingot, 2 Chitin |
 
 ## Loot
 
@@ -292,7 +339,7 @@ A chest makes 2–4 rolls, plus one more per two difficulty bands (`floor(band /
 | Common | Wood 2–5, Stone 2–5, Berries 2–4, Herb 1–3, Coal 1–3, Mushroom 1–3, Arrow 3–8 |
 | Uncommon | Iron Ore 1–3, Herbal Bandage 1–2, Roast Mushroom 1–2, Iron Ingot 1–2, Stone Axe, Wooden Sword, Antidote 1–2, Leather Tunic, Leather Cap, Leather Boots, Wooden Shield |
 | Rare | Gold Ore 1–2, Health Potion, Forest Stew 1–2, Stone Pickaxe, Hunting Bow, Leather Trousers, Iron Helmet, Iron Boots |
-| Epic | Crystal, Gemstone, Iron Pickaxe, Iron Axe, Iron Sword, Iron Chestplate, Iron Greaves, Iron Shield |
+| Epic | Forgotten Schematic, Crystal, Gemstone, Iron Pickaxe, Iron Axe, Iron Sword, Iron Chestplate, Iron Greaves, Iron Shield |
 | Legendary | Golden Idol |
 
 Chest contents are seeded by the chest's object id and layout index, so a chest always holds the same loot.

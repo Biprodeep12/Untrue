@@ -6,6 +6,9 @@ import { chunkKey, expandRect, inRect, keyX, keyY, sameRect, tileToChunk, type C
 import type { ChunkRequest, ChunkResult } from '../generation/TerrainGenerator';
 import { Chunk, ChunkPool } from './Chunk';
 
+/** Chunks drawn per frame at most; see `pendingShow`. */
+const SHOW_PER_FRAME = 2;
+
 /** Produces chunk terrain, usually off the main thread. */
 export interface ChunkGenerator {
   request(req: ChunkRequest): void;
@@ -47,6 +50,10 @@ export class ChunkManager {
   /** Generated or generating chunks. */
   readonly chunks = new Map<number, Chunk>();
   listener?: ChunkListener;
+  /** Ready chunks waiting to be drawn. Drawing a chunk is costly (meshes,
+   *  hundreds of sprites, lights), so a few go per frame, nearest first,
+   *  instead of every result that lands in the same frame. */
+  private readonly pendingShow = new Set<Chunk>();
   inFlight = 0;
 
   private readonly pool = new ChunkPool();
@@ -85,6 +92,25 @@ export class ChunkManager {
     }
     for (const c of this.chunks.values()) c.simulated = inRect(this.simRect, c.cx, c.cy);
     this.schedule();
+    this.flushShows();
+  }
+
+  /** Draws up to SHOW_PER_FRAME waiting chunks, nearest to the player first. */
+  private flushShows(): void {
+    for (let n = 0; n < SHOW_PER_FRAME && this.pendingShow.size; n++) {
+      let best: Chunk | null = null;
+      let bestD = Infinity;
+      for (const c of this.pendingShow) {
+        const d = Math.abs(c.cx - this.playerCX) + Math.abs(c.cy - this.playerCY);
+        if (d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      this.pendingShow.delete(best!);
+      best!.shown = true;
+      this.listener?.show(best!);
+    }
   }
 
   get(cx: number, cy: number): Chunk | undefined {
@@ -102,6 +128,7 @@ export class ChunkManager {
       leaving.push(key);
       const chunk = this.chunks.get(key);
       if (chunk) {
+        this.pendingShow.delete(chunk);
         if (chunk.shown) this.listener?.hide(chunk);
         this.chunks.delete(key);
         this.pool.release(chunk);
@@ -169,10 +196,16 @@ export class ChunkManager {
   /** Activate or deactivate rendering for a chunk. */
   private syncShown(chunk: Chunk): void {
     const want = chunk.ready && !!this.renderRect && inRect(this.renderRect, chunk.cx, chunk.cy);
+    if (!want) this.pendingShow.delete(chunk);
     if (want === chunk.shown) return;
-    chunk.shown = want;
-    if (want) this.listener?.show(chunk);
-    else this.listener?.hide(chunk);
+    if (want) {
+      // Without a renderer (tests, tools) there is nothing to spread out.
+      if (this.listener) this.pendingShow.add(chunk);
+      else chunk.shown = true;
+      return;
+    }
+    chunk.shown = false;
+    this.listener?.hide(chunk);
   }
 
   /** Re-composes a chunk after an object was stamped onto it. */

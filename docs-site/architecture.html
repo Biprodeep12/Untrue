@@ -68,7 +68,11 @@
 </tr>
 <tr>
 <td><code>Input.ts</code></td>
-<td>Keyboard, mouse, wheel, the touch stick (left half) and tap-to-interact.</td>
+<td>Keyboard, mouse, wheel, the touch stick (left half), pinch zoom and tap-to-interact. Game code asks for actions (<code>act</code>, <code>holding</code>), not keys.</td>
+</tr>
+<tr>
+<td><code>Keys.ts</code></td>
+<td>Key bindings: each action&#39;s main key (<code>DEFAULT_KEYS</code>, changeable in Settings), fixed extras such as the arrow keys, <code>RESERVED_KEYS</code> (Esc, F3, F4, 1–8) and key names for the screen.</td>
 </tr>
 <tr>
 <td><code>Settings.ts</code></td>
@@ -89,6 +93,14 @@
 <tr>
 <td><code>Chunk.ts</code></td>
 <td>Chunk buffers and the chunk pool.</td>
+</tr>
+<tr>
+<td><code>GroundItems.ts</code></td>
+<td>Items lying on the ground, picked up by walking over them, saved with the world.</td>
+</tr>
+<tr>
+<td><code>Interior.ts</code></td>
+<td>Building interiors, mine caves and the keep&#39;s floors, generated from the building&#39;s seed.</td>
 </tr>
 <tr>
 <td><code>BiomeManager.ts</code></td>
@@ -152,7 +164,7 @@
 </tr>
 <tr>
 <td><strong><code>src/entities/</code></strong></td>
-<td><code>Enemy.ts</code> (enemy AI), <code>Species.ts</code> (enemy roster), <code>NPC.ts</code> (NPC schedules and following).</td>
+<td><code>Enemy.ts</code> (enemy AI), <code>Species.ts</code> (enemy roster, damage-type weaknesses and resistances, variants), <code>NPC.ts</code> (NPC schedules and following).</td>
 </tr>
 <tr>
 <td><strong><code>src/items/</code></strong></td>
@@ -168,11 +180,11 @@
 </tr>
 <tr>
 <td><strong><code>src/rendering/</code></strong></td>
-<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>.</td>
+<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Buildings.ts</code>, <code>InteriorRenderer.ts</code>, <code>GroundItemRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>.</td>
 </tr>
 <tr>
 <td><strong><code>src/ui/</code></strong></td>
-<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code>, <code>MapView</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>.</td>
+<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code> (tabs: Inventory, Crafting, Skills, Quests, Map, Lantern, Settings, About), <code>MapView</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>SleepOverlay</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>, <code>Hints</code> (first-time tips), <code>Fullscreen</code> (the Fullscreen API), <code>About</code> (privacy, credits, licenses), <code>Playground</code> (the story playground panel).</td>
 </tr>
 <tr>
 <td><strong><code>src/audio/</code></strong></td>
@@ -194,17 +206,19 @@
 <li>Blocking state and movement speed (slow status, blocking, weather).</li>
 <li><code>Player.update</code>, then gathering, then <code>CombatSystem.update</code> with the player&#39;s body.</li>
 <li>The camera follows the player.</li>
-<li><code>Vitals.update</code>; a collapse sends the player back to the origin.</li>
+<li><code>Vitals.update</code>; a collapse sends the player to their waking spot (the last rest, Moonwell or story stage; the origin before any).</li>
 </ul>
 </li>
-<li><code>WorldManager.update(view)</code> with the camera&#39;s view in tiles: streaming, biome and object bookkeeping, discovery.</li>
+<li><code>WorldManager.update(view)</code> with the camera&#39;s view in tiles: streaming, biome and object bookkeeping, discovery. <code>ChunkManager</code> draws at most 2 waiting chunks, nearest first.</li>
 <li>The world layer is positioned and scaled for the camera.</li>
+<li><code>TileRenderer.cull()</code> hides chunks outside the camera&#39;s view; buildings and ground items near the screen update.</li>
 <li><code>updateTarget()</code>: the interaction prompt and target outline.</li>
-<li>Rendering updates: tree fading, <code>EntityRenderer.update</code>, then <code>LivingWorld.render</code> (weather particles, effects, lighting).</li>
+<li>Rendering updates: tree fading, <code>EntityRenderer.update</code>, then <code>LivingWorld.render</code> (weather particles, effects, lighting), and the music mood (biome, band, indoors or cave, what is hunting the player).</li>
 <li>Touch stick, hotbar and menu refresh.</li>
-<li>Autosave every 30 seconds; HUD refresh every 0.25 seconds.</li>
+<li>Autosave every 30 seconds; every 0.25 seconds, the HUD refresh, first-time tips and the check for a new story stage (which moves the waking spot).</li>
 <li><code>Input.endFrame()</code> clears one-frame inputs.</li>
 </ol>
+<p>The ticker is capped at 60 frames per second (30 with the setting).</p>
 <h2 id="threads">Threads<a class="anchor" href="#threads" aria-label="Link to this section">#</a></h2>
 <p>Terrain generation runs off the main thread so streaming never stalls a frame.</p>
 <ul>
@@ -279,12 +293,32 @@
 <td>Streaming, minimum biome size, bounded memory, determinism, multi-chunk lifetime, regeneration</td>
 </tr>
 <tr>
+<td><code>src/world/Buildings.test.ts</code></td>
+<td>Buildings, interiors, castles, discovered places, saves that keep the world as it was</td>
+</tr>
+<tr>
+<td><code>src/world/Rivers.test.ts</code></td>
+<td>Rivers and bridges, the spawn, mines</td>
+</tr>
+<tr>
 <td><code>src/save/SaveManager.test.ts</code></td>
 <td>Persistent finds and save round trips</td>
 </tr>
 <tr>
+<td><code>src/entities/NPC.test.ts</code></td>
+<td>NPCs at night</td>
+</tr>
+<tr>
 <td><code>src/systems/Survival.test.ts</code></td>
 <td>Inventory, crafting, vitals, gathering, chests that never refill</td>
+</tr>
+<tr>
+<td><code>src/systems/Adventurer.test.ts</code></td>
+<td>Carrying, skills, semi-persistent places, the Moonwell, equipment</td>
+</tr>
+<tr>
+<td><code>src/systems/Progress.test.ts</code></td>
+<td>Sorting the bag, selling a stack, damage types, legends and trophies, rare recipes and the star tier, abandoning and defending in quests, key bindings</td>
 </tr>
 <tr>
 <td><code>src/systems/Combat.test.ts</code></td>

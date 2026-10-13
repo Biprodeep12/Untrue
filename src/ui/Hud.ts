@@ -1,6 +1,7 @@
 // HTML overlay HUD (spec 7.2): location top right, vitals bottom right,
 // notifications bottom left, the action prompt above the hotbar.
 
+import { keyName, type Action, type Bindings } from '../game/Keys';
 import type { VitalValues } from '../systems/Vitals';
 import { fullscreenSupported, isFullscreen, onFullscreenChange, toggleFullscreen } from './Fullscreen';
 
@@ -37,6 +38,7 @@ export class Hud {
   onBag?: () => void;
   onAttack?: () => void;
   onDodge?: () => void;
+  onPause?: () => void;
   /** The touch Block button is held down. */
   blockHeld = false;
   private readonly level: HTMLElement;
@@ -47,11 +49,16 @@ export class Hud {
   private readonly clock: HTMLElement;
   private readonly tracker: HTMLElement;
   private readonly help: HTMLElement;
-  private readonly compass: HTMLElement;
-  private readonly location: HTMLElement;
   private readonly notes: HTMLElement;
   private readonly loading: HTMLElement;
   private readonly prompt: HTMLElement;
+  private readonly last = new Map<string, string>();
+  private readonly biome: HTMLElement;
+  private readonly meta: HTMLElement;
+  private readonly needle: HTMLElement;
+  private readonly compassLabel: HTMLElement;
+  private readonly bossName: HTMLElement;
+  private readonly bossFill: HTMLElement;
   private readonly touch = matchMedia('(pointer: coarse)');
   private readonly fills = new Map<keyof VitalValues, HTMLElement>();
   private readonly warnings: HTMLElement;
@@ -60,7 +67,7 @@ export class Hud {
   /** Called when a vital gets worse: fine to low, or to critical. */
   onDanger?: (key: keyof VitalValues, level: Danger) => void;
 
-  constructor(root: HTMLElement) {
+  constructor(private readonly root: HTMLElement) {
     root.innerHTML = `
       <div class="panel hud-location"><div class="hud-clock"></div><div class="hud-biome"></div><div class="hud-meta"></div></div>
       <div class="hud-tracker"></div>
@@ -74,14 +81,14 @@ export class Hud {
       <div class="hud-danger"></div>
       <div class="hud-hurt"></div>
       <div class="hud-warnings"></div>
-      <div class="panel hud-help">WASD move · Shift run · Click / J attack · Right-click / K block · Space dodge · E talk / gather · 1–8 hotbar · F use · Q drop · Tab bag · Ctrl+S save</div>
+      <div class="hud-alerts"></div>
+      <div class="panel hud-help"></div>
       <div class="touch-buttons">
         <button class="touch-btn bag">Bag</button><button class="touch-btn act">Use</button>
         <button class="touch-btn dodge">Roll</button><button class="touch-btn attack">Hit</button>
-        <button class="touch-btn block">Block</button><button class="touch-btn full">Full</button>
+        <button class="touch-btn block">Block</button><button class="touch-btn full">Full</button><button class="touch-btn pause">Pause</button>
       </div>
       <div class="hud-loading"><div class="panel">Generating world…</div></div>`;
-    this.location = root.querySelector('.hud-location')!;
     this.notes = root.querySelector('.hud-notes')!;
     this.loading = root.querySelector('.hud-loading')!;
     this.prompt = root.querySelector('.hud-prompt')!;
@@ -95,7 +102,12 @@ export class Hud {
     this.clock = root.querySelector('.hud-clock')!;
     this.tracker = root.querySelector('.hud-tracker')!;
     this.help = root.querySelector('.hud-help')!;
-    this.compass = root.querySelector('.hud-compass')!;
+    this.biome = root.querySelector('.hud-biome')!;
+    this.meta = root.querySelector('.hud-meta')!;
+    this.needle = root.querySelector('.compass-needle')!;
+    this.compassLabel = root.querySelector('.compass-label')!;
+    this.bossName = root.querySelector('.boss-name')!;
+    this.bossFill = root.querySelector('.boss-fill')!;
     const vitals = root.querySelector('.hud-vitals')!;
     for (const [key, label] of BARS) {
       const bar = document.createElement('div');
@@ -119,6 +131,7 @@ export class Hud {
     button('bag', () => this.onBag);
     button('attack', () => this.onAttack);
     button('dodge', () => this.onDodge);
+    button('pause', () => this.onPause);
     // Full screen: hidden where the browser cannot do it (iPhone).
     const full = root.querySelector<HTMLElement>('.touch-btn.full')!;
     full.hidden = !fullscreenSupported();
@@ -138,16 +151,27 @@ export class Hud {
     this.loading.style.display = on ? 'flex' : 'none';
   }
 
+  /** True when `value` differs from what `key` showed last; DOM writes are
+   *  skipped otherwise, since the HUD refreshes several times a second. */
+  private changed(key: string, value: string): boolean {
+    if (this.last.get(key) === value) return false;
+    this.last.set(key, value);
+    return true;
+  }
+
   setLocation(biome: string, difficulty: string, x: number, y: number): void {
-    this.location.querySelector('.hud-biome')!.textContent = biome;
-    this.location.querySelector('.hud-meta')!.textContent = `${difficulty} · ${x}, ${y}`;
+    if (this.changed('biome', biome)) this.biome.textContent = biome;
+    const meta = `${difficulty} · ${x}, ${y}`;
+    if (this.changed('meta', meta)) this.meta.textContent = meta;
   }
 
   setVitals(v: VitalValues, maxHealth: number): void {
     let changed = false;
     for (const [key, el] of this.fills) {
       const share = v[key] / (key === 'health' ? maxHealth : 100);
-      el.style.height = `${share * 100}%`;
+      // Scaled, not resized: no layout work for a bar that changes constantly.
+      const fill = `scaleY(${Math.max(0, Math.min(1, share)).toFixed(3)})`;
+      if (this.changed(key, fill)) el.style.transform = fill;
       const was = this.dangers[key];
       const level = dangerOf(key, share, was);
       if (level === was) continue;
@@ -176,23 +200,31 @@ export class Hud {
   }
 
   setClock(clock: string, weather: string): void {
-    this.clock.textContent = `${clock} · ${weather}`;
+    const text = `${clock} · ${weather}`;
+    if (this.changed('clock', text)) this.clock.textContent = text;
   }
 
   /** Points the compass needle (radians, 0 = east) at a target, with its name. */
   setCompass(angle: number | null, label: string): void {
-    const needle = this.compass.querySelector('.compass-needle') as HTMLElement;
-    needle.style.display = angle === null ? 'none' : '';
-    if (angle !== null) needle.style.transform = `rotate(${angle + Math.PI / 2}rad)`;
-    this.compass.querySelector('.compass-label')!.textContent = label;
+    const turn = angle === null ? 'none' : `rotate(${(angle + Math.PI / 2).toFixed(2)}rad)`;
+    if (this.changed('needle', turn)) {
+      this.needle.style.display = angle === null ? 'none' : '';
+      if (angle !== null) this.needle.style.transform = turn;
+    }
+    if (this.changed('compass', label)) this.compassLabel.textContent = label;
   }
 
-  setHelp(visible: boolean): void {
+  /** The controls bar, naming the player's own keys. */
+  setHelp(visible: boolean, keys: Bindings): void {
     this.help.style.display = visible ? '' : 'none';
+    const k = (a: Action) => keyName(keys[a][0]);
+    const move = `${k('up')}${k('left')}${k('down')}${k('right')}`;
+    this.help.textContent = `${move} move · ${k('run')} run · Click / ${k('attack')} attack · Right-click / ${k('block')} block · ${k('dodge')} dodge · ${k('interact')} talk / gather · 1–8 hotbar · ${k('use')} use · ${k('drop')} drop · ${k('bag')} bag · Ctrl+S save`;
   }
 
   /** Quest lines, the first with an optional arrow (radians) toward its target. */
   setTracker(lines: Array<{ text: string; angle: number | null }>): void {
+    if (!this.changed('tracker', lines.map((l) => `${l.text}@${l.angle === null ? '' : l.angle.toFixed(2)}`).join('|'))) return;
     this.tracker.replaceChildren(
       ...lines.map((l) => {
         const el = document.createElement('div');
@@ -211,12 +243,14 @@ export class Hud {
   }
 
   setLevel(level: number, xp: number, needed: number): void {
-    this.level.textContent = `Lv ${level}`;
-    this.xpFill.style.width = `${Math.min(100, (xp / needed) * 100)}%`;
+    if (this.changed('level', String(level))) this.level.textContent = `Lv ${level}`;
+    const fill = `scaleX(${Math.min(1, xp / needed).toFixed(3)})`;
+    if (this.changed('xp', fill)) this.xpFill.style.transform = fill;
   }
 
   setStatus(effects: Array<[string, number]>): void {
     const active = effects.filter(([, t]) => t > 0);
+    if (!this.changed('status', active.map(([n, t]) => `${n}${Math.ceil(t)}`).join())) return;
     this.statuses.replaceChildren(
       ...active.map(([name, t]) => {
         const el = document.createElement('div');
@@ -228,26 +262,65 @@ export class Hud {
   }
 
   setBoss(name: string | null, share: number): void {
-    this.boss.style.display = name ? 'block' : 'none';
+    if (this.changed('boss', name ?? '')) {
+      this.boss.style.display = name ? 'block' : 'none';
+      if (name) this.bossName.textContent = name;
+    }
     if (!name) return;
-    this.boss.querySelector('.boss-name')!.textContent = name;
-    (this.boss.querySelector('.boss-fill') as HTMLElement).style.width = `${share * 100}%`;
+    const fill = `scaleX(${share.toFixed(3)})`;
+    if (this.changed('bossFill', fill)) this.bossFill.style.transform = fill;
   }
 
+  /** Screen flashes (the red hurt flash); off for players sensitive to them. */
+  flashes = true;
+
   /** A red flash at the screen edges when the player is hit. */
+
   flashHurt(): void {
+    if (!this.flashes) return;
     this.hurt.classList.remove('on');
     void this.hurt.offsetWidth;
     this.hurt.classList.add('on');
   }
 
   setPrompt(text: string | null): void {
+    // Set every frame: only touch the page when it changes.
+    if (!this.changed('prompt', text ?? '')) return;
     this.prompt.style.display = text ? 'block' : 'none';
     if (!text) return;
     // Touch screens have no E key: tap the prompt instead.
     const tap = this.touch.matches && text.startsWith('E  ');
     this.prompt.textContent = tap ? text.slice(3) : text;
     this.prompt.classList.toggle('tap', tap);
+  }
+
+  /** An important message that stays until the player dismisses it. */
+  alert(text: string): void {
+    const alerts = this.root.querySelector('.hud-alerts')!;
+    // The same message twice is shown once.
+    for (const el of alerts.children) if (el.firstChild?.textContent === text) return;
+    const el = document.createElement('div');
+    el.className = 'panel hud-alert';
+    const msg = document.createElement('span');
+    msg.textContent = text;
+    const ok = document.createElement('button');
+    ok.className = 'btn';
+    ok.textContent = 'OK';
+    ok.addEventListener('pointerdown', (e) => e.stopPropagation());
+    ok.addEventListener('click', () => el.remove());
+    el.append(msg, ok);
+    alerts.appendChild(el);
+  }
+
+  /** A tip for new players: like a note, but it stays longer. */
+  tip(text: string): void {
+    const el = document.createElement('div');
+    el.className = 'panel hud-note hud-tip';
+    el.textContent = `Tip: ${text}`;
+    this.notes.appendChild(el);
+    while (this.notes.children.length > 5) this.notes.firstElementChild!.remove();
+    setTimeout(() => el.classList.add('fade'), 9000);
+    setTimeout(() => el.remove(), 9700);
   }
 
   notify(text: string): void {

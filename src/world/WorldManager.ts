@@ -134,10 +134,14 @@ export class WorldManager {
     return { tile: chunk.tiles[i], deco: chunk.decos[i] };
   }
 
-  /** Unloaded ground counts as solid so the player cannot walk into the void. */
+  /** Unloaded ground counts as solid so the player cannot walk into the void.
+   *  Called many times a frame by every walker: reads the chunk directly
+   *  instead of allocating a tile object. */
   isSolidAt(gx: number, gy: number): boolean {
-    const t = this.tileAt(gx, gy);
-    return !t || isSolid(t.tile, t.deco);
+    const chunk = this.chunks.get(tileToChunk(gx), tileToChunk(gy));
+    if (!chunk?.ready) return true;
+    const i = (gy - chunk.cy * CHUNK_SIZE) * CHUNK_SIZE + (gx - chunk.cx * CHUNK_SIZE);
+    return isSolid(chunk.tiles[i], chunk.decos[i]);
   }
 
   /** Removes a decoration the player gathered. It stays gone until the

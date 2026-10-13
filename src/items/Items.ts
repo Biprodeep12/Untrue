@@ -10,8 +10,13 @@ export type ToolKind = 'axe' | 'pickaxe';
 /** Where a piece of equipment goes. */
 export type EquipSlot = 'head' | 'chest' | 'legs' | 'feet' | 'offhand';
 export const EQUIP_SLOTS: readonly EquipSlot[] = ['head', 'chest', 'legs', 'feet', 'offhand'];
-/** Armour sets drawn on the player: 0 leather, 1 iron. */
-export const ARMOR_SETS = 2;
+/** Armour sets drawn on the player: 0 leather, 1 iron, 2 starforged. */
+export const ARMOR_SETS = 3;
+
+/** Damage types beyond plain blows. Some creatures take more from one
+ *  (weak) or less (resist); see Species. */
+export type Element = 'frost' | 'venom' | 'spirit';
+export const ELEMENT_NAMES: Record<Element, string> = { frost: 'Frost', venom: 'Venom', spirit: 'Spirit' };
 
 export interface WeaponStats {
   kind: 'melee' | 'bow';
@@ -22,6 +27,8 @@ export interface WeaponStats {
   reach: number;
   /** Seconds between attacks. */
   cooldown: number;
+  /** Its damage type, if not plain. */
+  element?: Element;
 }
 
 export interface ItemDef {
@@ -110,7 +117,23 @@ export const Items = {
   lantern: item({ id: 'lantern', name: 'Lantern', description: 'A steady light that never burns out.', rarity: ItemRarity.Rare, stack: 1, light: 7, weight: 1, equip: 'offhand' }),
   spiritEssence: item({ id: 'spirit-essence', name: 'Spirit Essence', description: 'A wisp of something that walked at night.', rarity: ItemRarity.Uncommon }),
   wanderersLantern: item({ id: 'wanderers-lantern', name: "Wanderer's Lantern", description: 'A faint blue flame. It remembers places the world has forgotten.', rarity: ItemRarity.Legendary, stack: 1, light: 6, weight: 0, equip: 'offhand' }),
-  starMetal: item({ id: 'star-metal', name: 'Star Metal', description: 'Fell from the sky. Traders pay well.', rarity: ItemRarity.Epic, weight: 1.5 }),
+  starMetal: item({ id: 'star-metal', name: 'Star Metal', description: 'Fell from the sky. Forge it with gold into star ingots.', rarity: ItemRarity.Epic, weight: 1.5 }),
+  // The tier above iron, for the far, hard lands, and blades that use rare drops.
+  starIngot: item({ id: 'star-ingot', name: 'Star Ingot', description: 'Star metal forged with gold. Light, and harder than anything.', rarity: ItemRarity.Epic, weight: 1 }),
+  starAxe: item({ id: 'star-axe', name: 'Starforged Axe', description: 'Trees fall almost at a touch.', rarity: ItemRarity.Epic, stack: 1, tool: { kind: 'axe', tier: 3 } }),
+  starPickaxe: item({ id: 'star-pickaxe', name: 'Starforged Pickaxe', description: 'Mines anything, quickly.', rarity: ItemRarity.Epic, stack: 1, tool: { kind: 'pickaxe', tier: 3 } }),
+  starSword: item({ id: 'star-sword', name: 'Starforged Sword', description: 'Forged from the sky. The finest blade there is.', rarity: ItemRarity.Legendary, stack: 1, weapon: { kind: 'melee', damage: 32, durability: 420, reach: 1.7, cooldown: 0.38 } }),
+  frostBlade: item({ id: 'frost-blade', name: 'Frost Blade', description: 'Cold to the touch. Desert creatures fear it; snow creatures shrug it off.', rarity: ItemRarity.Epic, stack: 1, weapon: { kind: 'melee', damage: 22, durability: 260, reach: 1.6, cooldown: 0.4, element: 'frost' } }),
+  venomBlade: item({ id: 'venom-blade', name: 'Venom Blade', description: 'Its edge weeps poison. Deadly to beasts; useless on stone and bone.', rarity: ItemRarity.Epic, stack: 1, weapon: { kind: 'melee', damage: 22, durability: 260, reach: 1.6, cooldown: 0.4, element: 'venom' } }),
+  spiritBlade: item({ id: 'spirit-blade', name: 'Spirit Blade', description: 'It glows near the dead. Wraiths and skeletons come apart under it.', rarity: ItemRarity.Epic, stack: 1, weapon: { kind: 'melee', damage: 22, durability: 260, reach: 1.6, cooldown: 0.4, element: 'spirit' } }),
+  crystalBow: item({ id: 'crystal-bow', name: 'Crystal Bow', description: 'Strung with silk, braced with crystal. Shoots far and hard.', rarity: ItemRarity.Epic, stack: 1, weapon: { kind: 'bow', damage: 20, durability: 260, reach: 11, cooldown: 0.55 } }),
+  starHelmet: item({ id: 'star-helmet', name: 'Starforged Helm', description: 'Light as leather, hard as nothing else.', rarity: ItemRarity.Epic, stack: 1, armor: 0.11, equip: 'head', look: 2, weight: 3 }),
+  starArmor: item({ id: 'star-armor', name: 'Starforged Plate', description: 'Plate forged from fallen stars.', rarity: ItemRarity.Legendary, stack: 1, armor: 0.22, equip: 'chest', look: 2, weight: 7 }),
+  starGreaves: item({ id: 'star-greaves', name: 'Starforged Greaves', description: 'Starforged plate for the legs.', rarity: ItemRarity.Epic, stack: 1, armor: 0.14, equip: 'legs', look: 2, weight: 4 }),
+  starBoots: item({ id: 'star-boots', name: 'Starforged Boots', description: 'They barely weigh a thing.', rarity: ItemRarity.Epic, stack: 1, armor: 0.09, equip: 'feet', look: 2, weight: 2 }),
+  chitinShield: item({ id: 'chitin-shield', name: 'Chitin Shield', description: 'A desert shell on a wooden frame. Blocks well and weighs little.', rarity: ItemRarity.Uncommon, stack: 1, equip: 'offhand', shield: { pass: 0.1, stamina: 5 }, weight: 2 }),
+  schematic: item({ id: 'schematic', name: 'Forgotten Schematic', description: 'Plans for something the world forgot how to make. Use it to learn a rare recipe.', rarity: ItemRarity.Epic, weight: 0.1 }),
+  frostDraught: item({ id: 'frost-draught', name: 'Frost Draught', description: 'Melted ice and herbs. Quenches the worst thirst.', rarity: ItemRarity.Uncommon, food: { thirst: 45, health: 10 } }),
 } as const;
 
 export const ITEM_LIST: readonly ItemDef[] = list;

@@ -41,7 +41,7 @@ export class Dialog {
     this.root.replaceChildren(head, row);
   }
 
-  trade(name: string, coins: number, offers: Offer[], sellables: Sellable[], buy: (o: Offer) => void, sell: (item: ItemDef) => void): void {
+  trade(name: string, coins: number, offers: Offer[], sellables: Sellable[], buy: (o: Offer) => void, sell: (item: ItemDef, count: number) => void): void {
     this.open();
     const head = document.createElement('div');
     head.innerHTML = `<h3></h3><p class="coins"></p>`;
@@ -56,17 +56,19 @@ export class Dialog {
       c.append(...rows);
       return c;
     };
-    const row = (item: ItemDef, label: string, button: DialogOption) => {
+    const row = (item: ItemDef, label: string, ...buttons: DialogOption[]) => {
       const r = document.createElement('div');
       r.className = 'trade-row';
       const text = document.createElement('span');
       text.textContent = label;
-      r.append(itemIcon(this.atlas, item, 24), text, this.button(button));
+      r.append(itemIcon(this.atlas, item, 24), text, ...buttons.map((b) => this.button(b)));
       return r;
     };
     cols.append(
       column('Buy', offers.map((o) => row(o.item, `${o.count > 1 ? `${o.count} × ` : ''}${o.item.name} · ${o.price}c`, { label: 'Buy', action: () => buy(o), disabled: coins < o.price }))),
-      column('Sell', sellables.map((s) => row(s.item, `${s.item.name} (${s.count}) · ${s.price}c`, { label: 'Sell', action: () => sell(s.item) }))),
+      column('Sell', sellables.map((s) => row(s.item, `${s.item.name} (${s.count}) · ${s.price}c`,
+        { label: 'Sell', action: () => sell(s.item, 1) },
+        ...(s.count > 1 ? [{ label: `All ${s.count * s.price}c`, action: () => sell(s.item, s.count) }] : [])))),
     );
     const done = document.createElement('div');
     done.className = 'dialog-options';

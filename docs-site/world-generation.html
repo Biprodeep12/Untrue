@@ -81,7 +81,7 @@
 </tr>
 <tr>
 <td><code>zone</code></td>
-<td>Landscape zones (scale 80): meadows, deep woods, dune seas, open snowfields; and rock fields (scale 22)</td>
+<td>Landscape zones (scale 80): meadows, deep woods, dune seas, open snowfields; marshes (scale 150); and rock fields (scale 22)</td>
 </tr>
 </tbody></table></div>
 <p>The same class runs in the workers (tile generation) and on the main thread (biome climate and structure ground checks).</p>
@@ -170,6 +170,13 @@
 <li>Desert: dune stripes (<code>sin(gx × 0.11 + gy × 0.04 + d × 3) &gt; 0.8 − deep × 0.35</code>) are <code>Alt</code>, <code>Detail</code> below −0.6, else <code>Base</code>.</li>
 </ul>
 <p><code>open</code> and <code>deep</code> come from the <code>zone</code> field <code>z</code> at scale 80: <code>open = smooth((−z − 0.25) / 0.25)</code>, <code>deep = smooth((z − 0.3) / 0.25)</code>.</p>
+<h3 id="marshes">Marshes<a class="anchor" href="#marshes" aria-label="Link to this section">#</a></h3>
+<p>Marshes are a forest landscape zone, kept more than 200 tiles from the start (<code>MARSH_MIN_DISTANCE</code>). <code>marsh = smooth((z − 0.4) / 0.15)</code>, with <code>z</code> the <code>zone</code> field at scale 150 (sampled at its own offset). Where <code>marsh</code> is above 0, on forest ground:</p>
+<ul>
+<li><strong>Pools:</strong> a tile becomes shallow <code>Water</code> where <code>detail</code> at scale 6 is above <code>0.8 − marsh × 0.62</code>, so pools grow thicker toward the marsh&#39;s heart. No pool forms within the river&#39;s width + 8 tiles, so bridges always land on dry ground.</li>
+<li><strong>Darker ground:</strong> elsewhere, the <code>Detail</code> ground kind is used where the ground noise is below <code>−0.3 + marsh × 0.4</code>.</li>
+<li><strong>Plants:</strong> see the forest row under <a href="#decorations">Decorations</a>.</li>
+</ul>
 <p>The six palettes are Forest, Autumn Forest, Desert, Red Desert, Snowfield and Crystal Tundra (<code>BIOME_NAMES</code> in <code>src/generation/Tiles.ts</code>).</p>
 <h2 id="decorations">Decorations<a class="anchor" href="#decorations" aria-label="Link to this section">#</a></h2>
 <p>Decorations are rolled per tile on ground tiles only (not water, rock, shared tiles or shore), with <code>unit(hash3(decoSeed, lx, ly))</code>. <code>decoSeed = hash(Stream.Decoration, seed, cx, cy, visit)</code>, so a regenerated region gets new decorations. A smooth density field (<code>detail</code> at scale 45, offset by the biome seed, clamped at 0) clusters trees into groves.</p>
@@ -182,7 +189,7 @@
 </thead>
 <tbody><tr>
 <td>Forest</td>
-<td>Trees <code>(0.01 + density × 0.17) × (1 − open × 0.95) + deep × 0.22</code>, × 0.4 in rock fields (<code>18% + deep × 30%</code> pines, otherwise oaks or autumn oaks), then bush +0.02 (+0.05 near rivers), flowers <code>+0.015 + open × 0.07</code> (+0.02 near rivers), mushroom <code>+0.007 + deep × 0.025</code>, stone +0.004 (+0.05 in rock fields), ore +0.0015 (+0.006 in rock fields)</td>
+<td>Trees <code>((0.01 + density × 0.17) × (1 − open × 0.95) + deep × 0.22) × (1 − marsh × 0.75)</code>, × 0.4 in rock fields (<code>18% + deep × 30%</code> pines, none in marshes, otherwise oaks or autumn oaks), then bush <code>+0.02 + marsh × 0.06</code> (+0.05 instead of 0.02 near rivers), dead bush <code>+marsh × 0.05</code>, flowers <code>+0.015 + open × 0.07</code> (+0.02 near rivers), mushroom <code>+0.007 + deep × 0.025 + marsh × 0.03</code>, stone +0.004 (+0.05 in rock fields), ore +0.0015 (+0.006 in rock fields)</td>
 </tr>
 <tr>
 <td>Desert</td>
@@ -193,7 +200,7 @@
 <td>Snowy pines <code>(0.01 + density × 0.11) × (1 − open × 0.9) + deep × 0.14</code>, snow rock +0.008 (+0.05 in rock fields), crystal +0.012 in the crystal variant or +0.0015 otherwise, ore +0.0015 (+0.005 in rock fields)</td>
 </tr>
 </tbody></table></div>
-<p>So forests have flowery meadows and dark deep woods, deserts have cactus stands, bare dune seas and palm oases, and snow has open snowfields between stands of taiga. Rock fields (<code>zone</code> at scale 22 above 0.5) are scattered in every biome. &quot;Near rivers&quot; means within <code>width + 5</code> tiles.</p>
+<p>So forests have flowery meadows, dark deep woods and, further out, marshes thick with bushes, reeds (dead brush) and mushrooms but few trees; deserts have cactus stands, bare dune seas and palm oases, and snow has open snowfields between stands of taiga. Rock fields (<code>zone</code> at scale 22 above 0.5) are scattered in every biome. &quot;Near rivers&quot; means within <code>width + 5</code> tiles.</p>
 <p>Tall decorations (oaks, pines, palms, cacti) are wider than a tile, so one is dropped if another tall one already sits left, above, above-left or above-right of it.</p>
 <h2 id="biomes">Biomes<a class="anchor" href="#biomes" aria-label="Link to this section">#</a></h2>
 <p>A biome is a record that owns many chunks (<code>BiomeRecord</code> in <code>src/world/BiomeManager.ts</code>): type, variant, a seed, its chunk keys and how many of them are in the cache area.</p>
@@ -242,12 +249,12 @@
 <td>10,000 and beyond</td>
 </tr>
 </tbody></table></div>
-<p>The band raises the odds of rarer structure tiers (see <a href="objects-and-structures.html">Objects and structures</a>), and rare structures have minimum distances, so rarer things appear farther out. Enemies scale with the band too (see <a href="combat.html">Combat</a>).</p>
+<p>The band raises the odds of rarer structure tiers (see <a href="objects-and-structures.html">Objects and structures</a>), and rare structures have minimum distances, so rarer things appear farther out. Enemies and legendary creatures scale with the band too (see <a href="combat.html">Combat</a>), ore and crystal give rarer finds (<a href="survival.html#gathering">Survival</a>), and the light and music grow grimmer (<a href="living-world.html#light">Living world</a>, <a href="audio.html#music">Audio</a>).</p>
 <p>See also: <a href="world-streaming.html">World streaming</a>, <a href="objects-and-structures.html">Objects and structures</a></p>
 </article>
     <nav class="pager"><a class="prev" href="world-streaming.html"><small>Previous</small>World streaming</a><a class="next" href="objects-and-structures.html"><small>Next</small>Objects and structures</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#seeds-and-streams">Seeds and streams</a></li><li class="l2"><a href="#noise-fields">Noise fields</a></li><li class="l2"><a href="#tiles">Tiles</a></li><li class="l3"><a href="#trails">Trails</a></li><li class="l3"><a href="#bridges">Bridges</a></li><li class="l2"><a href="#decorations">Decorations</a></li><li class="l2"><a href="#biomes">Biomes</a></li><li class="l2"><a href="#regions-and-regeneration">Regions and regeneration</a></li><li class="l2"><a href="#world-scale-rules">World-scale rules</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#seeds-and-streams">Seeds and streams</a></li><li class="l2"><a href="#noise-fields">Noise fields</a></li><li class="l2"><a href="#tiles">Tiles</a></li><li class="l3"><a href="#trails">Trails</a></li><li class="l3"><a href="#bridges">Bridges</a></li><li class="l3"><a href="#marshes">Marshes</a></li><li class="l2"><a href="#decorations">Decorations</a></li><li class="l2"><a href="#biomes">Biomes</a></li><li class="l2"><a href="#regions-and-regeneration">Regions and regeneration</a></li><li class="l2"><a href="#world-scale-rules">World-scale rules</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

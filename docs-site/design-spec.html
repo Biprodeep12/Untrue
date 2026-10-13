@@ -86,11 +86,11 @@
 </tr>
 <tr>
 <td>Water</td>
-<td>Rivers, lakes, swamps</td>
+<td>Rivers, lakes, marshes (a forest landscape zone of shallow pools, beyond 200 tiles from the start)</td>
 </tr>
 <tr>
 <td>Underground</td>
-<td>Caves, underground areas</td>
+<td>Mines (caves) and keep cellars, entered through buildings. There is no separate underground layer.</td>
 </tr>
 <tr>
 <td>Climate regions</td>
@@ -110,25 +110,26 @@
 </thead>
 <tbody><tr>
 <td>Forest</td>
-<td>Trees, mushrooms, wildlife</td>
-<td>Wolves, bears, spiders</td>
-<td>Ruins, cabins</td>
+<td>Trees, mushrooms, marshes, wildlife</td>
+<td>Wolves, bears, spiders, thorn spiders</td>
+<td>Ruins, cabins, villages, castles</td>
 </tr>
 <tr>
 <td>Desert</td>
-<td>Cactus, oases, sandstorms</td>
-<td>Scorpions, sand creatures</td>
-<td>Ruins</td>
+<td>Cactus, oases, dune seas, sandstorms</td>
+<td>Scorpions, emperor scorpions, sand lurkers, jackals</td>
+<td>Ruins, nomad camps, the Sun Temple</td>
 </tr>
 <tr>
 <td>Snow</td>
-<td>Snow, ice, pine trees</td>
-<td>Wolves, ice creatures</td>
-<td>Frozen structures</td>
+<td>Snow, ice, taiga, blizzards</td>
+<td>Frost golems, frost wolves, tundra bears, wolves</td>
+<td>Cabins, villages, castles</td>
 </tr>
 </tbody></table></div>
+<p>Wraiths roam every biome at night.</p>
 <h4 id="biome-size-and-lifetime">Biome size and lifetime<a class="anchor" href="#biome-size-and-lifetime" aria-label="Link to this section">#</a></h4>
-<p>A biome is generated once, as a single region, the first time any part of it enters the render area. Its size and shape then stay fixed for as long as it is loaded, so every chunk inside it generates consistently.</p>
+<p>A biome is generated once, as a single region, the first time any part of it enters the cache area. Its size and shape then stay fixed for as long as it is loaded, so every chunk inside it generates consistently.</p>
 <ol>
 <li><strong>Trigger.</strong> A chunk enters the cache radius where no biome record exists. (Cache rather than render, so structures anchored next to the render area know their biome before they are drawn.)</li>
 <li><strong>Type.</strong> The biome type is picked from the climate noise at that point and the world-scale rules. Growth prefers chunks whose climate matches, so an area keeps its type across regenerations.</li>
@@ -159,7 +160,7 @@
 </tr>
 <tr>
 <td>Uncommon</td>
-<td>Ruins, towers, cabins, abandoned camps, caves, mines</td>
+<td>Ruins, towers, cabins, abandoned camps, mines, nomad camps (desert only)</td>
 </tr>
 <tr>
 <td>Rare</td>
@@ -245,10 +246,13 @@
 </tbody></table></div>
 <p>Other world-scale rules:</p>
 <ul>
-<li>Rare structures appear farther from the origin</li>
-<li>Biomes and resources are distributed by region</li>
-<li>Special regions, dangerous zones and safe zones</li>
-<li>World rings</li>
+<li><strong>Difficulty bands</strong> (the table above) scale enemy health, damage and XP, elite chances, chest rolls, quest rewards and the odds of legendary creatures.</li>
+<li><strong>Rare structures</strong> appear farther from the origin: each has a minimum distance, and rarer tiers weigh more in higher bands.</li>
+<li><strong>Rarer finds further out:</strong> the chance of gold ore from ore (0.12 + 0.05 × band, with an iron pickaxe), of a gem from a crystal (0.06 + 0.03 × band) and of an extra crystal (0.15 × band) grows per band.</li>
+<li><strong>Landscape zones</strong> vary each biome: meadows and deep woods, marshes, dune seas, open snowfields and taiga, rock fields, and oases.</li>
+<li><strong>Safe zone:</strong> the start is always forest, and no wild enemy spawns within 64 tiles of the origin.</li>
+<li><strong>Dangerous zones:</strong> the far bands are grimmer, with a faint gloom over the light, lower and darker music, and more legendary creatures.</li>
+<li>Biomes and resources are distributed by region.</li>
 </ul>
 <h3 id="36-rare-events">3.6 Rare events<a class="anchor" href="#36-rare-events" aria-label="Link to this section">#</a></h3>
 <p>Very low-probability finds give each player discoveries that others may never see.</p>
@@ -265,7 +269,7 @@
 </tr>
 <tr>
 <td>Legendary creature</td>
-<td>0.05%</td>
+<td>0.05% × (1 + band)</td>
 </tr>
 <tr>
 <td>Lost city</td>
@@ -276,6 +280,7 @@
 <td>0.001%</td>
 </tr>
 </tbody></table></div>
+<p>Rare events roll per chunk. The legendary creature rolls once per chunk per region visit. Each land has its own legend: the Elder Stag near home, the Alpha Wolf further out (band 2 and beyond, or the snow from band 1), the Dune Tyrant in the desert (band 1 and beyond) and the Ancient Golem in the snow (band 1 and beyond).</p>
 <h2 id="4-object-lifetime-and-persistence">4. Object lifetime and persistence<a class="anchor" href="#4-object-lifetime-and-persistence" aria-label="Link to this section">#</a></h2>
 <p>This is the system that defines the game. A world object is discarded only when every chunk it occupies has left the active range. In this section, active means loaded: the chunk is still inside the cache radius.</p>
 <h3 id="41-multi-chunk-objects">4.1 Multi-chunk objects<a class="anchor" href="#41-multi-chunk-objects" aria-label="Link to this section">#</a></h3>
@@ -284,7 +289,7 @@
 <li>The object stays alive while any of those chunks is active.</li>
 <li>It is discarded only when all of them are inactive.</li>
 </ul>
-<p>This applies to buildings, dungeons, lakes, forests, mountains and other terrain formations. A giant castle might cover a 3 × 3 block of chunks:</p>
+<p>As built, multi-chunk objects are structures (buildings, villages, castles, dungeons) and lakes. Forests, rivers and mountains are terrain from seeded noise, not objects, so they need no lifetime of their own. A giant castle might cover a 3 × 3 block of chunks:</p>
 <pre><code class="language-text">┌─────────┬─────────┬─────────┐
 │ Chunk 1 │ Chunk 2 │ Chunk 3 │
 ├─────────┼─────────┼─────────┤
@@ -317,7 +322,7 @@
 </tr>
 <tr>
 <td>Semi-persistent</td>
-<td>Between the two: once discovered, kept for 3 in-game days after the player leaves (villages, castles, mines).</td>
+<td>Between the two: once discovered, kept for 3 in-game days after the player leaves (villages, castles, mines, nomad camps).</td>
 </tr>
 <tr>
 <td>Persistent</td>
@@ -326,10 +331,10 @@
 </tbody></table></div>
 <p>Persistent objects include:</p>
 <ul>
-<li>Important NPCs</li>
-<li>Quest locations and boss locations</li>
+<li>Important NPCs (a lost traveller lives in their quest record)</li>
+<li>Quest locations and boss locations (cleared places stay cleared)</li>
 <li>Major discoveries and special landmarks</li>
-<li>Important loot</li>
+<li>Important loot: chests never refill, and items on the ground are saved. Legends&#39; drops (schematics, star metal) go into the bag, or onto the ground when it is full.</li>
 </ul>
 <h2 id="5-gameplay-systems">5. Gameplay systems<a class="anchor" href="#5-gameplay-systems" aria-label="Link to this section">#</a></h2>
 <p>These systems sit on top of the world technology and are built after the MVP.</p>
@@ -342,15 +347,15 @@
 </thead>
 <tbody><tr>
 <td>Player</td>
-<td>Walking, running, jumping, crouching. Health, stamina, hunger, thirst. Damage, death, respawn. Status effects and equipment.</td>
+<td>Walking, running, dodge rolls, swimming. Health, stamina, hunger, thirst. Damage and collapse: the player wakes at the last rest spot (a campfire, a bed, a Moonwell, or the last story stage reached). Status effects and equipment. No jumping or crouching in the top-down view.</td>
 </tr>
 <tr>
 <td>Combat</td>
-<td>Melee and ranged weapons, projectiles. Dodge, block, critical hits. Damage types, armor, weapon durability. Enemy drops and boss fights.</td>
+<td>Melee and ranged weapons, projectiles. Dodge, block, critical hits. Damage types (frost, venom, spirit): each species can be weak to one (×1.5) or resist it (×0.5). Armor, weapon durability. Enemy drops and boss fights.</td>
 </tr>
 <tr>
 <td>Enemies</td>
-<td>Biome-based spawning and despawning. AI states: patrol, aggro, chase, attack, flee. Group behaviour, difficulty scaling, rare variants, bosses. No wild spawns within 64 tiles of the origin (safe zone). Dungeons wake skeleton guards; boss arenas wake an Arena Guardian.</td>
+<td>Biome-based spawning and despawning. AI states: patrol, aggro, chase, attack, flee. Group behaviour, difficulty scaling, elites, variants drawn from existing sprites, a legendary boss per land. No wild spawns within 64 tiles of the origin (safe zone). Dungeons wake skeletons, skeleton archers and, further out, ghouls; boss arenas wake an Arena Guardian.</td>
 </tr>
 <tr>
 <td>Resources</td>
@@ -358,15 +363,15 @@
 </tr>
 <tr>
 <td>Crafting</td>
-<td>Recipes, recipe discovery, crafting stations, tiers, rare recipes. Produces tools, weapons, armor and consumables. Stations are found in the world, never built: campfires in camps, anvils in villages and castles.</td>
+<td>Recipes, crafting stations, crafting several at once (up to 20). Tiers: wood and stone, iron, then starforged (star ingots from star metal and gold). Rare recipes stay hidden until a Forgotten Schematic teaches them. Produces tools, weapons, armor and consumables. Stations are found in the world, never built: campfires in camps, anvils in villages, castles and nomad camps.</td>
 </tr>
 <tr>
 <td>Inventory</td>
-<td>Stacking and quantities, equipment slots, hotbar, sorting, categories, rarity, weight or capacity limits, dropping and picking up.</td>
+<td>Stacking and quantities, equipment slots, hotbar, a Sort bag button (by category, rarest first), rarity, weight limits, dropping and picking up. A full bag leaves the rest on the ground.</td>
 </tr>
 <tr>
 <td>Progression</td>
-<td>XP, levels, skills, unlockable abilities. Equipment, crafting and exploration progression. Difficulty scaling.</td>
+<td>XP and levels (cap 50). 9 passive skills of 5 ranks each; no active abilities. Equipment, crafting and exploration progression. Legends defeated are kept as trophies. Difficulty scaling.</td>
 </tr>
 </tbody></table></div>
 <p>One rule ties these systems back to the world:</p>
@@ -390,11 +395,11 @@
 </tr>
 <tr>
 <td>Weather</td>
-<td>Rain, storms, snow, fog, sandstorms. Temperature, lighting changes, environmental hazards.</td>
+<td>Rain, storms, snow, blizzards, fog, sandstorms, heat waves. Lighting changes, environmental hazards. Temperature has no bar of its own: it is folded into how fast hunger and thirst drain, by biome and weather.</td>
 </tr>
 </tbody></table></div>
-<p>A full day lasts 16 real minutes. Players can rest by a campfire at dusk or night to skip to morning. Wraiths roam only at night, more enemies spawn after dark, and lit windows, campfires, torches and lanterns push back the darkness.</p>
-<p>Weather depends on the biome and feeds into gameplay. Each biome type runs its own weather pattern (forest: rain, thunderstorms, fog; desert: sandstorms, heat waves; snow: snow, blizzards, fog), and the player feels the weather of the biome they stand in. Thunderstorms bring lightning strikes that can set trees burning; fire spreads unless the weather is wet.</p>
+<p>A full day lasts 16 real minutes. Players can rest by a campfire, or in a bed indoors, at dusk or night to skip to morning. Wraiths roam only at night, more enemies spawn after dark, and lit windows, campfires, torches and lanterns push back the darkness.</p>
+<p>Weather depends on the biome and feeds into gameplay. Each biome type runs its own weather pattern (forest: rain, thunderstorms, fog; desert: sandstorms, heat waves; snow: snow, blizzards, fog), and the player feels the weather of the biome they stand in. Thunderstorms bring lightning strikes that can set trees burning. Fire spreads to nearby plants, far less in wet weather (5% per neighbour instead of 35%).</p>
 <pre><code class="language-text">Biome  →  Weather  →  Environment  →  Gameplay
 </code></pre>
 <h3 id="62-simulation">6.2 Simulation<a class="anchor" href="#62-simulation" aria-label="Link to this section">#</a></h3>
@@ -415,14 +420,14 @@
 </thead>
 <tbody><tr>
 <td>Generated quests</td>
-<td>Find an NPC, explore a location, kill an enemy, find an item, escort an NPC, defend a location, discover a landmark, clear a dungeon, collect resources</td>
+<td>Collect resources, find rare items (rarer further out), slay enemies, discover a place, clear a dungeon, rescue and escort a lost traveller, defend the village</td>
 </tr>
 <tr>
 <td>Random world events</td>
-<td>Meteor crash, bandit attack, monster invasion, treasure event, rare merchant, ancient structure appearing</td>
+<td>Meteor crash, bandit attack, monster invasion, treasure event, rare merchant, ancient structure appearing, a Moonwell at night</td>
 </tr>
 </tbody></table></div>
-<p>Quests come from villagers: each village has three villagers (one offering a new quest each day) and a trader. Quests complete on their own when the objective is met, except collect quests, which are handed in to any villager. Rewards are coins, experience and an item. Coins buy goods from traders and travelling merchants, who also buy treasure. A lost traveller is an important NPC: their position lives in the quest record, so they persist until rescued, while ordinary villagers come and go with their village.</p>
+<p>Quests come from villagers: each village has three villagers (one offering a new quest each day) and a trader. A nomad camp has one quest giver and a trader. Defend quests are only offered in villages and start an invasion at once; they complete when it is driven off. Quests complete on their own when the objective is met, except collect and find quests, which are handed in to any villager. Unfinished quests can be abandoned. Rewards are coins, experience and an item. Coins buy goods from traders and travelling merchants, who also buy treasure. A lost traveller is an important NPC: their position lives in the quest record, so they persist until rescued, while ordinary villagers come and go with their village.</p>
 <h3 id="64-exploration">6.4 Exploration<a class="anchor" href="#64-exploration" aria-label="Link to this section">#</a></h3>
 <ul>
 <li>Map with fog of war, coordinates and compass</li>
@@ -474,30 +479,51 @@
 </tr>
 </thead>
 <tbody><tr>
+<td>Compass</td>
+<td>Top left; points to the story goal or the tracked marker</td>
+</tr>
+<tr>
+<td>Location panel: clock, day, weather, biome, difficulty, position</td>
+<td>Top right</td>
+</tr>
+<tr>
+<td>Quest tracker</td>
+<td>Top right, under the location panel</td>
+</tr>
+<tr>
+<td>Health, stamina, hunger and thirst bars</td>
+<td>Bottom right, vertical</td>
+</tr>
+<tr>
+<td>Level and XP, status effects</td>
+<td>Bottom right, above the vitals</td>
+</tr>
+<tr>
+<td>Notifications and tips</td>
+<td>Bottom left</td>
+</tr>
+<tr>
+<td>Action prompt</td>
+<td>Above the hotbar</td>
+</tr>
+<tr>
 <td>Hotbar</td>
 <td>Bottom centre</td>
 </tr>
 <tr>
-<td>Health and stamina bars</td>
-<td>Bottom right, vertical</td>
+<td>Boss bar and low-vital warnings</td>
+<td>Top centre</td>
 </tr>
 <tr>
-<td>Hunger and thirst bars</td>
-<td>Bottom right, beside health and stamina</td>
-</tr>
-<tr>
-<td>Clock, day and weather</td>
-<td>Top right</td>
-</tr>
-<tr>
-<td>Notifications</td>
-<td>Bottom left</td>
+<td>Alerts that stay until dismissed</td>
+<td>Middle</td>
 </tr>
 <tr>
 <td>Main menu</td>
-<td>Full-screen panel with tabs: inventory, crafting, map, quests, settings</td>
+<td>Full-screen panel with tabs: Inventory, Crafting, Skills, Quests, Map, Lantern, Settings, About</td>
 </tr>
 </tbody></table></div>
+<p>On touch screens the vitals, level and status effects sit under the compass, and the buttons sit bottom right: Use, Bag, Hit, Roll and Block, with small Pause and Full buttons above them.</p>
 <h3 id="73-features">7.3 Features<a class="anchor" href="#73-features" aria-label="Link to this section">#</a></h3>
 <div class="table-wrap"><table>
 <thead>
@@ -508,15 +534,15 @@
 </thead>
 <tbody><tr>
 <td>Rendering</td>
-<td>2D tiles and sprites, animated sprites, animation system. Particles, lighting, shadows, weather and screen effects. Camera movement and zoom. Parallax backgrounds.</td>
+<td>2D tiles and sprites, animated sprites, animation system. Particles, lighting, shadows, weather and screen effects. Camera movement and zoom. No parallax backgrounds: they do not fit the top-down view.</td>
 </tr>
 <tr>
 <td>Audio</td>
-<td>Background and biome-specific music. Ambient, environmental and weather sounds. Footsteps, combat and creature sounds. Structure-specific ambience.</td>
+<td>Background music with a voice and tempo per biome, lower and darker further out. Weather sounds, birds by day, crickets at night, wind in the desert and snow, drips and a drone in mines. Footsteps, combat sounds, and calls (howls, wails, growls) from creatures hunting the player.</td>
 </tr>
 <tr>
 <td>UI</td>
-<td>Health, stamina, hunger and thirst bars. Hotbar, inventory, crafting menu, map, quest UI. Interaction prompts and notifications. Settings and pause menu.</td>
+<td>Health, stamina, hunger and thirst bars. Hotbar, inventory, crafting menu, map, quest UI. Interaction prompts, notifications and first-time tips. Settings (key rebinding, text and HUD size, screen flashes) and pause menu.</td>
 </tr>
 </tbody></table></div>
 <h2 id="8-technical-design">8. Technical design<a class="anchor" href="#8-technical-design" aria-label="Link to this section">#</a></h2>
@@ -588,10 +614,10 @@
 </ul>
 <h3 id="82-threading">8.2 Threading<a class="anchor" href="#82-threading" aria-label="Link to this section">#</a></h3>
 <p>As built, the worker generates terrain tiles and decorations only. Structures, lakes and events are rolled on the main thread, because they need the live object list to avoid collisions.</p>
-<pre><code class="language-text">MAIN THREAD                      WEB WORKER
-├── Game loop                    ├── Terrain generation
-└── Renderer (WebGL)             ├── Structure generation
-                                 └── Resource generation
+<pre><code class="language-text">MAIN THREAD                              WEB WORKERS (1 to 3)
+├── Game loop                            └── Terrain tiles and decorations
+├── Biomes, structures, lakes, events
+└── Renderer (WebGL)
 </code></pre>
 <h3 id="83-performance-techniques">8.3 Performance techniques<a class="anchor" href="#83-performance-techniques" aria-label="Link to this section">#</a></h3>
 <div class="table-wrap"><table>
@@ -615,7 +641,7 @@
 </tr>
 <tr>
 <td>Rendering</td>
-<td>WebGL, sprite batching, texture atlases, entity culling</td>
+<td>WebGL, sprite batching, one texture atlas, chunk culling to the camera view, separate render groups for ground and entities, pooled display objects, at most 2 chunks drawn per frame</td>
 </tr>
 </tbody></table></div>
 <h3 id="84-save-system">8.4 Save system<a class="anchor" href="#84-save-system" aria-label="Link to this section">#</a></h3>
@@ -628,46 +654,7 @@
 <li>Important discoveries</li>
 </ul>
 <h3 id="85-project-layout">8.5 Project layout<a class="anchor" href="#85-project-layout" aria-label="Link to this section">#</a></h3>
-<p>The tree below was the starting plan. The code has since grown its own layout (adding <code>story/</code>, <code>items/</code>, <code>ui/</code>, <code>audio/</code> and more systems); <code>docs/architecture.md</code> describes it as built.</p>
-<pre><code class="language-text">src/
-├── game/
-│   ├── Game.ts
-│   ├── Player.ts
-│   ├── Camera.ts
-│   └── Input.ts
-├── world/
-│   ├── WorldManager.ts
-│   ├── ChunkManager.ts
-│   ├── Chunk.ts
-│   ├── WorldObject.ts
-│   └── ObjectManager.ts
-├── generation/
-│   ├── TerrainGenerator.ts
-│   ├── BiomeGenerator.ts
-│   ├── StructureGenerator.ts
-│   ├── ResourceGenerator.ts
-│   ├── EnemyGenerator.ts
-│   └── Random.ts
-├── entities/
-│   ├── Entity.ts
-│   ├── Enemy.ts
-│   ├── NPC.ts
-│   └── Animal.ts
-├── systems/
-│   ├── CombatSystem.ts
-│   ├── InventorySystem.ts
-│   ├── CraftingSystem.ts
-│   ├── WeatherSystem.ts
-│   └── TimeSystem.ts
-├── workers/
-│   └── worldGenerator.worker.ts
-├── rendering/
-│   ├── TileRenderer.ts
-│   ├── ParticleSystem.ts
-│   └── Lighting.ts
-└── save/
-    └── SaveManager.ts
-</code></pre>
+<p>The source layout as built is described in <a href="architecture.html">docs/architecture.md</a>.</p>
 <h2 id="9-roadmap">9. Roadmap<a class="anchor" href="#9-roadmap" aria-label="Link to this section">#</a></h2>
 <p>Build the world technology first. It is the unique part of the game and the riskiest, so it should be proven before combat, crafting or quests.</p>
 <h3 id="91-mvp-build-order">9.1 MVP build order<a class="anchor" href="#91-mvp-build-order" aria-label="Link to this section">#</a></h3>
@@ -682,51 +669,60 @@
 </ol>
 <p>The MVP is done when a multi-chunk structure survives a partial unload and the area regenerates differently after a full unload.</p>
 <h3 id="92-after-the-mvp">9.2 After the MVP<a class="anchor" href="#92-after-the-mvp" aria-label="Link to this section">#</a></h3>
-<p>The original notes only fix the MVP. The order below is a suggested grouping, not a decision. Phases 2 to 6 are now built (building was dropped: the player is an adventurer). The current behaviour of every system is documented in <code>docs/</code>.</p>
+<p>The original notes only fixed the MVP. The phases below are now built. The current behaviour of every system is documented in <code>docs/</code>.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Phase</th>
 <th>Goal</th>
-<th>Systems</th>
+<th>Built</th>
 </tr>
 </thead>
 <tbody><tr>
 <td>2. Persistence</td>
 <td>The world remembers what matters</td>
-<td>Persistence tiers, save system</td>
+<td>Persistence tiers, IndexedDB saves with versioned upgrades</td>
 </tr>
 <tr>
 <td>3. Survival loop</td>
 <td>There is a reason to explore</td>
-<td>Resources, inventory, crafting, player vitals</td>
+<td>Resources, inventory, crafting, vitals, swimming</td>
 </tr>
 <tr>
 <td>4. Threat</td>
 <td>The world pushes back</td>
-<td>Enemies, combat, distance-based difficulty, progression</td>
+<td>Enemies and wildlife, combat, distance-based difficulty, progression, legends, damage types, the starforged tier</td>
 </tr>
 <tr>
 <td>5. Living world</td>
 <td>The world feels alive</td>
-<td>Day/night, weather, simulation, quests, world events, rare events</td>
+<td>Day/night, weather, hazards, NPCs, quests, trade, world events, rare events, the story</td>
 </tr>
 <tr>
 <td>6. Polish</td>
 <td>The game is presentable</td>
-<td>Map and exploration tools, audio, lighting, particles, full UI</td>
+<td>Map and exploration tools, audio, lighting, particles, full UI, accessibility settings, touch controls, key rebinding</td>
 </tr>
 </tbody></table></div>
+<p>Not built:</p>
+<ul>
+<li><strong>Building:</strong> dropped by design. The player is an adventurer.</li>
+<li><strong>Jumping, crouching and parallax backgrounds:</strong> dropped; they do not fit the top-down view.</li>
+<li><strong>A separate underground layer:</strong> mines and keep cellars are interiors entered through buildings instead.</li>
+<li><strong>A temperature bar:</strong> temperature is folded into hunger and thirst drain.</li>
+<li><strong>Multiplayer and accounts.</strong></li>
+<li><strong>A smaller Pixi bundle without the WebGPU code:</strong> Pixi&#39;s main export imports it statically, so splitting it out needs a custom Pixi build. <code>vite.config.ts</code> is unchanged.</li>
+</ul>
 <h2 id="10-open-questions">10. Open questions<a class="anchor" href="#10-open-questions" aria-label="Link to this section">#</a></h2>
 <p>These gaps surfaced while tightening the notes. The first three, plus chunk size and minimum biome size, must be settled before the MVP.</p>
 <ul>
-<li><input disabled="" type="checkbox"> <strong>Side-view leftovers.</strong> The Stardew Valley direction makes the game top-down. Jumping, crouching and parallax backgrounds do not fit that view. Drop them or redefine them? <em>Deferred: redefine after the MVP.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Side-view leftovers.</strong> The Stardew Valley direction makes the game top-down. Jumping, crouching and parallax backgrounds do not fit that view. Drop them or redefine them? <em>Decided: dropped. The dodge roll and swimming cover movement instead.</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>How regeneration differs.</strong> A seeded RNG gives the same result for the same seed and coordinates. Regenerating differently needs an extra input, such as a per-region visit counter or world time. <em>Decided: a visit counter per 8 × 8-chunk region, raised when the region fully leaves the cache radius. Rivers and mountains stay fixed; biomes, ground detail, decorations, lakes and structures vary.</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>Biome regeneration.</strong> A discarded biome can currently return as a different type. Confirm this, or fix the type per area and vary only size, shape and contents. <em>Decided: the type is fixed per area; size, shape, variant and contents vary.</em></li>
-<li><input checked="" disabled="" type="checkbox"> <strong>Semi-persistent tier.</strong> What does it keep, and for how long? <em>Decided: villages, castles and mines are semi-persistent. Once discovered, one is kept unchanged for 3 in-game days after the player last left it, then forgotten like a temporary place.</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Semi-persistent tier.</strong> What does it keep, and for how long? <em>Decided: villages, castles, mines and nomad camps are semi-persistent. Once discovered, one is kept unchanged for 3 in-game days after the player last left it, then forgotten like a temporary place.</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>Player changes to temporary objects.</strong> Does a looted chest or cleared dungeon reset when its area regenerates? <em>Decided: chests never refill. A looted chest stays open, and chests that later regenerate from the same anchor start empty. Gathered trees, rocks and plants come back only when their region regenerates. Cleared dungeons, defeated arena bosses and slain legendary creatures stay cleared the same way.</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>Map and waypoints.</strong> What does the map show for a discovered location that has since regenerated? <em>Decided by the story: the lantern remembers it. Forgotten places are listed in the Lantern tab and show as ghosts in the lantern&#39;s light.</em></li>
-<li><input disabled="" type="checkbox"> <strong>Rare event odds.</strong> Are the percentages per chunk, per region or per structure roll? <em>Rolled per chunk for now, including the legendary creature (per chunk, per region visit).</em></li>
+<li><input checked="" disabled="" type="checkbox"> <strong>Rare event odds.</strong> Are the percentages per chunk, per region or per structure roll? <em>Decided: per chunk. The legendary creature rolls once per chunk per region visit, at 0.05% × (1 + band).</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>Chunk size, simulation radius and cache radius.</strong> No values are set yet. <em>Decided: 32 × 32 tiles, simulation radius 2 chunks, cache radius = render area + 2 chunks.</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>Minimum biome size.</strong> The value of the constant is not set yet. <em>Decided: 64 chunks.</em></li>
 <li><input checked="" disabled="" type="checkbox"> <strong>Persistent objects in a regenerated biome.</strong> A persistent landmark is saved but its biome is not. What happens if the area comes back as a different biome? <em>Resolved: biome types are fixed per area, and there is no player building.</em></li>

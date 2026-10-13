@@ -149,6 +149,9 @@
 <li>The world keeps streaming around the door outside, so nothing unloads.</li>
 <li>The clock, events, NPC schedules and vitals keep running (<code>LivingWorld.updateIndoors</code>). Weather does not reach indoors, and enemies outside wait.</li>
 <li>Lighting is dimmer than outdoors at night (60% of the night&#39;s darkness), lit by the room&#39;s fireplace and lamps.</li>
+<li>There is no fighting indoors: attacks do nothing, since combat still runs at the door outside.</li>
+<li>Crafting stations count only if the room itself has them, not the world outside the door.</li>
+<li>What does not fit in the bag (loot, rewards) is left on the ground outside the door.</li>
 <li>Walking out over the doormat leaves, onto the doorstep outside.</li>
 <li>Saving indoors records the spot outside the door, so a reload starts outside.</li>
 </ul>
@@ -204,7 +207,7 @@
 </thead>
 <tbody><tr>
 <td>Bed</td>
-<td>Sleep until morning, at dusk or night (or during the story&#39;s night in the village); otherwise &quot;too early&quot;</td>
+<td>Sleep until morning, at dusk or night (or during the story&#39;s night in the village); otherwise &quot;too early&quot;. The spot outside the door becomes the waking spot after a collapse.</td>
 </tr>
 <tr>
 <td>Bookshelf</td>
@@ -254,7 +257,7 @@
 </tr>
 </tbody></table></div>
 <p>Anything the player could not walk up to from the entrance is removed. Caves are always dark (at least 75% darkness, more at night), lit by the lamps, the player&#39;s light, and daylight from the entrance.</p>
-<p>Ore, crystals and stones are mined as outdoors (same tools, times and drops; see <a href="survival.html#gathering">survival.md</a>), with a progress bar over the rock. <code>GatheringSystem.ground</code> is the <code>Interior</code> while inside, so drops are seeded per mine and tile. Mined rock is recorded in the object&#39;s opened set (ids from 2,000,000 up) and stays gone for as long as the mine stands.</p>
+<p>Ore, crystals and stones are mined as outdoors (same tools, times and drops; see <a href="survival.html#gathering">survival.md</a>), with a progress bar over the rock. <code>GatheringSystem.ground</code> is the <code>Interior</code> while inside, so drops are seeded per mine and tile. Rarer finds depend on the difficulty band of the mine&#39;s door outside (<code>GatheringSystem.bandAt</code>). Mined rock is recorded in the object&#39;s opened set (ids from 2,000,000 up) and stays gone for as long as the mine stands.</p>
 <h2 id="castle-keeps">Castle keeps<a class="anchor" href="#castle-keeps" aria-label="Link to this section">#</a></h2>
 <p>A keep&#39;s door leads into a building of three floors, 22 × 16 tiles each, joined by stairs (<code>Interior.keepFloor()</code>). Facing stairs, E goes up or down (<strong>E Go up to the upper floor</strong>); the HUD shows the floor&#39;s name, and the player arrives by the stairs on the other floor. Only the great hall has the way out.</p>
 <div class="table-wrap"><table>

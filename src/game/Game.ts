@@ -12,19 +12,20 @@ import { EntityRenderer } from '../rendering/EntityRenderer';
 import { InteriorRenderer } from '../rendering/InteriorRenderer';
 import type { Light } from '../rendering/Lighting';
 import { TileRenderer } from '../rendering/TileRenderer';
-import { restore, SaveManager, snapshot, type SaveData } from '../save/SaveManager';
+import { restore, SaveManager, snapshot, UnreadableSave, type SaveData } from '../save/SaveManager';
 import type { BurstKind } from '../rendering/Effects';
 import { CombatSystem } from '../systems/CombatSystem';
 import { EXPLORE_XP, ExplorationSystem } from '../systems/ExplorationSystem';
-import { craft, STATION_DECO, STATION_RANGE, type Recipe, type Station } from '../systems/CraftingSystem';
+import { craft, STATION_DECO, STATION_NAMES, STATION_RANGE, unknownRare, type Recipe, type Station } from '../systems/CraftingSystem';
 import { GatheringSystem, interactionAt, type Interaction } from '../systems/GatheringSystem';
 import { Inventory } from '../systems/InventorySystem';
-import type { ItemDef } from '../items/Items';
+import { Items, type ItemDef } from '../items/Items';
 import { Progression, type SkillId } from '../systems/Progression';
 import { SLOW_FACTOR, VITAL_MAX, Vitals } from '../systems/Vitals';
 import { WEATHER, type WeatherKind } from '../systems/WeatherSystem';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { Hotbar } from '../ui/Hotbar';
+import { Hints } from '../ui/Hints';
 import { Hud } from '../ui/Hud';
 import { Playground, type PlaygroundFind } from '../ui/Playground';
 import type { Landmark } from '../ui/MapView';
@@ -50,11 +51,14 @@ import { Camera } from './Camera';
 import { Input } from './Input';
 import { LivingWorld } from './LivingWorld';
 import { DODGE_STAMINA, Player, type Collider } from './Player';
+import { bindings, keyName, type Action } from './Keys';
 import { Settings } from './Settings';
 
 /** Internal resolution target: the canvas is this tall, then scaled up with
  *  nearest-neighbour filtering. */
 const TARGET_HEIGHT = 270;
+/** A touch screen: messages name buttons instead of keys. */
+const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 /** How far the debug "far trip" jumps, in tiles. Far enough to unload everything. */
 const FAR_TRIP = 20000;
 /** Search radius when looking for open ground, in tiles. Stays inside the
@@ -114,8 +118,12 @@ export class Game {
   private readonly app = new Application();
   private readonly camera = new Camera();
   private readonly worldLayer = new Container();
-  private readonly ground = new Container();
-  private readonly entities = new Container({ sortableChildren: true });
+  // Render groups: Pixi rebuilds a group's draw list when anything in it is
+  // cleared, added or re-sorted. The ground meshes rarely change, and the
+  // y-sorted entities re-sort every frame, so each gets its own group and
+  // neither makes the other rebuild.
+  private readonly ground = new Container({ isRenderGroup: true });
+  private readonly entities = new Container({ sortableChildren: true, isRenderGroup: true });
   /** Target outline and gathering progress, drawn above the world. */
   private readonly marker = new Graphics();
   /** Health bars, damage numbers and projectiles, above the world. */
@@ -152,11 +160,20 @@ export class Game {
     },
   };
   private drownNote = 0;
+  private swimNote = 0;
+  private markerDrawn = false;
   private saveFailed = false;
   private errors = 0;
   private sleepOverlay!: SleepOverlay;
-  /** Moonwells already drunk from; each rises fresh on a later night. */
+  /** Moonwells already drunk from; each gives its gift once. */
   private readonly usedMoonwells = new Set<string>();
+  /** Where the player wakes after collapsing: the last place they rested,
+   *  or the last story place reached. */
+  private respawn = { x: 0, y: 0 };
+  private lastStage = '';
+  /** Saving is off: the stored save could not be read this session, or
+   *  another tab holds the save. Says why. */
+  private saveLock: string | null = null;
   private groundItems!: GroundItemRenderer;
   private overloaded = false;
   private hud!: Hud;
@@ -173,6 +190,7 @@ export class Game {
   private target: Interaction | null = null;
   private autosaveTimer = AUTOSAVE_SECONDS;
   private uiTimer = 0;
+  private hints!: Hints;
 
   async start(host: HTMLElement, ui: HTMLElement): Promise<void> {
     // ?new or ?seed=N start a fresh world; otherwise the save is loaded.
@@ -180,9 +198,18 @@ export class Game {
     // ?playground (development builds): a story test world, never saved.
     const playground = import.meta.env.DEV && params.has('playground');
     const fresh = params.has('new') || params.has('seed') || playground;
-    let saved: SaveData | null = fresh ? null : await this.saves.load().catch(() => null);
     // A save that cannot be read is kept aside, and a new world begins.
     let recovered = false;
+    let saved: SaveData | null = null;
+    if (!fresh) {
+      try {
+        saved = await this.saves.load();
+      } catch (e) {
+        if (e instanceof UnreadableSave) recovered = true;
+        // Storage failed: a save may exist, so this session must not replace it.
+        else this.saveLock = "Your save couldn't be loaded, so this session won't save over it. Reload to try again.";
+      }
+    }
     if (saved && !readable(saved)) {
       await this.saves.backup(saved).catch(() => {});
       saved = null;
@@ -203,7 +230,11 @@ export class Game {
       resolution: 1,
       roundPixels: true,
       preference: 'webgl',
+      // Input is plain DOM events: Pixi's pointer system would hit-test the
+      // whole scene on every pointer move for nothing.
+      eventFeatures: { move: false, globalMove: false, click: false, wheel: false },
     });
+    this.app.stage.eventMode = 'none';
     if (params.get('fps') === '30') this.settings.values.fps30 = true;
     host.appendChild(this.app.canvas);
 
@@ -235,11 +266,12 @@ export class Game {
 
     this.input = new Input(window, this.app.canvas);
     this.hud = new Hud(ui);
+    this.hints = new Hints((t) => this.hud.tip(t));
     this.sleepOverlay = new SleepOverlay(ui);
     this.hotbar = new Hotbar(ui, atlasCanvas, this.inventory);
     this.menu = new Menu(ui, atlasCanvas, this.inventory, {
       stations: () => this.stations(),
-      craft: (r) => this.craft(r),
+      craft: (r, times) => this.craft(r, times),
       use: (slot) => this.useItem(slot),
       drop: (slot) => this.drop(slot),
       load: () => ({ weight: this.inventory.weight(), capacity: this.capacity }),
@@ -247,6 +279,7 @@ export class Game {
       learn: (id) => this.learn(id),
       notify: (t) => this.hud.notify(t),
       quests: () => this.living.questViews(),
+      abandon: (id) => this.living.abandonQuest(id),
       memories: () => this.living.story.memories,
       map: {
         exploration: this.exploration,
@@ -312,7 +345,9 @@ export class Game {
       ui,
       unstick: () => this.unstick(),
       audio: this.audio,
+      overflow: (item, count) => this.overflow(item, count),
     });
+    this.gathering.overflow = (item, count) => this.overflow(item, count);
     this.gathering.onGathered = (deco, gx, gy) => {
       const fx = GATHER_FX[deco];
       if (!fx) return;
@@ -339,9 +374,14 @@ export class Game {
       try {
         this.living.load(saved.living);
       } catch (e) {
+        // Keep the old save, since autosave would otherwise lose the story for good.
         console.error('Could not restore the living world; starting it afresh.', e);
+        void this.saves.backup(saved).catch(() => {});
+        this.hud.alert("Part of your save (story, quests, clock) couldn't be read and started afresh. A copy of the old save was kept.");
       }
     }
+    if (saved?.player.respawn) this.respawn = { ...saved.player.respawn };
+    for (const id of saved?.player.moonwells ?? []) this.usedMoonwells.add(id);
     if (playground) this.startPlayground(ui);
     this.living.beginStory();
     // Debug: ?hour=22 sets the clock, ?weather=storm forces the weather everywhere.
@@ -358,8 +398,12 @@ export class Game {
     }
     this.settings.onChange = () => this.applySettings();
     this.applySettings();
-    this.hud.onAttack = () => this.attack(false);
+    // Touch has no mouse to aim with: Hit aims at the nearest enemy in reach.
+    this.hud.onAttack = () => this.attack(false, true);
     this.hud.onDodge = () => this.dodge();
+    this.hud.onPause = () => {
+      if (!this.living.vision.isOpen) this.pause.toggle();
+    };
     this.hotbar.onUse = (slot) => this.useItem(slot);
     this.hud.onAction = () => this.interact();
     this.hud.onBag = () => this.menu.toggle();
@@ -373,8 +417,10 @@ export class Game {
       this.living.onDiscover(o);
     };
     if (saved) this.hud.notify('Welcome back');
-    this.watchOtherTabs();
-    if (recovered) this.hud.notify("Your save couldn't be read, so a new world began. The old save was kept.");
+    // The playground never saves, so it never competes for the save.
+    if (!playground) this.watchOtherTabs();
+    if (recovered) this.hud.alert("Your save couldn't be read (it may be from a newer version), so a new world began. The old save was kept.");
+    if (this.saveLock) this.hud.alert(this.saveLock);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.save(false);
     });
@@ -404,9 +450,16 @@ export class Game {
 
   private applySettings(): void {
     const v = this.settings.values;
-    this.app.ticker.maxFPS = v.fps30 ? 30 : 0;
-    this.hud.setHelp(v.help);
+    // 60 at most: 120 Hz screens would otherwise do twice the work for little gain.
+    this.app.ticker.maxFPS = v.fps30 ? 30 : 60;
+    this.input.keys = bindings(v.keys);
+    this.hud.setHelp(v.help, this.input.keys);
+    this.pause.setKeys(this.input.keys);
     this.audio.setVolumes(v.music, v.sfx);
+    this.hud.flashes = this.living.particles.flashes = v.flashes;
+    this.living.effects.bursts = v.particles;
+    document.documentElement.style.setProperty('--ui-scale', String(v.uiScale));
+    this.stick.relayout();
   }
 
   /** Menus and conversations pause the world. */
@@ -425,7 +478,7 @@ export class Game {
       this.living.update(dt);
       const under = world.tileAt(Math.floor(player.x), Math.floor(player.y - 0.1))?.tile;
       player.swim = under === Tile.WaterDeep ? 2 : under === Tile.Water ? 1 : 0;
-      this.blocking = !player.swim && (input.held('KeyK') || input.mouseBlock || this.hud.blockHeld);
+      this.blocking = !player.swim && (input.holding('block') || input.mouseBlock || this.hud.blockHeld);
       this.checkLoad();
       const weather = this.living.effect;
       const swimmer = player.swim ? 1 + 0.1 * this.progression.rank('swimmer') : 1;
@@ -439,6 +492,7 @@ export class Game {
       this.dressPlayer();
       player.update(dt, input, this.walker, this.vitals.canRun && !this.blocking && !player.swim && !this.overloaded, speed);
       if (player.moving) this.gathering.cancel();
+      this.swimNote -= dt;
       this.gathering.update(dt);
       this.sounds(dt);
       this.exploration.update(world);
@@ -453,7 +507,7 @@ export class Game {
       camera.follow(player.x * TILE_SIZE, player.y * TILE_SIZE, dt);
       const biome = world.biomeAt(Math.floor(player.x), Math.floor(player.y));
       const appetite = 1 - 0.1 * this.progression.rank('survivalist');
-      const drain = player.swim === 2 ? 1 - 0.25 * this.progression.rank('swimmer') : 1;
+      const drain = player.swim === 2 ? 1 - 0.15 * this.progression.rank('swimmer') : 1;
       const needs = { hunger: weather.hunger * appetite, thirst: weather.thirst * appetite };
       if (this.vitals.update(dt, player.running || player.swim === 2, biome?.type, needs, drain)) this.collapse();
       else if (player.swim === 2 && !this.vitals.canRun) this.drown(dt);
@@ -489,8 +543,9 @@ export class Game {
       this.finishFrame(dt);
       return;
     }
+    this.renderer.cull((cx - halfW) * TILE_SIZE, (cy - halfH) * TILE_SIZE, (cx + halfW) * TILE_SIZE, (cy + halfH) * TILE_SIZE);
     this.buildings.update(world.objects.objects.values(), world.chunks.renderRect, player.x * TILE_SIZE, player.y * TILE_SIZE);
-    this.groundItems.update(dt, world.ground.items);
+    this.groundItems.update(dt, world.ground.items, { x0: cx - halfW - 2, y0: cy - halfH - 2, x1: cx + halfW + 2, y1: cy + halfH + 2 });
     this.updateTarget();
     this.renderer.fadeAround(player.x * TILE_SIZE, player.y * TILE_SIZE);
     this.entityRenderer.update(dt, this.combat.enemies, this.combat.projectiles, this.living.npcs.npcs, this.living.marks());
@@ -517,6 +572,10 @@ export class Game {
       danger: !this.room && this.combat.enemies.some((e) => e.state === 'chase' || e.state === 'attack'),
       weather: this.living.kind,
       weatherStrength: this.paused || this.room ? 0 : this.living.weatherStrength,
+      band: difficultyBand(Math.floor(at.x), Math.floor(at.y)),
+      indoors: !!this.room,
+      cave: !!this.room?.cave,
+      hunter: this.room ? null : this.hunterCall(),
     });
     this.stick.update(input.stick);
     this.hotbar.render();
@@ -531,7 +590,14 @@ export class Game {
     if (this.uiTimer <= 0) {
       this.uiTimer = 0.25;
       this.updateUi();
+      this.tips();
       this.playground?.update(this.living.story);
+      // Reaching a new story stage also moves the waking spot there.
+      const { stage } = this.living.story;
+      if (stage !== this.lastStage) {
+        if (this.lastStage) this.setRespawn();
+        this.lastStage = stage;
+      }
     }
     if (this.playground?.god) {
       const v = this.vitals;
@@ -539,6 +605,18 @@ export class Game {
       v.hunger = v.thirst = v.stamina = VITAL_MAX;
     }
     input.endFrame();
+  }
+
+  /** The call of whatever is hunting the player: wolves howl, the dead wail. */
+  private hunterCall(): 'howl' | 'wail' | 'growl' | null {
+    for (const e of this.combat.enemies) {
+      if (e.state !== 'chase' && e.state !== 'aggro') continue;
+      const art = e.species.art ?? e.species.id;
+      if (art === 'wolf') return 'howl';
+      if (art === 'wraith' || art === 'skeleton') return 'wail';
+      if (art === 'bear' || art === 'golem') return 'growl';
+    }
+    return null;
   }
 
   // Indoors -----------------------------------------------------------------
@@ -558,6 +636,7 @@ export class Game {
     this.player.swim = 0;
     this.gathering.cancel();
     this.gathering.ground = room;
+    this.gathering.bandAt = () => difficultyBand(room.outside.x, room.outside.y);
     this.living.outside = room.outside;
     this.interiorRenderer.open(room, this.player.sprite);
     this.worldLayer.visible = false;
@@ -572,6 +651,7 @@ export class Game {
     this.room = null;
     this.gathering.cancel();
     this.gathering.ground = this.world;
+    this.gathering.bandAt = difficultyBand;
     this.living.outside = null;
     this.interiorRenderer.close();
     this.entities.addChild(this.player.sprite);
@@ -581,13 +661,29 @@ export class Game {
     this.camera.snap(this.player.x * TILE_SIZE, this.player.y * TILE_SIZE);
   }
 
-  /** Two tabs would overwrite each other's save: warn when another is open. */
+  /** Two tabs would overwrite each other's save: the first one open holds a
+   *  lock and saves; any other plays without saving. */
   private watchOtherTabs(): void {
+    const readOnly = () => {
+      this.saveLock = 'Untrue is open in another tab, so this tab will not save. Close the other tab and reload to save here.';
+      this.hud.alert(this.saveLock);
+    };
+    if (navigator.locks) {
+      // Held until the tab closes.
+      void navigator.locks.request('untrue-save', { ifAvailable: true }, (lock) => {
+        if (!lock) {
+          readOnly();
+          return;
+        }
+        return new Promise<void>(() => {});
+      });
+      return;
+    }
     if (typeof BroadcastChannel === 'undefined') return;
     const channel = new BroadcastChannel('untrue');
     channel.onmessage = (e) => {
       if (e.data === 'hello') channel.postMessage('here');
-      if (e.data === 'hello' || e.data === 'here') this.hud.notify('Untrue is open in another tab: saves from both will overwrite each other');
+      if (e.data === 'here') readOnly();
     };
     channel.postMessage('hello');
   }
@@ -606,6 +702,7 @@ export class Game {
       return;
     }
     this.gathering.cancel();
+    this.setRespawn();
     this.sleepOverlay.play(() => this.living.rest(message));
   }
 
@@ -616,6 +713,7 @@ export class Game {
     this.room = room;
     this.gathering.cancel();
     this.gathering.ground = room;
+    this.gathering.bandAt = () => difficultyBand(room.outside.x, room.outside.y);
     this.interiorRenderer.close();
     this.interiorRenderer.open(room, this.player.sprite);
     const at = room.arrival(from.floor);
@@ -769,26 +867,26 @@ export class Game {
     const { input, camera, player } = this;
     if (input.hit('F3')) this.debug.toggle();
     if (input.hit('F4')) this.playground?.toggle();
-    if (input.hit('Tab') || input.hit('KeyI')) this.menu.toggle();
-    if (this.living.vision.isOpen && (input.hit('Space') || input.hit('KeyE') || input.hit('Enter'))) this.living.vision.next();
+    if (input.act('bag')) this.menu.toggle();
+    if (this.living.vision.isOpen && (input.hit('Space') || input.act('interact') || input.act('dodge') || input.hit('Enter'))) this.living.vision.next();
     if (input.hit('Escape')) {
       if (this.living.dialog.isOpen) this.living.dialog.close();
       else if (this.menu.isOpen) this.menu.close();
       else if (!this.living.vision.isOpen) this.pause.toggle();
     }
-    if (input.hit('KeyM') && !this.pause.isOpen) this.menu.toggle('map');
+    if (input.act('map') && !this.pause.isOpen) this.menu.toggle('map');
     if (input.hit('Save')) this.save(true);
     if (this.paused) return;
 
     if (input.wheel) camera.zoomBy(input.wheel);
-    if (input.hit('Equal') || input.hit('NumpadAdd')) camera.zoomBy(-1);
-    if (input.hit('Minus') || input.hit('NumpadSubtract')) camera.zoomBy(1);
+    if (input.act('zoomIn')) camera.zoomBy(-1);
+    if (input.act('zoomOut')) camera.zoomBy(1);
     for (let n = 1; n <= 8; n++) if (input.hit(`Digit${n}`)) this.hotbar.select(n - 1);
-    if (input.hit('KeyF')) this.useItem(this.hotbar.selected);
-    if (input.hit('KeyQ')) this.drop(this.hotbar.selected);
-    if (input.hit('KeyE')) this.interact();
-    if (input.hit('KeyJ') || input.mouseAttack) this.attack(input.mouseAttack);
-    if (input.hit('Space')) this.dodge();
+    if (input.act('use')) this.useItem(this.hotbar.selected);
+    if (input.act('drop')) this.drop(this.hotbar.selected);
+    if (input.act('interact')) this.interact();
+    if (input.act('attack') || input.mouseAttack) this.attack(input.mouseAttack);
+    if (input.act('dodge')) this.dodge();
     if (import.meta.env.DEV && input.hit('KeyG') && !this.spawnTarget && !this.room) {
       this.home = { x: player.x, y: player.y };
       this.travel(player.x + FAR_TRIP, player.y);
@@ -801,12 +899,12 @@ export class Game {
 
   /** Finds what the player faces (or stands on) and marks it. */
   private updateTarget(): void {
-    const { player, marker, gathering } = this;
-    marker.clear();
+    const { player, gathering } = this;
+    this.clearMarker();
     if (this.blocking) {
       // A shield arc on the side the player faces.
       const a = Math.atan2(player.faceY, player.faceX);
-      marker.arc(player.x * TILE_SIZE, (player.y - 0.4) * TILE_SIZE, 11, a - 0.9, a + 0.9).stroke({ width: 2, color: 0xa8d8ff, alpha: 0.85 });
+      this.drawMarker().arc(player.x * TILE_SIZE, (player.y - 0.4) * TILE_SIZE, 11, a - 0.9, a + 0.9).stroke({ width: 2, color: 0xa8d8ff, alpha: 0.85 });
     }
     this.target = null;
     if (this.spawnTarget || this.paused) {
@@ -838,23 +936,22 @@ export class Game {
       return;
     }
     const [fx, fy] = player.frontTile();
-    const feet: [number, number] = [Math.floor(player.x), Math.floor(player.y - 0.15)];
-    for (const [gx, gy] of [[fx, fy], feet]) {
-      this.target = interactionAt(this.world, this.inventory, this.vitals, gx, gy, this.gatherSpeed);
-      if (this.target) break;
-    }
+    // What the player faces, else what they stand on.
+    this.target =
+      interactionAt(this.world, this.inventory, this.vitals, fx, fy, this.gatherSpeed) ??
+      interactionAt(this.world, this.inventory, this.vitals, Math.floor(player.x), Math.floor(player.y - 0.15), this.gatherSpeed);
 
     const busy = gathering.current;
     const t = busy ?? this.target;
     if (t) {
       const color = t.kind === 'locked' ? 0xe04a3a : 0xfff2b0;
-      marker.rect(t.gx * TILE_SIZE, t.gy * TILE_SIZE, TILE_SIZE, TILE_SIZE).stroke({ width: 1, color, alpha: 0.8 });
+      this.drawMarker().rect(t.gx * TILE_SIZE, t.gy * TILE_SIZE, TILE_SIZE, TILE_SIZE).stroke({ width: 1, color, alpha: 0.8 });
     }
     if (busy) {
       const x = busy.gx * TILE_SIZE;
       const y = busy.gy * TILE_SIZE - 6;
-      marker.rect(x, y, TILE_SIZE, 3).fill({ color: 0x3b2412 });
-      marker.rect(x, y, TILE_SIZE * gathering.progress, 3).fill({ color: 0x7ee07a });
+      this.drawMarker().rect(x, y, TILE_SIZE, 3).fill({ color: 0x3b2412 });
+      this.drawMarker().rect(x, y, TILE_SIZE * gathering.progress, 3).fill({ color: 0x7ee07a });
     }
 
     if (busy) this.hud.setPrompt(`${busy.harvest.verb}…`);
@@ -894,6 +991,7 @@ export class Game {
       return;
     }
     this.usedMoonwells.add(well.id);
+    this.setRespawn();
     this.vitals.consume({ health: this.vitals.maxHealth * 0.5, thirst: 40 }, 'poison');
     this.combat.grantXp(MOONWELL_XP);
     this.living.effects.burst(this.player.x, this.player.y - 0.6, 'magic', 24);
@@ -907,10 +1005,17 @@ export class Game {
     return this.living.canRest() && this.world.tileAt(fx, fy)?.deco === Deco.Campfire;
   }
 
-  /** Attacks toward the mouse, or the way the player faces. */
-  private attack(atMouse: boolean): void {
-    if (this.paused || this.spawnTarget) return;
+  /** Attacks toward the mouse, the nearest enemy (`aim`), or the way the player faces. */
+  private attack(atMouse: boolean, aim = false): void {
+    // Indoors there is nothing to fight, and combat still runs at the door outside.
+    if (this.paused || this.spawnTarget || this.room) return;
     const { player, input } = this;
+    // Enemies cannot follow into water, so the water is no place to fight from.
+    if (player.swim) {
+      if (this.swimNote <= 0) this.hud.notify("You can't fight while swimming");
+      this.swimNote = 2;
+      return;
+    }
     let dx = player.faceX;
     let dy = player.faceY;
     if (atMouse && input.mouse) {
@@ -918,6 +1023,21 @@ export class Game {
       const ty = (input.mouse.y / this.pixelScale - this.worldLayer.y) / this.camera.zoom / TILE_SIZE;
       dx = tx - player.x;
       dy = ty - (player.y - 0.4);
+      player.faceTowards(dx, dy);
+    } else if (aim) {
+      const reach = (this.inventory.slots[this.hotbar.selected]?.item.weapon?.reach ?? 1.2) + 1.5;
+      let best = reach * reach;
+      for (const e of this.combat.enemies) {
+        if (e.species.passive || e.state === 'burrowed' || !e.alive) continue;
+        const ex = e.x - player.x;
+        const ey = e.y - player.y;
+        const d = ex * ex + ey * ey;
+        if (d < best) {
+          best = d;
+          dx = ex;
+          dy = ey;
+        }
+      }
       player.faceTowards(dx, dy);
     }
     if (this.combat.attack(dx, dy, this.hotbar.selected)) {
@@ -942,9 +1062,10 @@ export class Game {
 
   private dodge(): void {
     if (this.paused || this.spawnTarget || this.player.swim) return;
-    if (this.vitals.stamina < DODGE_STAMINA) return;
+    const cost = DODGE_STAMINA * (1 - 0.12 * this.progression.rank('nimble'));
+    if (this.vitals.stamina < cost) return;
     if (this.player.dodge()) {
-      this.vitals.spend(DODGE_STAMINA);
+      this.vitals.spend(cost);
       this.gathering.cancel();
       this.audio.play('dodge');
       this.living.effects.burst(this.player.x, this.player.y, 'dust', 8);
@@ -1020,7 +1141,12 @@ export class Game {
     player.holding = this.heldItem();
     player.offhand = eq.offhand?.item ?? null;
     player.guarding = this.blocking;
-    player.wear = [eq.head, eq.chest, eq.legs, eq.feet].map((s) => s?.item.look ?? -1);
+    // Written in place: this runs every frame.
+    const wear = player.wear;
+    wear[0] = eq.head?.item.look ?? -1;
+    wear[1] = eq.chest?.item.look ?? -1;
+    wear[2] = eq.legs?.item.look ?? -1;
+    wear[3] = eq.feet?.item.look ?? -1;
   }
 
   /** What the player holds: the selected weapon, tool or light. */
@@ -1042,7 +1168,7 @@ export class Game {
     const over = this.inventory.weight() > this.capacity;
     if (over === this.overloaded) return;
     this.overloaded = over;
-    this.hud.notify(over ? 'Your bag is too heavy: drop something (Q) to move freely' : 'Your load feels lighter');
+    this.hud.notify(over ? `Your bag is too heavy: drop something (${TOUCH ? 'Bag → Drop' : 'Q'}) to move freely` : 'Your load feels lighter');
   }
 
   /** Drops a whole stack at the player's feet. */
@@ -1065,6 +1191,7 @@ export class Game {
 
   private learn(id: SkillId): void {
     if (this.progression.learn(id)) {
+      this.vitals.maxHealth = this.progression.maxHealth;
       this.hud.notify('Skill learned');
       this.audio.play('level');
     }
@@ -1073,6 +1200,10 @@ export class Game {
   private useItem(slot: number): void {
     const s = this.inventory.slots[slot];
     if (!s) return;
+    if (s.item === Items.schematic) {
+      this.readSchematic(slot);
+      return;
+    }
     if (!s.item.food) {
       this.hud.notify(s.item.tool ? 'Tools work automatically while carried' : `${s.item.name} cannot be used`);
       return;
@@ -1082,20 +1213,49 @@ export class Game {
     this.hud.notify(`Used ${item.name}`);
   }
 
+  /** A Forgotten Schematic teaches a rare recipe not yet known. */
+  private readSchematic(slot: number): void {
+    const unknown = unknownRare(this.progression.recipes);
+    if (!unknown.length) {
+      this.hud.notify('You already know every recipe it could hold');
+      return;
+    }
+    this.inventory.takeOne(slot);
+    const r = unknown[Math.floor(Math.random() * unknown.length)];
+    this.progression.recipes.add(r.output.id);
+    this.audio.play('level');
+    const where = r.station === 'hand' ? 'by hand' : `at ${r.station === 'anvil' ? 'an' : 'a'} ${STATION_NAMES[r.station].toLowerCase()}`;
+    this.hud.alert(`You learned to make the ${r.output.name}, ${where}.`);
+  }
+
   private stations(): Set<Station> {
     const set = new Set<Station>(['hand']);
+    // Indoors, the room's own furniture counts, not the world outside.
+    const ground = this.room ?? this.world;
     const gx = Math.floor(this.player.x);
     const gy = Math.floor(this.player.y);
     for (const [station, deco] of Object.entries(STATION_DECO) as Array<[Station, number]>) {
-      if (this.world.near(gx, gy, STATION_RANGE, deco)) set.add(station);
+      let found = false;
+      for (let y = gy - STATION_RANGE; y <= gy + STATION_RANGE && !found; y++) {
+        for (let x = gx - STATION_RANGE; x <= gx + STATION_RANGE && !found; x++) found = ground.tileAt(x, y)?.deco === deco;
+      }
+      if (found) set.add(station);
     }
     return set;
   }
 
-  private craft(recipe: Recipe): void {
-    const result = craft(this.inventory, recipe, this.stations());
-    if (result === 'ok') this.hud.notify(`Crafted ${recipe.output.name}`);
-    else if (result === 'full') this.hud.notify('Bag full');
+  private craft(recipe: Recipe, times = 1): void {
+    if (recipe.rare && !this.progression.recipes.has(recipe.output.id)) {
+      this.hud.notify('You do not know this recipe yet: find a Forgotten Schematic');
+      return;
+    }
+    const stations = this.stations();
+    let made = 0;
+    let result: ReturnType<typeof craft> = 'ok';
+    while (made < times && (result = craft(this.inventory, recipe, stations)) === 'ok') made++;
+    const count = made * recipe.count;
+    if (made) this.hud.notify(`Crafted ${count > 1 ? `${count} × ` : ''}${recipe.output.name}`);
+    if (result === 'full') this.hud.notify('Bag full');
   }
 
   /** Story playground: places packed near the spawn, and a panel to drive the story. */
@@ -1152,13 +1312,49 @@ export class Game {
     if (this.room) this.leave();
     this.gathering.cancel();
     this.vitals.revive();
-    this.hud.notify('You collapsed… and wake up back at the start');
-    this.travel(0, 0);
+    const { x, y } = this.respawn;
+    this.hud.alert(x || y ? 'You collapsed… and wake up where you last rested.' : 'You collapsed… and wake up back at the start.');
+    this.travel(x, y);
+  }
+
+  /** What does not fit in the bag is left on the ground, outside if indoors. */
+  private overflow(item: ItemDef, count: number): void {
+    const at = this.room ? this.room.outside : this.player;
+    this.world.ground.drop({ item, count }, at.x, at.y);
+    this.hud.notify(`Bag full: ${count} ${item.name} left on the ground${this.room ? ' outside' : ''}`);
+  }
+
+  /** The target marker is cleared only when something was drawn on it:
+   *  clearing a Graphics makes Pixi rebuild its render group's draw list. */
+  private clearMarker(): void {
+    if (!this.markerDrawn) return;
+    this.marker.clear();
+    this.markerDrawn = false;
+  }
+
+  private drawMarker(): Graphics {
+    this.markerDrawn = true;
+    return this.marker;
+  }
+
+  /** Remembers where the player is, outdoors, as the place to wake after collapsing. */
+  private setRespawn(): void {
+    const at = this.room ? this.room.outside : this.player;
+    this.respawn = { x: at.x, y: at.y };
   }
 
   private save(manual: boolean): void {
     if (this.playground) {
       if (manual) this.hud.notify('The story playground is never saved');
+      return;
+    }
+    if (this.saveLock) {
+      if (manual) this.hud.alert(this.saveLock);
+      return;
+    }
+    // A vision may be half way through changing the story: save after it.
+    if (this.living.vision.isOpen) {
+      if (manual) this.hud.notify('Cannot save during a vision');
       return;
     }
     if (this.spawnTarget) {
@@ -1176,6 +1372,8 @@ export class Game {
           equipment: this.inventory.saveEquipment(),
           vitals: this.vitals.save(),
           progression: this.progression.save(),
+          respawn: { ...this.respawn },
+          moonwells: [...this.usedMoonwells],
         }, this.living.save(), this.exploration.save()),
       )
       .then(() => {
@@ -1230,6 +1428,31 @@ export class Game {
     }
     // Nothing open nearby: try a bit further along.
     this.spawnTarget = { x: target.x + SPAWN_SEARCH * 2, y: target.y };
+  }
+
+  /** First-time tips, one at a time, as each part of the game comes up. */
+  private tips(): void {
+    if (this.spawnTarget || this.paused || this.playground) return;
+    const k = (a: Action) => keyName(this.input.keys[a][0]);
+    const act = TOUCH ? 'tap' : k('interact');
+    const h = this.hints;
+    const stations = this.stations();
+    const { vitals } = this;
+    void (
+      h.once('start', true, TOUCH
+        ? 'Drag on the left half to move; tap to talk, gather and open. The compass (top left) points to your next goal.'
+        : `${k('up')}${k('left')}${k('down')}${k('right')} to move, ${k('interact')} to talk, gather and open. The compass (top left) points to your next goal.`) ||
+      h.once('enemy', !this.room && this.combat.enemies.some((e) => e.state === 'chase' || e.state === 'attack'), TOUCH
+        ? 'An enemy! Hit attacks the nearest one, hold Block to block, Roll to dodge.'
+        : `An enemy! Click or ${k('attack')} to attack, hold right-click or ${k('block')} to block, ${k('dodge')} to roll away.`) ||
+      h.once('hungry', vitals.hunger < 50, `You're getting hungry. Pick berries or cook meat at a campfire, then ${TOUCH ? 'tap its hotbar slot twice' : `select it and press ${k('use')}`} to eat.`) ||
+      h.once('thirsty', vitals.thirst < 50, `Thirsty? Face water and ${act} to drink.`) ||
+      h.once('night', this.living.time.isNight, `Night is dark and dangerous. ${act === 'tap' ? 'Tap' : `Press ${act}`} at a campfire to sleep until morning; you also wake there if you collapse.`) ||
+      h.once('campfire', stations.has('campfire'), 'A campfire: cook food here from the Crafting tab of the Bag.') ||
+      h.once('anvil', stations.has('anvil'), 'An anvil: forge tools, weapons and armour here from the Crafting tab.') ||
+      h.once('skill', this.progression.skillPoints > 0, 'You have a skill point: spend it in the Skills tab of the Bag.') ||
+      h.once('heavy', this.overloaded, 'Your bag is too heavy and slows you down: drop or sell things.')
+    );
   }
 
   private updateUi(): void {

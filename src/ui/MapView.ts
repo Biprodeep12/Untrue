@@ -38,6 +38,7 @@ export class MapView {
   private cx = 0;
   private cy = 0;
   private zoom = 16;
+  private drawQueued = false;
   private drag: { x: number; y: number; moved: boolean } | null = null;
 
   constructor(private readonly src: MapSource) {
@@ -46,42 +47,88 @@ export class MapView {
     this.root.innerHTML = `
       <div class="map-main"><canvas width="560" height="360"></canvas>
       <div class="map-readout hint"></div></div>
-      <div class="map-side"><button class="btn map-centre">Centre on me</button><h4>Markers</h4><div class="map-markers"></div>
-      <p class="hint">Click the map to drop a marker. Drag to pan, scroll to zoom.</p></div>`;
+      <div class="map-side"><div class="map-buttons"><button class="btn map-centre">Centre on me</button><button class="btn map-zoom-in" title="Zoom in">+</button><button class="btn map-zoom-out" title="Zoom out">−</button></div><h4>Markers</h4><div class="map-markers"></div>
+      <p class="hint">Tap or click the map to drop a marker. Drag to pan; zoom with + and −, the wheel or a pinch.</p></div>`;
     this.canvas = this.root.querySelector('canvas')!;
     this.ctx = this.canvas.getContext('2d')!;
     this.list = this.root.querySelector('.map-markers')!;
     this.readout = this.root.querySelector('.map-readout')!;
     this.root.querySelector('.map-centre')!.addEventListener('click', () => this.centre());
+    this.root.querySelector('.map-zoom-in')!.addEventListener('click', () => this.zoomBy(1.25));
+    this.root.querySelector('.map-zoom-out')!.addEventListener('click', () => this.zoomBy(0.8));
+    // Pointers on the map: one drags (or taps a marker), two pinch.
+    const touches = new Map<number, [number, number]>();
+    let pinch = 0;
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return Math.hypot(a[0] - b[0], a[1] - b[1]);
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
-      this.drag = { x: e.offsetX, y: e.offsetY, moved: false };
+      const [x, y] = this.local(e);
+      touches.set(e.pointerId, [x, y]);
       this.canvas.setPointerCapture(e.pointerId);
+      if (touches.size === 2) {
+        pinch = spread();
+        this.drag = null;
+      } else if (touches.size === 1) this.drag = { x, y, moved: false };
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      const [tx, ty] = this.toTiles(e.offsetX, e.offsetY);
+      const [x, y] = this.local(e);
+      const [tx, ty] = this.toTiles(x, y);
       this.readout.textContent = `${Math.round(tx)}, ${Math.round(ty)}`;
+      if (touches.has(e.pointerId)) touches.set(e.pointerId, [x, y]);
+      if (touches.size === 2 && pinch > 0) {
+        const d = spread();
+        if (d > 0) this.zoomBy(d / pinch);
+        pinch = d;
+        return;
+      }
       if (!this.drag) return;
-      const dx = e.offsetX - this.drag.x;
-      const dy = e.offsetY - this.drag.y;
+      const dx = x - this.drag.x;
+      const dy = y - this.drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) this.drag.moved = true;
       if (!this.drag.moved) return;
       this.cx -= (dx / this.zoom) * CHUNK_SIZE;
       this.cy -= (dy / this.zoom) * CHUNK_SIZE;
-      this.drag.x = e.offsetX;
-      this.drag.y = e.offsetY;
-      this.draw();
+      this.drag.x = x;
+      this.drag.y = y;
+      this.requestDraw();
     });
-    this.canvas.addEventListener('pointerup', (e) => {
-      if (this.drag && !this.drag.moved) {
-        const [tx, ty] = this.toTiles(e.offsetX, e.offsetY);
+    const up = (e: PointerEvent) => {
+      touches.delete(e.pointerId);
+      if (touches.size < 2) pinch = 0;
+      if (e.type === 'pointerup' && this.drag && !this.drag.moved) {
+        const [tx, ty] = this.toTiles(...this.local(e));
         this.src.exploration.addMarker(Math.round(tx), Math.round(ty));
         this.refresh();
       }
       this.drag = null;
-    });
+    };
+    this.canvas.addEventListener('pointerup', up);
+    this.canvas.addEventListener('pointercancel', up);
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * (e.deltaY > 0 ? 0.8 : 1.25)));
+      this.zoomBy(e.deltaY > 0 ? 0.8 : 1.25);
+    });
+  }
+
+  private zoomBy(factor: number): void {
+    this.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom * factor));
+    this.requestDraw();
+  }
+
+  /** Pointer position in canvas pixels; the canvas may be shown scaled down. */
+  private local(e: PointerEvent): [number, number] {
+    const r = this.canvas.getBoundingClientRect();
+    return [((e.clientX - r.left) * this.canvas.width) / (r.width || 1), ((e.clientY - r.top) * this.canvas.height) / (r.height || 1)];
+  }
+
+  /** Draws once per frame at most, however many events arrive. */
+  private requestDraw(): void {
+    if (this.drawQueued) return;
+    this.drawQueued = true;
+    requestAnimationFrame(() => {
+      this.drawQueued = false;
       this.draw();
     });
   }

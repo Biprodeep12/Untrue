@@ -35,7 +35,7 @@
 <tbody><tr>
 <td>Attack</td>
 <td>Left click (toward the mouse) or J (the way you face)</td>
-<td>Hit</td>
+<td>Hit (aims at the nearest enemy in reach)</td>
 </tr>
 <tr>
 <td>Block</td>
@@ -53,7 +53,8 @@
 <td>Tap a slot</td>
 </tr>
 </tbody></table></div>
-<p>Attacking with the mouse turns the player toward the cursor. The weapon is whatever sits in the selected hotbar slot; anything else counts as fists.</p>
+<p>Attacking with the mouse turns the player toward the cursor. On touch screens, Hit turns the player toward the nearest enemy within the weapon&#39;s reach plus 1.5 tiles (animals and burrowed lurkers are skipped), or the way they face if there is none. The weapon is whatever sits in the selected hotbar slot; anything else counts as fists. J and K are the default keys; both can be changed in Settings (<a href="index.html#controls">README.md</a>).</p>
+<p>There is no fighting indoors (enemies stay outside) or while swimming (&quot;You can&#39;t fight while swimming&quot;).</p>
 <h2 id="damage">Damage<a class="anchor" href="#damage" aria-label="Link to this section">#</a></h2>
 <h3 id="dealing-damage">Dealing damage<a class="anchor" href="#dealing-damage" aria-label="Link to this section">#</a></h3>
 <p><code>playerHitDamage(base, levelBonus, crit) = round(base × levelBonus × (crit ? 2 : 1))</code></p>
@@ -63,14 +64,15 @@
 <li><strong>Melee arc:</strong> a swing hits every enemy within <code>reach + 0.4</code> tiles and within 60° either side of the swing direction. Enemies closer than 0.3 tiles are always hit.</li>
 <li><strong>Knockback:</strong> each hit pushes the enemy 0.35 tiles along the swing, unless that spot is solid.</li>
 <li><strong>Burrowed enemies</strong> can&#39;t be hit.</li>
+<li><strong>Damage types:</strong> see <a href="#damage-types">below</a>. The type&#39;s factor is applied last, and a hit always does at least 1.</li>
 </ul>
 <h3 id="taking-damage">Taking damage<a class="anchor" href="#taking-damage" aria-label="Link to this section">#</a></h3>
 <p><code>incomingDamage(raw, armor, blocked, pass) = max(1, round(raw × (1 − armor) × (blocked ? pass : 1)))</code></p>
 <ul>
-<li><strong>Armor:</strong> the pieces worn add up (see <a href="survival.html#equipment">survival.md</a>), to at most 60%. A full leather set gives 20%, a full iron set 40%.</li>
-<li><strong>Blocking:</strong> without a shield, absorbs 70% of a hit (<code>pass</code> 0.3) and costs 8 stamina. A <strong>Wooden Shield</strong> in the off hand absorbs 85% for 6 stamina; an <strong>Iron Shield</strong> 95% for 4. While blocking, the shield is raised in front of the player. It only works if the player faces the attacker and has the stamina. Blocking also halves movement speed and stops running, and a blocked hit inflicts no status effect.</li>
+<li><strong>Armor:</strong> the pieces worn add up (see <a href="survival.html#equipment">survival.md</a>), to at most 60%. A full leather set gives 20%, a full iron set 40%, a full starforged set 56%.</li>
+<li><strong>Blocking:</strong> without a shield, absorbs 70% of a hit (<code>pass</code> 0.3) and costs 8 stamina. A <strong>Wooden Shield</strong> in the off hand absorbs 85% for 6 stamina; a <strong>Chitin Shield</strong> 90% for 5; an <strong>Iron Shield</strong> 95% for 4. While blocking, the shield is raised in front of the player. It only works if the player faces the attacker and has the stamina. Blocking also halves movement speed and stops running, and a blocked hit inflicts no status effect.</li>
 <li><strong>After a hit:</strong> the player is knocked back 0.45 tiles and can&#39;t be hit again for 0.6 s (the sprite blinks).</li>
-<li><strong>Dodge roll:</strong> a 0.18 s dash at 15 tiles/s, during which the player can&#39;t be hit. It costs 20 stamina and has a 0.7 s cooldown.</li>
+<li><strong>Dodge roll:</strong> a 0.18 s dash at 15 tiles/s, during which the player can&#39;t be hit. It costs 20 stamina (12% less per Nimble rank) and has a 0.7 s cooldown.</li>
 <li><strong>Projectiles:</strong> enemy projectiles deal 80% of the enemy&#39;s damage.</li>
 </ul>
 <h2 id="weapons">Weapons<a class="anchor" href="#weapons" aria-label="Link to this section">#</a></h2>
@@ -80,6 +82,7 @@
 <th>Weapon</th>
 <th>Kind</th>
 <th>Damage</th>
+<th>Type</th>
 <th>Reach / range</th>
 <th>Cooldown</th>
 <th>Durability</th>
@@ -89,6 +92,7 @@
 <td>Fists</td>
 <td>melee</td>
 <td>5</td>
+<td>–</td>
 <td>1.1</td>
 <td>0.45 s</td>
 <td>–</td>
@@ -97,6 +101,7 @@
 <td>Wooden Sword</td>
 <td>melee</td>
 <td>9</td>
+<td>–</td>
 <td>1.4</td>
 <td>0.45 s</td>
 <td>60</td>
@@ -105,23 +110,99 @@
 <td>Iron Sword</td>
 <td>melee</td>
 <td>20</td>
+<td>–</td>
 <td>1.6</td>
 <td>0.4 s</td>
 <td>220</td>
 </tr>
 <tr>
+<td>Frost Blade</td>
+<td>melee</td>
+<td>22</td>
+<td>frost</td>
+<td>1.6</td>
+<td>0.4 s</td>
+<td>260</td>
+</tr>
+<tr>
+<td>Venom Blade</td>
+<td>melee</td>
+<td>22</td>
+<td>venom</td>
+<td>1.6</td>
+<td>0.4 s</td>
+<td>260</td>
+</tr>
+<tr>
+<td>Spirit Blade</td>
+<td>melee</td>
+<td>22</td>
+<td>spirit</td>
+<td>1.6</td>
+<td>0.4 s</td>
+<td>260</td>
+</tr>
+<tr>
+<td>Starforged Sword</td>
+<td>melee</td>
+<td>32</td>
+<td>–</td>
+<td>1.7</td>
+<td>0.38 s</td>
+<td>420</td>
+</tr>
+<tr>
 <td>Hunting Bow</td>
 <td>bow</td>
 <td>12</td>
+<td>–</td>
 <td>9</td>
 <td>0.65 s</td>
 <td>140</td>
 </tr>
+<tr>
+<td>Crystal Bow</td>
+<td>bow</td>
+<td>20</td>
+<td>–</td>
+<td>11</td>
+<td>0.55 s</td>
+<td>260</td>
+</tr>
 </tbody></table></div>
+<p>The three elemental blades, the Starforged Sword and the Crystal Bow are rare recipes, learned from Forgotten Schematics (<a href="survival.html#rare-recipes">survival.md</a>).</p>
 <ul>
-<li><strong>Durability:</strong> each attack with a weapon costs one point. At 0 it breaks and a notice says so.</li>
+<li><strong>Durability:</strong> each attack with a weapon costs one point. At 0 it breaks and a notice says so. A worn weapon shows a bar along the bottom of its slot (red below 25%).</li>
+<li><strong>Stats on screen:</strong> the bag&#39;s item details list a weapon&#39;s damage and type, reach or range, hits per second and durability. Selecting a hotbar slot briefly shows the item&#39;s name, and a weapon&#39;s durability, above the bar.</li>
 <li><strong>Bows:</strong> each shot uses one Arrow from the bag. Without arrows the attack fails with &quot;No arrows&quot;. Arrows fly at 14 tiles/s and stop at their range or at anything solid. They can crit like melee hits.</li>
 </ul>
+<h2 id="damage-types">Damage types<a class="anchor" href="#damage-types" aria-label="Link to this section">#</a></h2>
+<p>A weapon can carry a damage type (<code>Element</code> in <code>src/items/Items.ts</code>): <code>frost</code>, <code>venom</code> or <code>spirit</code>. Species list the types they are weak to (<code>weak</code>, ×1.5 damage) or resist (<code>resist</code>, ×0.5), in <code>src/entities/Species.ts</code>; <code>elementFactor</code> applies them. Arrows from a typed bow would carry its type too, but no bow has one yet.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Weak to it</th>
+<th>Resist it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frost</td>
+<td>Scorpion, Sand Lurker, Jackal, Emperor Scorpion, Dune Tyrant, Thorn Spider</td>
+<td>Frost Golem, Ancient Golem, Frost Wolf, Tundra Bear</td>
+</tr>
+<tr>
+<td>Venom</td>
+<td>Wolf, Bear, Frost Wolf, Tundra Bear, Jackal, Alpha Wolf, Elder Stag</td>
+<td>Spider, Thorn Spider, Scorpion, Emperor Scorpion, Dune Tyrant, Frost Golem, Ancient Golem, Wraith, Skeleton, Skeleton Archer, Ghoul</td>
+</tr>
+<tr>
+<td>Spirit</td>
+<td>Wraith, Skeleton, Skeleton Archer, Ghoul</td>
+<td>–</td>
+</tr>
+</tbody></table></div>
+<p>The Jackal is weak to both frost and venom. Bandits, wildlife and the Arena Guardian have no weakness or resistance.</p>
 <h2 id="enemies">Enemies<a class="anchor" href="#enemies" aria-label="Link to this section">#</a></h2>
 <p>Stats below are at band 0. &quot;Aggro&quot; is the distance at which the enemy notices the player; &quot;drops&quot; are (count, chance).</p>
 <div class="table-wrap"><table>
@@ -205,6 +286,61 @@
 <td>22</td>
 </tr>
 <tr>
+<td>Thorn Spider</td>
+<td>Forest</td>
+<td>48</td>
+<td>11</td>
+<td>3.9</td>
+<td>7</td>
+<td>Ranged web (range 5); hits poison you for 4 s</td>
+<td>Silk 2–3, Venom 1 (60%)</td>
+<td>20</td>
+</tr>
+<tr>
+<td>Jackal</td>
+<td>Desert</td>
+<td>26</td>
+<td>7</td>
+<td>4.8</td>
+<td>7</td>
+<td>Packs of 2–4; flees below 25% HP</td>
+<td>Raw Meat 1, Hide 1 (50%), Bone 1 (30%)</td>
+<td>11</td>
+</tr>
+<tr>
+<td>Emperor Scorpion</td>
+<td>Desert</td>
+<td>110</td>
+<td>18</td>
+<td>3</td>
+<td>6</td>
+<td>Hits poison you for 6 s</td>
+<td>Chitin 2–3, Venom 1–2, Gemstone 1 (5%)</td>
+<td>38</td>
+</tr>
+<tr>
+<td>Frost Wolf</td>
+<td>Snow</td>
+<td>42</td>
+<td>10</td>
+<td>4.5</td>
+<td>7.5</td>
+<td>Packs of 2–4; flees below 15% HP</td>
+<td>Raw Meat 1–2, Hide 1–2 (80%), Ice Shard 1 (30%)</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Tundra Bear</td>
+<td>Snow</td>
+<td>120</td>
+<td>22</td>
+<td>3</td>
+<td>5</td>
+<td>Slow, heavy hitter</td>
+<td>Raw Meat 2–4, Hide 2–3</td>
+<td>40</td>
+</tr>
+<tr>
 <td>Wraith</td>
 <td>All</td>
 <td>28</td>
@@ -238,6 +374,28 @@
 <td>16</td>
 </tr>
 <tr>
+<td>Skeleton Archer</td>
+<td>Guard only</td>
+<td>30</td>
+<td>8</td>
+<td>2.8</td>
+<td>10</td>
+<td>Dungeon and archive guard; shoots arrows (range 7)</td>
+<td>Bone 1–2, Arrow 3–6 (70%)</td>
+<td>18</td>
+</tr>
+<tr>
+<td>Ghoul</td>
+<td>Guard only</td>
+<td>70</td>
+<td>15</td>
+<td>3.6</td>
+<td>9</td>
+<td>Dungeon guard from band 2; hits poison you for 3 s</td>
+<td>Bone 2–3, Spirit Essence 1 (40%)</td>
+<td>28</td>
+</tr>
+<tr>
 <td>Elder Stag</td>
 <td>Legend only</td>
 <td>420</td>
@@ -245,8 +403,41 @@
 <td>4.6</td>
 <td>8</td>
 <td>Legendary creature, boss</td>
-<td>Hide 3–5, Gemstone 1, Crystal 1–2, plus a chest roll</td>
+<td>Hide 3–5, Gemstone 1, Crystal 1–2, Forgotten Schematic 1, plus a chest roll</td>
 <td>300</td>
+</tr>
+<tr>
+<td>Alpha Wolf</td>
+<td>Legend only</td>
+<td>380</td>
+<td>22</td>
+<td>4.8</td>
+<td>9</td>
+<td>Legendary creature, boss</td>
+<td>Hide 3–5, Gemstone 1, Star Metal 1, Forgotten Schematic 1, plus a chest roll</td>
+<td>280</td>
+</tr>
+<tr>
+<td>Dune Tyrant</td>
+<td>Legend only</td>
+<td>520</td>
+<td>26</td>
+<td>3.2</td>
+<td>8</td>
+<td>Legendary creature, boss; hits poison you for 6 s</td>
+<td>Chitin 4–6, Venom 2–3, Gemstone 1, Star Metal 1–2, Forgotten Schematic 1, plus a chest roll</td>
+<td>360</td>
+</tr>
+<tr>
+<td>Ancient Golem</td>
+<td>Legend only</td>
+<td>620</td>
+<td>28</td>
+<td>2.2</td>
+<td>10</td>
+<td>Legendary creature, boss; throws boulders (range 7)</td>
+<td>Crystal 2–3, Ice Shard 3–5, Star Metal 2, Forgotten Schematic 1, plus a chest roll</td>
+<td>400</td>
 </tr>
 <tr>
 <td>Arena Guardian</td>
@@ -256,11 +447,12 @@
 <td>2.6</td>
 <td>14</td>
 <td>Boss; also throws boulders (range 8)</td>
-<td>Golden Idol 1, Iron Ingot 3–6, plus a chest roll</td>
+<td>Golden Idol 1, Iron Ingot 3–6, Forgotten Schematic 1–2, plus a chest roll</td>
 <td>600</td>
 </tr>
 </tbody></table></div>
-<p>Spawn weights within a biome: Wolf 4, Bear 1.5, Spider 3, Scorpion 4, Sand Lurker 2, Frost Golem 3, Wraith 3.</p>
+<p>Spawn weights within a biome: Wolf 4, Bear 1.5, Spider 3, Thorn Spider 1, Scorpion 4, Sand Lurker 2, Jackal 3, Emperor Scorpion 0.8, Frost Golem 3, Frost Wolf 3, Tundra Bear 1.2, Wraith 3.</p>
+<p><strong>Variants.</strong> The newer species borrow an existing creature&#39;s sprites (<code>art</code> on the species), with their own <code>tint</code> and <code>size</code>: the Frost Wolf, Jackal and Alpha Wolf are wolves; the Tundra Bear a bear; the Emperor Scorpion and Dune Tyrant scorpions; the Thorn Spider a spider; the Ancient Golem a golem; the Skeleton Archer and Ghoul skeletons. Bosses and elites get a chest roll; a boss&#39;s is 3 bands richer.</p>
 <h2 id="wildlife">Wildlife<a class="anchor" href="#wildlife" aria-label="Link to this section">#</a></h2>
 <p>Animals (<code>passive</code> species in <code>src/entities/Species.ts</code>) share the enemy code but never start a fight. Skittish animals bolt when the player comes within their range (and warn their herd); defensive ones ignore the player until hurt, then fight back like an enemy.</p>
 <div class="table-wrap"><table>
@@ -345,7 +537,7 @@
 </tr>
 </tbody></table></div>
 <p>Weights within a biome: Rabbit 4, Deer 3, Boar 2, Sand Lizard 4, Snow Hare 4, Mountain Goat 2. Hunting an animal says &quot;Hunted a …&quot;; the Hunter skill adds to its drops. Animals never block resting by a campfire.</p>
-<p>Drops go straight into the bag.</p>
+<p>Drops go straight into the bag. What does not fit is left on the ground where the enemy fell, with a notice.</p>
 <h3 id="ai-states">AI states<a class="anchor" href="#ai-states" aria-label="Link to this section">#</a></h3>
 <p><code>Enemy.update()</code> runs a small state machine.</p>
 <div class="table-wrap"><table>
@@ -378,7 +570,7 @@
 </tr>
 <tr>
 <td><code>attack</code></td>
-<td>Flickers during a 0.3 s wind-up, then hits if the player is within <code>attackRange + 0.4</code>, or else fires a projectile if in range</td>
+<td>Flickers and shows a red &quot;!&quot; during a 0.3 s wind-up, then hits if the player is within <code>attackRange + 0.4</code>, or else fires a projectile if in range</td>
 <td>After 0.5 s → <code>chase</code></td>
 </tr>
 <tr>
@@ -389,7 +581,7 @@
 </tbody></table></div>
 <ul>
 <li>Taking a hit provokes an enemy (patrol or burrowed → aggro).</li>
-<li>A wolf that drops below 20% health flees instead.</li>
+<li>A species with <code>fleeBelow</code> flees instead once its health drops below that share: wolves 20%, frost wolves 15%, jackals 25%.</li>
 <li>Every enemy except a flier collides with solid tiles, sliding along walls.</li>
 </ul>
 <h3 id="difficulty-scaling-and-elites">Difficulty scaling and elites<a class="anchor" href="#difficulty-scaling-and-elites" aria-label="Link to this section">#</a></h3>
@@ -450,7 +642,7 @@
 </thead>
 <tbody><tr>
 <td>Dungeon</td>
-<td>3–5 Skeletons on open floor tiles</td>
+<td>2–3 Skeletons and 1–2 Skeleton Archers on open floor tiles, plus 1 Ghoul at band 2 or 2 at band 3</td>
 </tr>
 <tr>
 <td>Boss Arena</td>
@@ -458,7 +650,7 @@
 </tr>
 <tr>
 <td>Sunken Archive (story)</td>
-<td>6 Skeletons</td>
+<td>4 Skeletons and 2 Skeleton Archers</td>
 </tr>
 </tbody></table></div>
 <p>Killing every guard clears the place:</p>
@@ -467,7 +659,33 @@
 <li>the place&#39;s anchor goes into <code>WorldManager.clearedAnchors</code>, which is saved</li>
 </ul>
 <p><strong>Cleared stays cleared:</strong> a cleared anchor never wakes guards again, even after its region regenerates. If the player leaves before clearing it, the guards despawn and the place resets for the next visit.</p>
-<p><strong>Elder Stag:</strong> every chunk in the simulation area gets one roll per region visit, with a 0.05% chance (<code>LEGEND_CHANCE</code>) of an Elder Stag at the chunk&#39;s centre. Killing it records <code>legend@cx,cy</code> in <code>clearedAnchors</code>, so that spot never spawns another.</p>
+<h3 id="legends">Legends<a class="anchor" href="#legends" aria-label="Link to this section">#</a></h3>
+<p>Every chunk in the simulation area gets one roll per region visit, with a chance of <code>LEGEND_CHANCE × (1 + band)</code> (0.05% at band 0, 0.2% at band 3) of a legendary creature at the chunk&#39;s centre. Rolls only run when the simulated area moves. Which legend depends on the land (<code>legendFor</code> in <code>src/systems/CombatSystem.ts</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Land</th>
+<th>Legend</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Desert, band 1 or more</td>
+<td>Dune Tyrant</td>
+</tr>
+<tr>
+<td>Snow, band 1 or more</td>
+<td>Ancient Golem or Alpha Wolf, half each</td>
+</tr>
+<tr>
+<td>Elsewhere, band 2 or more</td>
+<td>Alpha Wolf or Elder Stag, half each</td>
+</tr>
+<tr>
+<td>Anywhere else (near home)</td>
+<td>Elder Stag</td>
+</tr>
+</tbody></table></div>
+<p>Killing a legend records <code>legend@cx,cy</code> in <code>clearedAnchors</code>, so that spot never spawns another. Every boss killed (legends and the Arena Guardian) counts as a trophy, by species, in progression (<code>trophies</code>). The Quests tab lists them under &quot;Legends of the land&quot; (found out of 5), with a tick and a count for each one defeated.</p>
 <p><strong>Event groups</strong> (bandit ambush, village defence) are tracked the same way, without persistence. Clearing them reports to quests; clearing a village defence also pays 30 coins.</p>
 <h2 id="progression">Progression<a class="anchor" href="#progression" aria-label="Link to this section">#</a></h2>
 <p><code>src/systems/Progression.ts</code>:</p>
@@ -477,7 +695,7 @@
 <li><strong>Per level:</strong> each level adds 8 max health and 5% damage, and a skill point. When you level up, current health rises by the same amount as max health.</li>
 </ul>
 <h3 id="skills">Skills<a class="anchor" href="#skills" aria-label="Link to this section">#</a></h3>
-<p>Skill points are spent in the menu&#39;s Skills tab. Each skill has 3 ranks; points left = level − 1 − ranks learned.</p>
+<p>Skill points are spent in the menu&#39;s Skills tab. Each skill has 5 ranks (<code>MAX_RANK</code>); points left = level − 1 − ranks learned. Nine skills × 5 ranks is 45 points, so every level up to 46 buys something. Once every skill is at rank 5, the tab says so.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -503,7 +721,7 @@
 </tr>
 <tr>
 <td>Swimmer</td>
-<td>Swim 10% faster; deep water tires 25% slower</td>
+<td>Swim 10% faster; deep water tires 15% slower</td>
 </tr>
 <tr>
 <td>Pack Mule</td>
@@ -512,6 +730,14 @@
 <tr>
 <td>Survivalist</td>
 <td>Hunger and thirst drain 10% slower</td>
+</tr>
+<tr>
+<td>Toughness</td>
+<td>+6% max health (multiplies the level&#39;s max health)</td>
+</tr>
+<tr>
+<td>Nimble</td>
+<td>Dodge rolls cost 12% less stamina</td>
 </tr>
 </tbody></table></div>
 <p>Ranks are saved with progression; older saves load with none.</p>
@@ -547,7 +773,7 @@
 </article>
     <nav class="pager"><a class="prev" href="survival.html"><small>Previous</small>Survival</a><a class="next" href="living-world.html"><small>Next</small>Living world</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#controls">Controls</a></li><li class="l2"><a href="#damage">Damage</a></li><li class="l3"><a href="#dealing-damage">Dealing damage</a></li><li class="l3"><a href="#taking-damage">Taking damage</a></li><li class="l2"><a href="#weapons">Weapons</a></li><li class="l2"><a href="#enemies">Enemies</a></li><li class="l2"><a href="#wildlife">Wildlife</a></li><li class="l3"><a href="#ai-states">AI states</a></li><li class="l3"><a href="#difficulty-scaling-and-elites">Difficulty scaling and elites</a></li><li class="l2"><a href="#spawning">Spawning</a></li><li class="l2"><a href="#guarded-places">Guarded places</a></li><li class="l2"><a href="#progression">Progression</a></li><li class="l3"><a href="#skills">Skills</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#controls">Controls</a></li><li class="l2"><a href="#damage">Damage</a></li><li class="l3"><a href="#dealing-damage">Dealing damage</a></li><li class="l3"><a href="#taking-damage">Taking damage</a></li><li class="l2"><a href="#weapons">Weapons</a></li><li class="l2"><a href="#damage-types">Damage types</a></li><li class="l2"><a href="#enemies">Enemies</a></li><li class="l2"><a href="#wildlife">Wildlife</a></li><li class="l3"><a href="#ai-states">AI states</a></li><li class="l3"><a href="#difficulty-scaling-and-elites">Difficulty scaling and elites</a></li><li class="l2"><a href="#spawning">Spawning</a></li><li class="l2"><a href="#guarded-places">Guarded places</a></li><li class="l3"><a href="#legends">Legends</a></li><li class="l2"><a href="#progression">Progression</a></li><li class="l3"><a href="#skills">Skills</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

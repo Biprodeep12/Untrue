@@ -1,7 +1,7 @@
 // World-space effects: burning trees, lightning warnings, meteor strikes,
 // memory ghosts, particle bursts, and ambient fireflies and falling leaves.
 
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { TILE_SIZE } from '../config';
 import type { Memory } from '../story/StorySystem';
 import type { Light } from './Lighting';
@@ -55,16 +55,26 @@ const MAX_PARTICLES = 400;
 
 export class Effects {
   readonly view = new Container();
+  /** Hit, dust and sparkle bursts; off in the low-quality settings. */
+  bursts = true;
   /** Drawn on the ground, under everything that stands: the lantern's ghosts. */
   readonly floor = new Graphics();
+  /** Fires, lightning warnings and meteors: rare, so a Graphics is fine. */
   private readonly g = new Graphics();
+  /** Particles and fireflies: pooled tinted squares, cheap to move each frame. */
+  private readonly dots = new Container();
+  private readonly dotPool: Sprite[] = [];
+  private drewShapes = false;
+  /** What the lantern's ghosts were last drawn for; redrawn only when it changes. */
+  private floorKey = '';
+  private leaves = 0;
   private readonly meteors: Meteor[] = [];
   private readonly particles: Particle[] = [];
   private readonly fireflies: Firefly[] = [];
   private time = 0;
 
   constructor() {
-    this.view.addChild(this.g);
+    this.view.addChild(this.g, this.dots);
   }
 
   meteor(x: number, y: number): void {
@@ -73,6 +83,7 @@ export class Effects {
 
   /** A puff of particles at a point, in tiles. */
   burst(x: number, y: number, kind: BurstKind, count = 8): void {
+    if (!this.bursts) return;
     const b = BURSTS[kind];
     for (let i = 0; i < count && this.particles.length < MAX_PARTICLES; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -103,7 +114,8 @@ export class Effects {
         f.y = py + (Math.random() - 0.5) * 18;
       }
     }
-    if (leaves && this.particles.filter((p) => p.drift).length < LEAVES && Math.random() < 0.05) {
+    if (leaves && this.leaves < LEAVES && Math.random() < 0.05) {
+      this.leaves++;
       this.particles.push({
         x: px + (Math.random() - 0.3) * 30,
         y: py - 10 - Math.random() * 4,
@@ -129,44 +141,14 @@ export class Effects {
   /** `sight` is the lantern's reach in tiles: forgotten places show as ghosts within it. */
   update(dt: number, fires: readonly Fire[], strikes: readonly Strike[], memories: readonly Memory[], px: number, py: number, sight: number): void {
     this.time += dt;
-    const g = this.g.clear();
     const T = TILE_SIZE;
+    this.drawGhosts(memories, px, py, sight);
 
-    const floor = this.floor.clear();
-    if (sight > 0) {
-      const pulse = 0.8 + Math.sin(this.time * 1.5) * 0.2;
-      for (const m of memories) {
-        if (px < m.x - sight || py < m.y - sight || px > m.x + m.w + sight || py > m.y + m.h + sight) continue;
-        const x0 = Math.max(0, Math.floor(px - sight - m.x));
-        const y0 = Math.max(0, Math.floor(py - sight - m.y));
-        const x1 = Math.min(m.w, Math.ceil(px + sight - m.x));
-        const y1 = Math.min(m.h, Math.ceil(py + sight - m.y));
-        for (let y = y0; y < y1; y++) {
-          for (let x = x0; x < x1; x++) {
-            if (!m.mask[y * m.w + x]) continue;
-            const d = Math.hypot(m.x + x + 0.5 - px, m.y + y + 0.5 - py);
-            if (d >= sight) continue;
-            // A spectral blueprint on the ground: a soft glow, with a bright
-            // line only along the outline of the forgotten place.
-            const f = (1 - d / sight) * pulse;
-            const sx = (m.x + x) * T;
-            const sy = (m.y + y) * T;
-            floor.rect(sx, sy, T, T).fill({ color: 0x7fd8ff, alpha: 0.22 * f });
-            const open = (dx: number, dy: number) => {
-              const nx = x + dx;
-              const ny = y + dy;
-              return nx < 0 || ny < 0 || nx >= m.w || ny >= m.h || !m.mask[ny * m.w + nx];
-            };
-            const edge = { color: 0xc8f4ff, alpha: 0.7 * f };
-            if (open(0, -1)) floor.rect(sx, sy, T, 1).fill(edge);
-            if (open(0, 1)) floor.rect(sx, sy + T - 1, T, 1).fill(edge);
-            if (open(-1, 0)) floor.rect(sx, sy, 1, T).fill(edge);
-            if (open(1, 0)) floor.rect(sx + T - 1, sy, 1, T).fill(edge);
-          }
-        }
-      }
-    }
-
+    // Shapes: only cleared when something was or is to be drawn.
+    const shapes = fires.length > 0 || strikes.length > 0 || this.meteors.length > 0;
+    if (shapes || this.drewShapes) this.g.clear();
+    this.drewShapes = shapes;
+    const g = this.g;
     for (const [i, f] of fires.entries()) {
       // Flickering flames and rising smoke over the tree.
       const cx = (f.gx + 0.5) * T;
@@ -189,10 +171,26 @@ export class Effects {
       g.circle(s.x * T, s.y * T, 1.3 * T * t).fill({ color: 0xfff2a0, alpha: 0.2 });
     }
 
+    let used = 0;
+    const dot = (x: number, y: number, size: number, color: number, alpha: number) => {
+      let sp = this.dotPool[used];
+      if (!sp) {
+        sp = new Sprite(Texture.WHITE);
+        this.dots.addChild(sp);
+        this.dotPool.push(sp);
+      }
+      used++;
+      sp.visible = true;
+      sp.position.set(x, y);
+      sp.setSize(size, size);
+      sp.tint = color;
+      sp.alpha = alpha;
+    };
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
       if (p.life <= 0) {
+        if (p.drift) this.leaves--;
         this.particles.splice(i, 1);
         continue;
       }
@@ -200,14 +198,15 @@ export class Effects {
       if (p.drift) p.vx += Math.sin(this.time * 2 + i) * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      g.rect(p.x * T, p.y * T, p.size, p.size).fill({ color: p.color, alpha: Math.min(1, (p.life / p.max) * 2) });
+      dot(p.x * T, p.y * T, p.size, p.color, Math.min(1, (p.life / p.max) * 2));
     }
     for (const f of this.fireflies) {
       f.x += Math.sin(this.time * 0.7 + f.phase) * dt * 0.6;
       f.y += Math.cos(this.time * 0.9 + f.phase * 1.3) * dt * 0.4;
       const glow = Math.max(0, Math.sin(this.time * 2 + f.phase));
-      g.circle(f.x * T, f.y * T, 1.2).fill({ color: 0xe8ff80, alpha: 0.3 + glow * 0.7 });
+      dot(f.x * T - 1.2, f.y * T - 1.2, 2.4, 0xe8ff80, 0.3 + glow * 0.7);
     }
+    for (let i = used; i < this.dotPool.length && this.dotPool[i].visible; i++) this.dotPool[i].visible = false;
 
     for (let i = this.meteors.length - 1; i >= 0; i--) {
       const m = this.meteors[i];
@@ -225,6 +224,45 @@ export class Effects {
         g.circle(tx, ty, r).stroke({ width: 3, color: 0xffa040, alpha: Math.max(0, 1 - r / 70) });
       }
       if (m.t > METEOR_SECONDS) this.meteors.splice(i, 1);
+    }
+  }
+
+  /** The lantern's ghosts: a spectral blueprint of each forgotten place within
+   *  sight. Redrawn only when the player moves half a tile; the pulse is the
+   *  layer's alpha. */
+  private drawGhosts(memories: readonly Memory[], px: number, py: number, sight: number): void {
+    const floor = this.floor;
+    floor.alpha = 0.8 + Math.sin(this.time * 1.5) * 0.2;
+    const key = sight > 0 ? `${Math.round(px * 2)},${Math.round(py * 2)},${sight},${memories.length}` : '';
+    if (key === this.floorKey) return;
+    this.floorKey = key;
+    floor.clear();
+    if (!sight) return;
+    const T = TILE_SIZE;
+    for (const m of memories) {
+      if (px < m.x - sight || py < m.y - sight || px > m.x + m.w + sight || py > m.y + m.h + sight) continue;
+      const x0 = Math.max(0, Math.floor(px - sight - m.x));
+      const y0 = Math.max(0, Math.floor(py - sight - m.y));
+      const x1 = Math.min(m.w, Math.ceil(px + sight - m.x));
+      const y1 = Math.min(m.h, Math.ceil(py + sight - m.y));
+      const open = (x: number, y: number) => x < 0 || y < 0 || x >= m.w || y >= m.h || !m.mask[y * m.w + x];
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          if (!m.mask[y * m.w + x]) continue;
+          const d = Math.hypot(m.x + x + 0.5 - px, m.y + y + 0.5 - py);
+          if (d >= sight) continue;
+          // A soft glow, with a bright line only along the outline.
+          const f = 1 - d / sight;
+          const sx = (m.x + x) * T;
+          const sy = (m.y + y) * T;
+          floor.rect(sx, sy, T, T).fill({ color: 0x7fd8ff, alpha: 0.22 * f });
+          const edge = { color: 0xc8f4ff, alpha: 0.7 * f };
+          if (open(x, y - 1)) floor.rect(sx, sy, T, 1).fill(edge);
+          if (open(x, y + 1)) floor.rect(sx, sy + T - 1, T, 1).fill(edge);
+          if (open(x - 1, y)) floor.rect(sx, sy, 1, T).fill(edge);
+          if (open(x + 1, y)) floor.rect(sx + T - 1, sy, 1, T).fill(edge);
+        }
+      }
     }
   }
 }

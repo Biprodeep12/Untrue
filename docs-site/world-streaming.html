@@ -102,12 +102,12 @@
 </tr>
 <tr>
 <td>Activate</td>
-<td>A finished chunk inside the render area is shown; inside the simulation area it is marked <code>simulated</code>.</td>
-<td><code>ChunkManager.receive</code>, <code>syncShown</code></td>
+<td>A finished chunk inside the render area is queued to be shown (<code>pendingShow</code>); at most 2 are shown per frame (<code>SHOW_PER_FRAME</code>), nearest to the player first. Inside the simulation area it is marked <code>simulated</code>.</td>
+<td><code>ChunkManager.receive</code>, <code>syncShown</code>, <code>flushShows</code></td>
 </tr>
 <tr>
 <td>Deactivate</td>
-<td>Leaving the render area hides it; leaving the simulation area clears <code>simulated</code>.</td>
+<td>Leaving the render area hides it (or drops it from the queue); leaving the simulation area clears <code>simulated</code>.</td>
 <td><code>ChunkManager.update</code></td>
 </tr>
 <tr>
@@ -138,7 +138,8 @@
 <li>Remove decorations the player harvested, if the harvest record is from the current region visit and the plant has not grown back.</li>
 </ol>
 <p><code>ChunkManager.refresh(chunk)</code> re-runs composition and tells the renderer when an object is added, removed or changed, a chest is opened, or something is harvested.</p>
-<p><code>WorldManager.tileAt(gx, gy)</code> reads the composed data. It returns <code>null</code> for chunks that are not generated, and <code>isSolidAt</code> treats those as solid so the player cannot walk into unloaded ground.</p>
+<p><code>WorldManager.tileAt(gx, gy)</code> reads the composed data. It returns <code>null</code> for chunks that are not generated, and <code>isSolidAt</code> treats those as solid so the player cannot walk into unloaded ground. <code>isSolidAt</code> is called many times a frame by every walker, so it reads the chunk&#39;s arrays directly instead of building a tile object.</p>
+<p>Spreading the shows out keeps a frame from stalling when several results land at once. Without a renderer listening (tests and tools), chunks are marked shown at once. The renderer also culls shown chunks outside the camera&#39;s view (see <a href="rendering.html#chunk-meshes">Rendering</a>).</p>
 <p>See also: <a href="world-generation.html">World generation</a>, <a href="objects-and-structures.html">Objects and structures</a>, <a href="architecture.html">Architecture</a></p>
 </article>
     <nav class="pager"><a class="prev" href="architecture.html"><small>Previous</small>Architecture</a><a class="next" href="world-generation.html"><small>Next</small>World generation</a></nav>

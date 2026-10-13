@@ -55,14 +55,24 @@
 <td>Story places</td>
 <td>Larger gold dots, always labelled</td>
 </tr>
+<tr>
+<td>The story&#39;s next destination</td>
+<td>A gold star, even before it is explored</td>
+</tr>
+<tr>
+<td>Markers</td>
+<td>Red pins; the tracked one is brighter</td>
+</tr>
+<tr>
+<td>The player</td>
+<td>A white dot</td>
+</tr>
 </tbody></table></div>
-<p>Discovered places come from <code>WorldManager.known</code>, a register of every place the player has found that is still standing, loaded or not. It is saved, so the map keeps every dot across reloads. When a known place regenerates after a reload (same region visit), it comes back already discovered, with no second &quot;Discovered&quot; notice or XP. When it is discarded, it leaves the register and the lantern remembers it. A known place that never comes back once its whole neighbourhood is loaded (its area changed while the game was closed) is also turned into a lantern memory.
-| The story&#39;s next destination | A gold star, even before it is explored |
-| Markers | Red pins; the tracked one is brighter |
-| The player | A white dot |</p>
-<p>Drag to pan, scroll to zoom (2 to 40 pixels per chunk, opening at 16). The tile coordinates under the cursor show below the map. &quot;Centre on me&quot; recentres on the player.</p>
+<p>Discovered places come from <code>WorldManager.known</code>, a register of every place the player has found that is still standing, loaded or not. It is saved, so the map keeps every dot across reloads. When a known place regenerates after a reload (same region visit), it comes back already discovered, with no second &quot;Discovered&quot; notice or XP. When it is discarded, it leaves the register and the lantern remembers it. A known place that never comes back once its whole neighbourhood is loaded (its area changed while the game was closed) is also turned into a lantern memory.</p>
+<p>Drag to pan. Zoom with the + and − buttons, the mouse wheel, or a two-finger pinch on the map (2 to 40 pixels per chunk, opening at 16). The tile coordinates under the cursor show below the map. &quot;Centre on me&quot; recentres on the player.</p>
+<p>Pointer positions are measured against the canvas&#39;s shown size, so taps and markers land in the right place when a small screen shows the map scaled down. Redraws are batched: however many pointer or wheel events arrive, the map draws at most once per frame (<code>requestDraw</code>).</p>
 <h2 id="markers">Markers<a class="anchor" href="#markers" aria-label="Link to this section">#</a></h2>
-<p>Clicking the map without dragging drops a marker there, named &quot;Marker N&quot;. The list beside the map tracks or removes each one. A tracked marker gets a line with a direction arrow in the quest tracker.</p>
+<p>Clicking or tapping the map without dragging drops a marker there, named &quot;Marker N&quot;. The list beside the map tracks or removes each one. A tracked marker gets a line with a direction arrow in the quest tracker.</p>
 <h2 id="compass">Compass<a class="anchor" href="#compass" aria-label="Link to this section">#</a></h2>
 <p>The compass sits at the top left of the HUD. North is always up (the view never rotates). The needle points toward the story&#39;s current objective, or, if there is none, the tracked marker. Next to it are the player&#39;s tile coordinates and the destination&#39;s name.</p>
 <h2 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h2>

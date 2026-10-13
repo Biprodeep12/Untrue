@@ -25,7 +25,8 @@ interface Harvest {
   /** Prompt word, and the word shown while it runs. */
   action: string;
   verb: string;
-  drops(rng: Rng, tier: number): Drops;
+  /** `band`: the difficulty band where it grows; rare finds get likelier further out. */
+  drops(rng: Rng, tier: number, band: number): Drops;
 }
 
 const tree: Harvest = {
@@ -77,9 +78,10 @@ const HARVESTS: Partial<Record<number, Harvest>> = {
     minTier: 1,
     action: 'Mine',
     verb: 'Mining',
-    drops: (rng, tier) => {
+    drops: (rng, tier, band) => {
       const roll = rng.next();
-      const ore = tier >= 2 && roll < 0.15 ? Items.goldOre : roll < 0.55 ? Items.coal : Items.ironOre;
+      const gold = 0.12 + 0.05 * band;
+      const ore = tier >= 2 && roll < gold ? Items.goldOre : roll < gold + 0.4 ? Items.coal : Items.ironOre;
       return [[ore, rng.int(1, 2)]];
     },
   },
@@ -89,7 +91,10 @@ const HARVESTS: Partial<Record<number, Harvest>> = {
     minTier: 2,
     action: 'Mine',
     verb: 'Mining',
-    drops: (rng) => (rng.chance(0.08) ? [[Items.crystal, 1], [Items.gem, 1]] : [[Items.crystal, 1]]),
+    drops: (rng, _tier, band) => {
+      const crystals = 1 + (rng.chance(0.15 * band) ? 1 : 0);
+      return rng.chance(0.06 + 0.03 * band) ? [[Items.crystal, crystals], [Items.gem, 1]] : [[Items.crystal, crystals]];
+    },
   },
   [Deco.Barrel]: { seconds: 0.8, minTier: 0, action: 'Break', verb: 'Breaking', drops: () => [] },
   [Deco.Treasure]: { seconds: 1.6, minTier: 0, action: 'Dig', verb: 'Digging', drops: (rng) => [[Items.coin, rng.int(10, 40)], ...rollChest(rng, 2)] },
@@ -147,9 +152,13 @@ export class GatheringSystem {
   /** The harvest in progress. */
   current: Extract<Interaction, { kind: 'harvest' }> | null = null;
   elapsed = 0;
+  /** The difficulty band of a tile; indoors, the game points it at the door outside. */
+  bandAt: (gx: number, gy: number) => number = difficultyBand;
   /** Something was gathered from this tile. */
   onGathered?: (deco: number, gx: number, gy: number) => void;
   onChest?: (gx: number, gy: number) => void;
+  /** What does not fit in the bag goes here (on the ground); lost without it. */
+  overflow?: (item: ItemDef, count: number) => void;
   /** Where gathering happens: the world, or the mine the player is in. */
   ground: Ground;
   /** For the Forager skill. */
@@ -212,7 +221,7 @@ export class GatheringSystem {
     this.current = null;
     this.vitals.spend(Math.min(STAMINA_COST, this.vitals.stamina));
     const rng = new Rng(this.ground.seedAt(c.gx, c.gy));
-    const drops = c.deco === Deco.Barrel ? rollBarrel(rng) : c.harvest.drops(rng, c.tier);
+    const drops = c.deco === Deco.Barrel ? rollBarrel(rng) : c.harvest.drops(rng, c.tier, this.bandAt(c.gx, c.gy));
     // Foragers find a little more on plants.
     const forager = 0.3 * (this.progression?.rank('forager') ?? 0);
     const plant = c.harvest.action === 'Pick' || c.harvest.action === 'Harvest';
@@ -228,7 +237,9 @@ export class GatheringSystem {
     for (const [item, count] of drops) {
       const left = this.inv.add(item, count);
       if (count - left > 0) this.notify(`+${count - left} ${item.name}`);
-      if (left > 0) this.notify(`Bag full: lost ${left} ${item.name}`);
+      if (left <= 0) continue;
+      if (this.overflow) this.overflow(item, left);
+      else this.notify(`Bag full: lost ${left} ${item.name}`);
     }
   }
 }

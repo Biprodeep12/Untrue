@@ -30,8 +30,13 @@ interface Particle {
 
 export class ParticleSystem {
   readonly view = new Container();
-  private readonly veil = new Graphics();
-  private readonly flash = new Graphics();
+  /** Tinted white sprites: changing them costs nothing, unlike redrawing a Graphics. */
+  private readonly veil = new Sprite(Texture.WHITE);
+  private readonly flash = new Sprite(Texture.WHITE);
+  /** Particles not in use, kept for later instead of destroyed. */
+  private readonly spare: Particle[] = [];
+  /** Lightning flashes the screen; off for players sensitive to flashes. */
+  flashes = true;
   private readonly layer = new Container();
   private readonly particles: Particle[] = [];
   private readonly textures: Record<Style['texture'], Texture>;
@@ -59,26 +64,36 @@ export class ParticleSystem {
   }
 
   lightning(): void {
-    this.flashLeft = 0.25;
+    if (this.flashes) this.flashLeft = 0.25;
   }
 
   /** `strength` fades weather in and out; `effects` false hides particles (low quality). */
   update(dt: number, kind: WeatherKind, strength: number, effects: boolean): void {
     const style = STYLES[kind];
     const veilColor = style?.veil ?? VEILS[kind];
-    this.veil.clear();
-    if (veilColor !== undefined && strength > 0) {
-      this.veil.rect(0, 0, this.width, this.height).fill({ color: veilColor, alpha: WEATHER[kind].veil * strength * 0.8 + (style ? 0.08 : 0) });
+    this.veil.visible = veilColor !== undefined && strength > 0;
+    if (this.veil.visible) {
+      this.veil.setSize(this.width, this.height);
+      this.veil.tint = veilColor!;
+      this.veil.alpha = WEATHER[kind].veil * strength * 0.8 + (style ? 0.08 : 0);
     }
 
     const want = effects && style ? Math.round(style.count * strength * Math.min(1, (this.width * this.height) / (480 * 270))) : 0;
     while (this.particles.length < want) {
-      const sprite = new Sprite();
-      this.layer.addChild(sprite);
-      this.particles.push({ sprite, vx: 0, vy: 0 });
-      this.respawn(this.particles[this.particles.length - 1], style!, true);
+      let p = this.spare.pop();
+      if (!p) {
+        p = { sprite: new Sprite(), vx: 0, vy: 0 };
+        this.layer.addChild(p.sprite);
+      }
+      p.sprite.visible = true;
+      this.particles.push(p);
+      this.respawn(p, style!, true);
     }
-    while (this.particles.length > want) this.particles.pop()!.sprite.destroy();
+    while (this.particles.length > want) {
+      const p = this.particles.pop()!;
+      p.sprite.visible = false;
+      this.spare.push(p);
+    }
     for (const p of this.particles) {
       if (style && p.sprite.texture !== this.textures[style.texture]) this.respawn(p, style, true);
       p.sprite.x += p.vx * dt;
@@ -87,8 +102,11 @@ export class ParticleSystem {
     }
 
     this.flashLeft = Math.max(0, this.flashLeft - dt);
-    this.flash.clear();
-    if (this.flashLeft > 0) this.flash.rect(0, 0, this.width, this.height).fill({ color: 0xffffff, alpha: (this.flashLeft / 0.25) * 0.7 });
+    this.flash.visible = this.flashLeft > 0;
+    if (this.flash.visible) {
+      this.flash.setSize(this.width, this.height);
+      this.flash.alpha = (this.flashLeft / 0.25) * 0.7;
+    }
   }
 
   private respawn(p: Particle, style: Style, anywhere: boolean): void {

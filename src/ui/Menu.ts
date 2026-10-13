@@ -1,9 +1,11 @@
 // Main menu (spec 7.2): a full-screen wood panel with tabs for inventory,
 // crafting, skills, quests, the map, the lantern, settings and about.
 
+import { ACTION_LABELS, bindings, DEFAULT_KEYS, keyName, RESERVED_KEYS, type Action } from '../game/Keys';
 import type { Settings } from '../game/Settings';
 import type { Memory } from '../story/StorySystem';
-import { itemById, Items, RARITY_NAMES, weightOf, type EquipSlot, type ItemDef } from '../items/Items';
+import { SPECIES } from '../entities/Species';
+import { ELEMENT_NAMES, itemById, Items, RARITY_NAMES, weightOf, type EquipSlot, type ItemDef } from '../items/Items';
 import { armorCell, Dir, playerCell } from '../rendering/Atlas';
 import { MAX_RANK, SKILLS, type Progression, type SkillId } from '../systems/Progression';
 import { hasInputs, RECIPES, STATION_NAMES, type Recipe, type Station } from '../systems/CraftingSystem';
@@ -15,6 +17,7 @@ import { MapView, type MapSource } from './MapView';
 type Tab = 'inventory' | 'crafting' | 'skills' | 'quests' | 'map' | 'lantern' | 'settings' | 'about';
 
 export interface QuestView {
+  id: string;
   title: string;
   giver: string;
   text: string;
@@ -26,7 +29,8 @@ export interface QuestView {
 export interface MenuActions {
   /** Stations within reach right now. */
   stations(): ReadonlySet<Station>;
-  craft(recipe: Recipe): void;
+  /** Crafts `times` batches, or as many as possible. */
+  craft(recipe: Recipe, times?: number): void;
   use(slot: number): void;
   /** Drops a whole stack on the ground. */
   drop(slot: number): void;
@@ -36,11 +40,15 @@ export interface MenuActions {
   learn(id: SkillId): void;
   notify(text: string): void;
   quests(): QuestView[];
+  abandon(id: string): void;
   /** Places the world forgot and the lantern kept. */
   memories(): readonly Memory[];
   map: MapSource;
   settings: Settings;
 }
+
+/** The legendary creatures listed in the Quests tab. */
+const LEGENDS = [SPECIES.stag, SPECIES.alphaWolf, SPECIES.duneTyrant, SPECIES.ancientGolem, SPECIES.guardian];
 
 const SLOT_NAMES: Record<EquipSlot, string> = { head: 'Head', chest: 'Chest', legs: 'Legs', feet: 'Feet', offhand: 'Off hand' };
 /** Faded stand-ins shown in empty equipment slots. */
@@ -58,10 +66,12 @@ const VOLUME_LABELS: Array<['music' | 'sfx', string]> = [
   ['sfx', 'Sound effects volume'],
 ];
 
-const SETTING_LABELS: Array<['lighting' | 'weather' | 'fps30' | 'help', string]> = [
-  ['lighting', 'Lighting and night darkness'],
+const SETTING_LABELS: Array<['lighting' | 'weather' | 'particles' | 'fps30' | 'flashes' | 'help', string]> = [
+  ['lighting', 'Lighting (off: a plain night tint)'],
   ['weather', 'Weather particles'],
+  ['particles', 'Hit and dust particles'],
   ['fps30', 'Cap at 30 frames per second'],
+  ['flashes', 'Screen flashes (lightning, getting hurt)'],
   ['help', 'Show the controls bar'],
 ];
 
@@ -90,22 +100,20 @@ export class Menu {
         <button class="menu-close" title="Close">✕</button>
       </div>`;
     const tabBar = this.root.querySelector('.menu-tabs')!;
-    for (const [id, label, ready] of [
-      ['inventory', 'Inventory', true],
-      ['crafting', 'Crafting', true],
-      ['skills', 'Skills', true],
-      ['quests', 'Quests', true],
-      ['map', 'Map', true],
-      ['lantern', 'Lantern', true],
-      ['settings', 'Settings', true],
-      ['about', 'About', true],
+    for (const [id, label] of [
+      ['inventory', 'Inventory'],
+      ['crafting', 'Crafting'],
+      ['skills', 'Skills'],
+      ['quests', 'Quests'],
+      ['map', 'Map'],
+      ['lantern', 'Lantern'],
+      ['settings', 'Settings'],
+      ['about', 'About'],
     ] as const) {
       const b = document.createElement('button');
       b.className = 'menu-tab';
       b.textContent = label;
-      b.disabled = !ready;
-      if (!ready) b.title = 'Coming in a later phase';
-      else b.addEventListener('click', () => this.show(id));
+      b.addEventListener('click', () => this.show(id));
       tabBar.appendChild(b);
       this.tabs.set(id, b);
     }
@@ -217,7 +225,7 @@ export class Menu {
       const s = this.inv.slots[i];
       const el = document.createElement('button');
       el.className = 'slot' + (i < HOTBAR_SIZE ? ' hot' : '') + (i === this.selected ? ' selected' : '');
-      el.appendChild(slotContent(this.atlas, s?.item ?? null, s?.count ?? 0));
+      el.appendChild(slotContent(this.atlas, s?.item ?? null, s?.count ?? 0, s?.durability));
       el.addEventListener('click', () => {
         // Click one slot, then another, to move or merge.
         if (this.selected !== null && this.selected !== i) {
@@ -235,6 +243,16 @@ export class Menu {
     const load = document.createElement('p');
     load.className = 'hint inv-load' + (weight > capacity ? ' over' : '');
     load.textContent = `Load ${Math.round(weight)} / ${capacity}` + (weight > capacity ? ' · too heavy: you move slowly and cannot run' : '');
+    const sort = document.createElement('button');
+    sort.className = 'btn inv-sort';
+    sort.textContent = 'Sort bag';
+    sort.title = 'Tidy everything below the hotbar';
+    sort.addEventListener('click', () => {
+      this.inv.sort();
+      this.selected = null;
+      this.render(true);
+    });
+    load.appendChild(sort);
     wrap.append(grid, this.details(), load);
     return wrap;
   }
@@ -256,12 +274,17 @@ export class Menu {
     if (item.tool) effects.push(`Tier ${item.tool.tier} ${item.tool.kind}, used automatically`);
     if (item.armor) effects.push(`+${Math.round(item.armor * 100)}% armor when worn`);
     if (item.shield) effects.push(`Blocks ${Math.round((1 - item.shield.pass) * 100)}% of a blow`);
+    const w = item.weapon;
+    if (w) {
+      effects.push(`${w.damage} ${w.element ? `${ELEMENT_NAMES[w.element].toLowerCase()} ` : ''}damage`, `${w.kind === 'bow' ? 'range' : 'reach'} ${w.reach} tiles`, `${+(1 / w.cooldown).toFixed(1)} hits/s`);
+      if (s.durability !== undefined) effects.push(`Durability ${s.durability}/${w.durability}`);
+    }
     effects.push(`Weight ${+(weightOf(item) * s.count).toFixed(2)}`);
     const info = document.createElement('div');
     info.innerHTML = `<h3>${item.name}</h3><div class="rarity r${item.rarity}">${RARITY_NAMES[item.rarity]}</div>
       <p>${item.description}</p>${effects.length ? `<p class="effects">${effects.join(' · ')}</p>` : ''}`;
     box.appendChild(info);
-    if (item.food) {
+    if (item.food || item === Items.schematic) {
       const use = document.createElement('button');
       use.className = 'btn';
       use.textContent = 'Use';
@@ -300,7 +323,9 @@ export class Menu {
     const wrap = document.createElement('div');
     const p = this.actions.progression;
     const points = p.skillPoints;
-    wrap.innerHTML = `<p class="hint">Each level gives a skill point. ${points > 0 ? `<b>${points} to spend.</b>` : 'No points to spend: level up to earn more.'}</p>`;
+    const mastered = SKILLS.every((d) => p.rank(d.id) >= MAX_RANK);
+    const note = mastered ? 'Every skill is mastered.' : points > 0 ? `<b>${points} to spend.</b>` : 'No points to spend: level up to earn more.';
+    wrap.innerHTML = `<p class="hint">Each level gives a skill point. ${note}</p>`;
     for (const def of SKILLS) {
       const rank = p.rank(def.id);
       const row = document.createElement('div');
@@ -329,10 +354,8 @@ export class Menu {
   private questsView(): HTMLElement {
     const wrap = document.createElement('div');
     const quests = this.actions.quests();
-    if (!quests.length) {
-      wrap.innerHTML = '<p class="hint">No quests yet. Villagers with a ! over their heads have work for you.</p>';
-      return wrap;
-    }
+    if (!quests.length) wrap.innerHTML = '<p class="hint">No quests yet. Villagers with a ! over their heads have work for you.</p>';
+    wrap.appendChild(this.legendsView());
     for (const q of quests) {
       const box = document.createElement('div');
       box.className = 'quest' + (q.done ? ' done' : '');
@@ -344,9 +367,34 @@ export class Menu {
       box.querySelector('.quest-text')!.textContent = q.text;
       box.querySelector('.quest-progress')!.textContent = q.done ? 'Complete' : q.progress;
       box.querySelector('.quest-reward')!.textContent = `Reward: ${reward}`;
+      if (!q.done) {
+        const give = document.createElement('button');
+        give.className = 'btn quest-abandon';
+        give.textContent = 'Abandon';
+        give.addEventListener('click', () => {
+          if (!confirm(`Abandon "${q.title}"?`)) return;
+          this.actions.abandon(q.id);
+          this.render(true);
+        });
+        box.appendChild(give);
+      }
       wrap.appendChild(box);
     }
     return wrap;
+  }
+
+  /** Legendary creatures: a goal for the far lands, during the story and after. */
+  private legendsView(): HTMLElement {
+    const box = document.createElement('div');
+    box.className = 'legends';
+    const { trophies } = this.actions.progression;
+    const rows = LEGENDS.map((sp) => {
+      const n = trophies[sp.id] ?? 0;
+      return `<li class="${n ? 'have' : ''}">${n ? '✓' : '○'} ${sp.name}${n > 1 ? ` ×${n}` : ''}</li>`;
+    }).join('');
+    const found = LEGENDS.filter((sp) => trophies[sp.id]).length;
+    box.innerHTML = `<h4>Legends of the land (${found}/${LEGENDS.length})</h4><p class="hint">Rare and mighty, they roam further out, each in its own land. Arenas hold a guardian.</p><ul>${rows}</ul>`;
+    return box;
   }
 
   private lanternView(): HTMLElement {
@@ -382,21 +430,91 @@ export class Menu {
       row.append(box, document.createTextNode(label));
       wrap.appendChild(row);
     }
-    for (const [key, label] of VOLUME_LABELS) {
+    const slider = (label: string, min: number, max: number, step: number, value: number, set: (v: number) => void) => {
       const row = document.createElement('label');
       row.className = 'setting';
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = '0';
-      slider.max = '1';
-      slider.step = '0.05';
-      slider.value = String(settings.values[key]);
-      slider.addEventListener('input', () => settings.set(key, Number(slider.value)));
-      row.append(document.createTextNode(label), slider);
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = String(min);
+      input.max = String(max);
+      input.step = String(step);
+      input.value = String(value);
+      input.addEventListener('input', () => set(Number(input.value)));
+      row.append(document.createTextNode(label), input);
       wrap.appendChild(row);
-    }
+    };
+    for (const [key, label] of VOLUME_LABELS) slider(label, 0, 1, 0.05, settings.values[key], (v) => settings.set(key, v));
+    // Applied on release: resizing under the finger would move the slider away.
+    const size = document.createElement('label');
+    size.className = 'setting';
+    const sizeInput = document.createElement('input');
+    sizeInput.type = 'range';
+    sizeInput.min = '0.8';
+    sizeInput.max = '1.5';
+    sizeInput.step = '0.1';
+    sizeInput.value = String(settings.values.uiScale);
+    sizeInput.addEventListener('change', () => settings.set('uiScale', Number(sizeInput.value)));
+    size.append(document.createTextNode('Text and HUD size'), sizeInput);
+    wrap.appendChild(size);
     wrap.insertAdjacentHTML('beforeend', '<p class="hint">Turn effects off for smoother play on older phones and laptops.</p>');
+    if (!matchMedia('(pointer: coarse)').matches) wrap.appendChild(this.keysView());
     return wrap;
+  }
+
+  /** Key bindings: click an action, then press its new key. */
+  private keysView(): HTMLElement {
+    const { settings } = this.actions;
+    const box = document.createElement('div');
+    box.className = 'keys';
+    box.innerHTML = '<h4>Keys</h4><p class="hint">Click a key, then press the new one (Esc cancels). Arrow keys always move.</p>';
+    const keys = bindings(settings.values.keys);
+    for (const action of Object.keys(ACTION_LABELS) as Action[]) {
+      const row = document.createElement('div');
+      row.className = 'key-row';
+      const name = document.createElement('span');
+      name.textContent = ACTION_LABELS[action];
+      const b = document.createElement('button');
+      b.className = 'btn key-btn';
+      b.textContent = keyName(keys[action][0]);
+      b.addEventListener('click', () => {
+        b.textContent = 'Press a key…';
+        const capture = (e: KeyboardEvent) => {
+          // Taken before the game sees it, so Esc does not close the menu.
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          window.removeEventListener('keydown', capture, true);
+          if (e.code === 'Escape') {
+            b.textContent = keyName(keys[action][0]);
+            return;
+          }
+          if (RESERVED_KEYS.has(e.code)) {
+            this.actions.notify(`${keyName(e.code)} is kept for the game`);
+            b.textContent = keyName(keys[action][0]);
+            return;
+          }
+          const custom = { ...settings.values.keys };
+          // A key does one thing: the action that had it gets the old key back.
+          for (const other of Object.keys(DEFAULT_KEYS) as Action[]) {
+            if (other !== action && bindings(custom)[other][0] === e.code) custom[other] = keys[action][0];
+          }
+          custom[action] = e.code;
+          settings.set('keys', custom);
+          this.render(true);
+        };
+        window.addEventListener('keydown', capture, true);
+      });
+      row.append(name, b);
+      box.appendChild(row);
+    }
+    const reset = document.createElement('button');
+    reset.className = 'btn';
+    reset.textContent = 'Reset keys';
+    reset.addEventListener('click', () => {
+      settings.set('keys', {});
+      this.render(true);
+    });
+    box.appendChild(reset);
+    return box;
   }
 
   private craftingView(): HTMLElement {
@@ -408,7 +526,14 @@ export class Menu {
     head.className = 'hint';
     head.textContent = near.length ? `Nearby: ${near.join(', ')}` : 'No station nearby. Campfires are found in camps; anvils in villages and castles.';
     wrap.appendChild(head);
+    const known = this.actions.progression.recipes;
+    let hidden = 0;
     for (const r of RECIPES) {
+      // Rare recipes stay hidden until a Forgotten Schematic teaches them.
+      if (r.rare && !known.has(r.output.id)) {
+        hidden++;
+        continue;
+      }
       const row = document.createElement('div');
       const atStation = stations.has(r.station);
       const ready = atStation && hasInputs(this.inv, r);
@@ -429,7 +554,26 @@ export class Menu {
         this.render(true);
       });
       row.append(text, btn);
+      // As many as the bag allows, up to 20 at once.
+      const most = atStation ? Math.min(20, ...r.inputs.map(([item, n]) => Math.floor(this.inv.count(item) / n))) : 0;
+      if (most > 1) {
+        const many = document.createElement('button');
+        many.className = 'btn';
+        many.textContent = `×${most}`;
+        many.title = `Craft ${most}`;
+        many.addEventListener('click', () => {
+          this.actions.craft(r, most);
+          this.render(true);
+        });
+        row.appendChild(many);
+      }
       wrap.appendChild(row);
+    }
+    if (hidden) {
+      const more = document.createElement('p');
+      more.className = 'hint';
+      more.textContent = `${hidden} rare recipe${hidden > 1 ? 's' : ''} still to discover: Forgotten Schematics teach them. They turn up in old chests and on legendary creatures.`;
+      wrap.appendChild(more);
     }
     return wrap;
   }

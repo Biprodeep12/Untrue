@@ -6,6 +6,8 @@ import { SimplexNoise } from './Noise';
 import { hash, hash3, Rng, Stream, unit } from './Random';
 import { BiomeType, Deco, Ground, groundTile, isWater, paletteOf, Tile } from './Tiles';
 
+/** Marshes keep at least this far (tiles) from the start. */
+const MARSH_MIN_DISTANCE = 200;
 /** Chunks around the origin that are always Forest: the cozy safe zone. */
 const SAFE_ZONE_CHUNKS = 6;
 const MOUNTAIN = 0.52;
@@ -406,9 +408,10 @@ export function generateChunk(fields: TerrainFields, req: ChunkRequest): ChunkRe
       }
       // Worn edges: the trail spills a little onto the ground beside it.
       const onTrail = trail < 0 || (trail < 0.6 && unit(hash3(req.worldSeed ^ 0x7a11, gx, gy)) < 0.3);
-      // Landscape zones on open ground: meadows and deep woods, dunes, snowfields.
+      // Landscape zones on open ground: meadows and deep woods, marshes, dunes, snowfields.
       let open = 0;
       let deep = 0;
+      let marsh = 0;
 
       let tile: number;
       if (inRiver) {
@@ -434,6 +437,16 @@ export function generateChunk(fields: TerrainFields, req: ChunkRequest): ChunkRe
         } else if (d > 0.38 - open * 0.3) kind = Ground.Alt;
         else if (d < -0.64) kind = Ground.Detail;
         tile = groundTile(palette, kind);
+        // Marshes: low forest dotted with shallow pools, away from the start.
+        if (type === BiomeType.Forest && gx * gx + gy * gy > MARSH_MIN_DISTANCE ** 2) {
+          marsh = smooth((zone.noise2(gx / 150 - 511, gy / 150 + 263) - 0.4) / 0.15);
+          if (marsh > 0) {
+            // No pools by rivers: bridges must land on dry ground.
+            const byRiver = riverW > 0 && riverD < riverW + 8;
+            if (!byRiver && detail.noise2(gx / 6 + 71, gy / 6 - 29) > 0.8 - marsh * 0.55) tile = Tile.Water;
+            else if (d < -0.3 + marsh * 0.4) tile = groundTile(palette, Ground.Detail);
+          }
+        }
       }
       // Bridges cross rivers here and there.
       if ((isWater(tile) || tile === Tile.Ice || tile === Tile.Path || (tile < Tile.Water && tile % 4 === Ground.Shore)) && riverW > 0) {
@@ -452,14 +465,16 @@ export function generateChunk(fields: TerrainFields, req: ChunkRequest): ChunkRe
       let acc: number;
       if (type === BiomeType.Forest) {
         // Meadows are open and flowery, deep woods dark with pines and mushrooms.
-        acc = (0.01 + density * 0.17) * (1 - open * 0.95) + deep * 0.22;
+        // Marshes: few trees, thick with bushes, reeds (dead brush) and mushrooms.
+        acc = ((0.01 + density * 0.17) * (1 - open * 0.95) + deep * 0.22) * (1 - marsh * 0.75);
         if (rocky) acc *= 0.4;
         if (r < acc) {
-          const pine = unit(hash3(decoSeed ^ 0x5bd1, lx, ly)) < 0.18 + deep * 0.3;
+          const pine = !marsh && unit(hash3(decoSeed ^ 0x5bd1, lx, ly)) < 0.18 + deep * 0.3;
           deco = pine ? Deco.Pine : variant ? Deco.OakAutumn : Deco.Oak;
-        } else if (r < (acc += nearWater ? 0.05 : 0.02)) deco = Deco.Bush;
+        } else if (r < (acc += (nearWater ? 0.05 : 0.02) + marsh * 0.06)) deco = Deco.Bush;
+        else if (r < (acc += marsh * 0.05)) deco = Deco.DeadBush;
         else if (r < (acc += 0.015 + open * 0.07 + (nearWater ? 0.02 : 0))) deco = Deco.Flowers;
-        else if (r < (acc += 0.007 + deep * 0.025)) deco = Deco.Mushroom;
+        else if (r < (acc += 0.007 + deep * 0.025 + marsh * 0.03)) deco = Deco.Mushroom;
         else if (r < (acc += rocky ? 0.05 : 0.004)) deco = Deco.Stone;
         else if (r < acc + (rocky ? 0.006 : 0.0015)) deco = Deco.Ore;
       } else if (type === BiomeType.Desert) {

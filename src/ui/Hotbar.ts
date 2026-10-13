@@ -8,6 +8,9 @@ export class Hotbar {
   selected = 0;
   onUse?: (slot: number) => void;
   private readonly slots: HTMLElement[] = [];
+  /** The selected item's name, shown briefly above the bar. */
+  private readonly label: HTMLElement;
+  private labelTimer = 0;
   private drawnVersion = -1;
 
   constructor(
@@ -28,6 +31,9 @@ export class Hotbar {
       bar.appendChild(el);
       this.slots.push(el);
     }
+    this.label = document.createElement('div');
+    this.label.className = 'hotbar-name';
+    bar.appendChild(this.label);
     root.appendChild(bar);
     this.select(0);
   }
@@ -35,6 +41,12 @@ export class Hotbar {
   select(i: number): void {
     this.selected = i;
     this.slots.forEach((el, n) => el.classList.toggle('selected', n === i));
+    const s = this.inv.slots[i];
+    const durability = s?.durability !== undefined && s.item.weapon ? ` · ${s.durability}/${s.item.weapon.durability}` : '';
+    this.label.textContent = s ? `${s.item.name}${durability}` : '';
+    this.label.classList.toggle('show', !!s);
+    clearTimeout(this.labelTimer);
+    this.labelTimer = window.setTimeout(() => this.label.classList.remove('show'), 1600);
   }
 
   render(): void {
@@ -42,7 +54,7 @@ export class Hotbar {
     this.drawnVersion = this.inv.version;
     this.slots.forEach((el, i) => {
       const s = this.inv.slots[i];
-      el.replaceChildren(slotContent(this.atlas, s?.item ?? null, s?.count ?? 0));
+      el.replaceChildren(slotContent(this.atlas, s?.item ?? null, s?.count ?? 0, s?.durability));
       const key = document.createElement('span');
       key.className = 'key';
       key.textContent = String(i + 1);

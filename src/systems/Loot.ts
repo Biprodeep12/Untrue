@@ -19,7 +19,7 @@ const POOLS: Record<ItemRarity, Pool> = {
   [ItemRarity.Common]: [[Items.wood, 2, 5], [Items.stone, 2, 5], [Items.berries, 2, 4], [Items.herb, 1, 3], [Items.coal, 1, 3], [Items.mushroom, 1, 3], [Items.arrow, 3, 8]],
   [ItemRarity.Uncommon]: [[Items.ironOre, 1, 3], [Items.bandage, 1, 2], [Items.roastMushroom, 1, 2], [Items.ironIngot, 1, 2], [Items.stoneAxe, 1, 1], [Items.woodenSword, 1, 1], [Items.antidote, 1, 2], [Items.leatherArmor, 1, 1], [Items.leatherCap, 1, 1], [Items.leatherBoots, 1, 1], [Items.woodenShield, 1, 1]],
   [ItemRarity.Rare]: [[Items.goldOre, 1, 2], [Items.potion, 1, 1], [Items.stew, 1, 2], [Items.stonePickaxe, 1, 1], [Items.bow, 1, 1], [Items.leatherPants, 1, 1], [Items.ironHelmet, 1, 1], [Items.ironBoots, 1, 1]],
-  [ItemRarity.Epic]: [[Items.crystal, 1, 1], [Items.gem, 1, 1], [Items.ironPickaxe, 1, 1], [Items.ironAxe, 1, 1], [Items.ironSword, 1, 1], [Items.ironArmor, 1, 1], [Items.ironGreaves, 1, 1], [Items.ironShield, 1, 1]],
+  [ItemRarity.Epic]: [[Items.schematic, 1, 1], [Items.crystal, 1, 1], [Items.gem, 1, 1], [Items.ironPickaxe, 1, 1], [Items.ironAxe, 1, 1], [Items.ironSword, 1, 1], [Items.ironArmor, 1, 1], [Items.ironGreaves, 1, 1], [Items.ironShield, 1, 1]],
   [ItemRarity.Legendary]: [[Items.idol, 1, 1]],
 };
 

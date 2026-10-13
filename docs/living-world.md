@@ -31,6 +31,7 @@ Facing a campfire at dusk or night, E rests until 6:00. Resting:
 - costs 15 hunger and 15 thirst, and restores 40 health
 - runs the hourly weather and regrowth for the hours skipped, but no world events
 - is refused while any enemy is hunting the player (wildlife doesn't count)
+- makes this spot the player's waking spot after a collapse ([survival.md](survival.md#collapse))
 - plays a 3-second sleep transition (`src/ui/SleepOverlay.ts`): the screen fades to night over 1 second, "Z z z" drifts up for 1 second while the hours pass, then the morning fades back in over 1 second. The game is paused throughout. Beds indoors use the same transition.
 
 In the story's night stage, the Village of Graves campfire can be rested at any hour ([story.md](story.md)).
@@ -40,6 +41,10 @@ In the story's night stage, the Village of Graves campfire can be rested at any 
 `src/rendering/Lighting.ts` draws a darkness layer, coloured violet at dusk and deep blue at night, at up to 80% opacity scaled by darkness. Every light cuts a soft hole in it, and warm lights add an orange glow.
 
 Thunderstorms add up to 0.45 darkness in daytime.
+
+**The far lands are grimmer:** a faint gloom of 0.03 darkness per difficulty band (0.09 in the Extreme band) is added at all hours, so even midday out there is a little dim. The music darkens with distance too ([audio.md](audio.md#music)).
+
+By day (darkness from the clock and storms at 0.01 or less), no lights are gathered: any gloom is drawn as a plain tint.
 
 | Light source | Radius (tiles) | Warm glow |
 | --- | --- | --- |
@@ -51,7 +56,7 @@ Thunderstorms add up to 0.45 darkness in daytime.
 | Meteorite | 2.5 | some |
 | Story pieces: Pedestal, Anchor core, Monument, Book | 2.5, 7, 1.5, 2 | varies |
 
-The "Lighting and night darkness" setting turns the whole layer off.
+With the "Lighting" setting off, night is still dark, but as a plain tint (85% as strong) with no lights cut into it.
 
 ## Weather
 
@@ -117,6 +122,8 @@ Everything else stays gone until its region fully unloads and regenerates.
 - **Three villagers**, in one of three outfits. The first is the village's quest giver. Villagers wander within 9 tiles of the village centre at 2.2 tiles/s.
 - **A trader** who stays within 2 tiles of the well.
 
+**Nomad camps** (desert) get two people the same way: a traveller who offers quests, and a trader by the fire.
+
 **Schedule:** from 20:00 to 6:00, villagers and traders walk to a door and go indoors, where the player can visit them (see [buildings-and-interiors.md](buildings-and-interiors.md#residents)). In the morning they step out of their door again. Story characters have no house, so they stay out (`Npc.stayOut`).
 
 **Travelling merchant:** appears through a world event, stands still, and leaves after 180 in-game minutes.
@@ -134,7 +141,9 @@ Press E within 1.8 tiles to talk. The NPC you talk to stops and turns to face yo
 | ! | Has something new to say, or a quest to offer |
 | $ | Trader or merchant |
 | ? | Lost traveller not yet found |
-| ✓ | A collect quest is ready to hand in |
+| ✓ | A collect or find quest is ready to hand in |
+
+Marks are worked out four times a second, not every frame.
 
 ## Quests
 
@@ -144,14 +153,25 @@ Press E within 1.8 tiles to talk. The NPC you talk to stops and turns to face yo
 - Each quest giver offers one quest per in-game day. The offer is seeded by village, giver and day, so it's the same every time you ask that day.
 - The player can hold 5 active quests. A full journal turns new offers away.
 - Finished quests are dropped from the journal at the next new day.
+- An unfinished quest can be given up with **Abandon** in the Quests tab (after a confirmation), which frees its slot.
 
 | Type | Weight | Objective | Coins (base) | XP |
 | --- | --- | --- | --- | --- |
 | Collect | 3 | Bring N of a biome resource, handed in to any villager | 10 + 2N | 30 + 2N |
+| Find | 1.5 | Bring N of a rare find from the giver's band (below), handed in like a collect quest | 40 + 25 × rarity × N | 60 + 30 × rarity |
 | Slay | 3 | Kill 3–6 of a non-night species from the giver's biome | 15 + 6N | 40 + 10N |
-| Discover | 2 | Find ruins, a tower, a temple, a mine, a cabin or a lake | 30 | 60 |
+| Discover | 2 | Find ruins, a dungeon, a nomad camp, a castle, the standing stones, a tower, a temple, a mine, a cabin or a lake | 30 | 60 |
 | Clear | 1 | Clear any dungeon | 70 | 120 |
 | Rescue | 1.5 | Find a lost traveller 150–300 tiles from the village and walk them within 12 tiles of it | 60 | 150 |
+| Defend | 1, only from givers who live in a village | Accepting it starts an invasion of the village at once; driving it off completes the quest | 60 | 140 |
+
+Find quests by band (rarity: Uncommon 1, Rare 2, Epic 3):
+
+| Band | Finds (N) |
+| --- | --- |
+| 0 Easy | Gold Ore 2–3, Spirit Essence 2–3, Venom Sac 2–3 |
+| 1 Medium | Gold Ore 3–4, Crystal 1, Ice Shard 3–4 |
+| 2 and beyond | Crystal 1–2, Gemstone 1, Star Metal 1–2 |
 
 Collect resources by biome:
 
@@ -165,7 +185,7 @@ Collect resources by biome:
 - Coins are the base × (1 + 0.5 × band) × a random 0.8–1.2.
 - Each quest also rewards the first item of a chest roll at the giver's band.
 
-**Completion:** quests complete as soon as their objective is met and pay out at once, except collect quests, which are handed in through a villager's dialog.
+**Completion:** quests complete as soon as their objective is met and pay out at once, except collect and find quests, which are handed in through a villager's dialog. Rewards that do not fit in the bag are left on the ground.
 
 **Tracking:** the HUD tracker (top right, under the location) lists the story objective, any treasure waypoint and up to three quests. Rescue lines carry an arrow toward the traveller, then toward home. The menu's Quests tab lists everything with its progress and rewards.
 
@@ -177,11 +197,12 @@ Collect resources by biome:
 - **Village traders** draw from: Arrows ×10 (12c), Torches ×3 (6c), Bandage (8c), Antidote (12c), Cooked Meat ×2 (10c), Stew (14c), Wooden Sword (20c), Hunting Bow (55c), Leather Armor (60c), Stone Pickaxe (18c).
 - **Travelling merchants** add rare stock: Health Potion (35c), Iron Sword (140c), Iron Armor (220c), Iron Pickaxe (120c), Lantern (90c), Iron Ingot ×3 (30c). They also carry the first four village items.
 
-**Buying** needs enough coins; if the item doesn't fit in the bag, the purchase is undone. **Selling** goes one item at a time, and only items with a price are bought:
+**Buying** needs enough coins; if the item doesn't fit in the bag, the purchase is undone. **Selling** goes one item at a time (Sell), or the whole stack at once (All, which shows the total), and only items with a price are bought:
 
 | Item | Price |
 | --- | --- |
 | Golden Idol | 250 |
+| Star Ingot | 120 |
 | Gemstone | 60 |
 | Star Metal | 45 |
 | Crystal | 35 |
@@ -200,7 +221,7 @@ Collect resources by biome:
 | --- | --- | --- | --- |
 | Meteor | 2 | Night | A meteor streaks in and leaves a 7×7 crater 10–18 tiles away, with a Meteorite to mine |
 | Bandits | 2 | Wild, not in a village | 3–4 bandits appear 11 tiles away, already hunting |
-| Invasion | 3 | Standing in a village | 2 groups of 3 biome enemies attack from the village edges; clearing them pays 30 coins |
+| Invasion | 3 | Standing in a village | 2 groups of 3 biome enemies attack from the village edges; clearing them pays 30 coins. A defend quest starts the same invasion. |
 | Treasure | 2 | Always | An X is buried 18–32 tiles away, with a waypoint and a compass hint |
 | Merchant | 1.5 | Daytime, no merchant nearby | A travelling merchant sets up 6–11 tiles away |
 | Ancient | 1 | Wild | A 9×9 Risen Obelisk with a chest rises 12–20 tiles away |
@@ -211,7 +232,7 @@ Collect resources by biome:
 
 Event structures are temporary objects placed on open ground clear of other objects (trees and bushes under them are cleared). They come and go like any other temporary object.
 
-**Night-only structures.** The Moonwell (`NIGHT_ONLY` in `src/systems/WorldEvents.ts`) exists only at night: a 9×9 ring of pale stone around a glowing spring, with mushrooms and flowers. Every Moonwell still standing fades at the first hour of daylight. Facing it, E drinks: half of max health back, +40 thirst, poison cured and 25 XP, once per Moonwell.
+**Night-only structures.** The Moonwell (`NIGHT_ONLY` in `src/systems/WorldEvents.ts`) exists only at night: a 9×9 ring of pale stone around a glowing spring, with mushrooms and flowers. Every Moonwell still standing fades at the first hour of daylight. Facing it, E drinks: half of max health back, +40 thirst, poison cured and 25 XP, once per Moonwell (the used ones are saved). Drinking also makes it the waking spot after a collapse.
 
 ## Settings
 
@@ -219,12 +240,18 @@ The menu's Settings tab (`src/game/Settings.ts`) stores these in this browser's 
 
 | Setting | Default |
 | --- | --- |
-| Lighting and night darkness | on |
+| Lighting (off: a plain night tint) | on |
 | Weather particles (also fireflies and falling leaves) | on |
-| Cap at 30 frames per second | off |
+| Hit and dust particles (bursts) | on |
+| Cap at 30 frames per second | off (the cap is otherwise 60) |
+| Screen flashes (lightning, getting hurt) | on, or off when the system asks for reduced motion |
 | Show the controls bar | on |
 | Music volume | 0.35 |
 | Sound effects volume | 0.6 |
+| Text and HUD size | 1 (0.8 to 1.5; applied when the slider is let go) |
+| Keys (desktop only) | WASD, Shift, J, K, Space, E, F, Q, Tab, M, = and − |
+
+The size setting zooms the whole HTML interface (`#ui`, CSS `zoom`); the touch stick undoes it so it stays where the thumb is. The keys are described in [README.md](README.md#controls).
 
 `?fps=30` in the URL also turns on the frame cap. For testing, `?hour=22` sets the clock and `?weather=storm` forces the weather in every biome.
 

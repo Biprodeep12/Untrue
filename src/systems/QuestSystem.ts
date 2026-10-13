@@ -1,5 +1,6 @@
-// Generated quests (spec 6.3): collect, slay, discover, clear a dungeon, and
-// find a lost traveller and bring them home. Quest records persist; the
+// Generated quests (spec 6.3): collect, find a rare item, slay, discover a
+// place, clear a dungeon, defend the village, and find a lost traveller and
+// bring them home. Quest records persist; the
 // villagers who hand them out do not.
 
 import { SPECIES_LIST } from '../entities/Species';
@@ -18,6 +19,7 @@ export type Objective =
   | { kind: 'slay'; species: string; count: number; progress: number }
   | { kind: 'discover'; structure: string; label: string; done: boolean }
   | { kind: 'clear'; done: boolean }
+  | { kind: 'defend'; done: boolean }
   | { kind: 'rescue'; name: string; x: number; y: number; homeX: number; homeY: number; found: boolean };
 
 export interface Quest {
@@ -35,8 +37,18 @@ const COLLECT: Partial<Record<BiomeType, Array<[ItemDef, number, number]>>> = {
   [BiomeType.Desert]: [[Items.cactusFruit, 4, 8], [Items.chitin, 3, 5], [Items.stone, 10, 20], [Items.venom, 1, 3]],
   [BiomeType.Snow]: [[Items.iceShard, 2, 4], [Items.wood, 10, 20], [Items.hide, 3, 5], [Items.coal, 4, 8]],
 };
+/** Rare finds to bring back, by difficulty band (more and rarer further out). */
+const FIND: ReadonlyArray<ReadonlyArray<[ItemDef, number, number]>> = [
+  [[Items.goldOre, 2, 3], [Items.spiritEssence, 2, 3], [Items.venom, 2, 3]],
+  [[Items.goldOre, 3, 4], [Items.crystal, 1, 1], [Items.iceShard, 3, 4]],
+  [[Items.crystal, 1, 2], [Items.gem, 1, 1], [Items.starMetal, 1, 2]],
+];
 const DISCOVER: Array<[string, string]> = [
   ['ruins', 'ruins'],
+  ['dungeon', 'a dungeon'],
+  ['nomad-camp', 'a nomad camp'],
+  ['castle', 'a castle'],
+  ['standing-stones', 'the standing stones'],
   ['tower', 'a tower'],
   ['temple', 'a temple'],
   ['mine', 'a mine'],
@@ -52,11 +64,14 @@ export interface QuestContext {
   homeY: number;
   biome: BiomeType;
   band: number;
+  /** The giver lives in a village, which can be defended. */
+  village?: boolean;
 }
 
 /** A quest offer, seeded so the same villager offers the same job. */
 export function generateQuest(rng: Rng, ctx: QuestContext, id: string): Quest {
-  const kind = rng.weighted(['collect', 'slay', 'discover', 'clear', 'rescue'] as const, (k) => ({ collect: 3, slay: 3, discover: 2, clear: 1, rescue: 1.5 })[k])!;
+  const kind = rng.weighted(['collect', 'find', 'slay', 'discover', 'clear', 'rescue', 'defend'] as const, (k) =>
+    ({ collect: 3, find: 1.5, slay: 3, discover: 2, clear: 1, rescue: 1.5, defend: ctx.village ? 1 : 0 })[k])!;
   const scale = 1 + ctx.band * 0.5;
   const coins = (base: number) => Math.round(base * scale * rng.range(0.8, 1.2));
   let quest: Omit<Quest, 'id' | 'giver' | 'reward' | 'done'> & { coins: number; xp: number };
@@ -74,6 +89,27 @@ export function generateQuest(rng: Rng, ctx: QuestContext, id: string): Quest {
       };
       break;
     }
+    case 'find': {
+      const [item, min, max] = rng.pick(FIND[Math.min(FIND.length - 1, ctx.band)]);
+      const count = rng.int(min, max);
+      quest = {
+        title: `Find ${count > 1 ? `${count} ` : ''}${item.name}`,
+        text: `I've heard there's ${item.name.toLowerCase()} out in the far places. Find me ${count} and I'll make it worth your while.`,
+        objective: { kind: 'collect', item: item.id, count },
+        coins: coins(40 + item.rarity * 25 * count),
+        xp: 60 + item.rarity * 30,
+      };
+      break;
+    }
+    case 'defend':
+      quest = {
+        title: 'Defend the village',
+        text: "Beasts have been circling the village, and they'll come for us soon. Stand with us and drive them off.",
+        objective: { kind: 'defend', done: false },
+        coins: coins(60),
+        xp: 140,
+      };
+      break;
     case 'slay': {
       const pool = SPECIES_LIST.filter((s) => s.biomes.includes(ctx.biome) && !s.nightOnly);
       const species = rng.pick(pool.length ? pool : SPECIES_LIST.filter((s) => s.biomes.length && !s.nightOnly));
@@ -139,6 +175,8 @@ export function progressText(q: Quest, inv: Inventory): string {
       return o.done ? 'Found' : 'Not yet found';
     case 'clear':
       return o.done ? 'Cleared' : 'Not yet cleared';
+    case 'defend':
+      return o.done ? 'Defended' : 'Drive off the beasts';
     case 'rescue':
       return o.found ? 'Bring them home' : 'Search for them';
   }
@@ -169,6 +207,14 @@ export class QuestSystem {
     return true;
   }
 
+  /** Gives up an unfinished quest, freeing its slot. */
+  abandon(id: string): boolean {
+    const i = this.quests.findIndex((q) => q.id === id && !q.done);
+    if (i < 0) return false;
+    this.quests.splice(i, 1);
+    return true;
+  }
+
   onKill(speciesId: string): void {
     for (const q of this.active) {
       const o = q.objective;
@@ -191,8 +237,9 @@ export class QuestSystem {
 
   onCleared(kind: string): void {
     for (const q of this.active) {
-      if (q.objective.kind === 'clear' && kind === 'dungeon') {
-        q.objective.done = true;
+      const o = q.objective;
+      if ((o.kind === 'clear' && kind === 'dungeon') || (o.kind === 'defend' && kind === 'invasion')) {
+        o.done = true;
         this.complete(q);
       }
     }

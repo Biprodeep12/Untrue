@@ -23,7 +23,7 @@
     <article><h1 id="survival">Survival</h1>
 <p>How the player stays alive: vitals, stamina, gathering, items, the inventory, crafting, loot and light.</p>
 <h2 id="vitals">Vitals<a class="anchor" href="#vitals" aria-label="Link to this section">#</a></h2>
-<p><code>src/systems/Vitals.ts</code> keeps four bars: health, stamina, hunger and thirst. Hunger, thirst and stamina run from 0 to 100. Health runs from 0 to <code>maxHealth</code>, which starts at 100 and grows with level (see <a href="combat.html#progression">combat.md</a>).</p>
+<p><code>src/systems/Vitals.ts</code> keeps four bars: health, stamina, hunger and thirst. Hunger, thirst and stamina run from 0 to 100. Health runs from 0 to <code>maxHealth</code>, which starts at 100 and grows with level and the Toughness skill (see <a href="combat.html#progression">combat.md</a>).</p>
 <h3 id="drain">Drain<a class="anchor" href="#drain" aria-label="Link to this section">#</a></h3>
 <div class="table-wrap"><table>
 <thead>
@@ -128,7 +128,7 @@
 <li>A banner at the top centre lists the warnings, worst first; critical ones are red and blink.</li>
 <li>The bar&#39;s frame glows and pulses, its label turns red, and a critical bar shakes.</li>
 <li>Low health tints the screen edges red; critical health makes them throb like a heartbeat.</li>
-<li>Each time a bar gets worse an alarm sounds (not for stamina, which runs out often).</li>
+<li>Each time a bar gets worse an alarm sounds (<code>warn</code>; not for stamina, which runs out often).</li>
 <li>Animations stop under the system&#39;s reduced-motion setting.</li>
 </ul>
 <h3 id="status-effects">Status effects<a class="anchor" href="#status-effects" aria-label="Link to this section">#</a></h3>
@@ -144,8 +144,8 @@
 <tbody><tr>
 <td><code>poison</code></td>
 <td>−2.5 HP/s, stops healing</td>
-<td>Scorpion hits</td>
-<td>Antidote, or wait it out</td>
+<td>Hits from scorpions, Emperor Scorpions, Thorn Spiders (their webs), Ghouls and the Dune Tyrant</td>
+<td>Antidote, a Moonwell, or wait it out</td>
 </tr>
 <tr>
 <td><code>slow</code></td>
@@ -156,7 +156,13 @@
 </tbody></table></div>
 <p>Each status lasts a set number of seconds. A new hit refreshes it to whichever is longer.</p>
 <h3 id="collapse">Collapse<a class="anchor" href="#collapse" aria-label="Link to this section">#</a></h3>
-<p>When health reaches 0 the player collapses. <code>Game.collapse()</code> cancels gathering, calls <code>Vitals.revive()</code> and sends the player back to the origin. Revival sets:</p>
+<p>When health reaches 0 the player collapses. <code>Game.collapse()</code> leaves any building, cancels gathering, calls <code>Vitals.revive()</code> and sends the player to their waking spot, with an alert that stays until dismissed. The waking spot (<code>Game.respawn</code>) is the start (0, 0) until the player:</p>
+<ul>
+<li>rests at a campfire or in a bed (the spot outside the door, if indoors),</li>
+<li>drinks from a Moonwell, or</li>
+<li>reaches a new story stage.</li>
+</ul>
+<p>Each of these moves it to where the player stands (<code>Game.setRespawn</code>). It is saved as <code>player.respawn</code> (<a href="saves.html">saves.md</a>). Revival sets:</p>
 <ul>
 <li>health to 60% of <code>maxHealth</code></li>
 <li>stamina to 100</li>
@@ -180,8 +186,8 @@
 </tr>
 <tr>
 <td>Dodge roll</td>
-<td>20</td>
-<td>Needs 20 or more.</td>
+<td>20, 12% less per Nimble rank</td>
+<td>Needs the full cost.</td>
 </tr>
 <tr>
 <td>Blocking a hit</td>
@@ -270,14 +276,14 @@
 <td>4 s</td>
 <td>pickaxe</td>
 <td>1</td>
-<td>1–2 of: Coal (55%) or Iron Ore (45%); with tier 2, 15% become Gold Ore</td>
+<td>1–2 of: Gold Ore (12% + 5% per band, with tier 2 or more), Coal (the next 40%, plus the gold share below tier 2), else Iron Ore</td>
 </tr>
 <tr>
 <td>Crystal</td>
 <td>5 s</td>
 <td>pickaxe</td>
 <td>2</td>
-<td>Crystal ×1; 8% chance of a Gemstone too</td>
+<td>Crystal ×1 (×2 with a 15% chance per band); a Gemstone too, 6% + 3% per band</td>
 </tr>
 <tr>
 <td>Barrel</td>
@@ -301,9 +307,10 @@
 <td>Star Metal ×(2–3 + tier)</td>
 </tr>
 </tbody></table></div>
-<p>Below the minimum tier the prompt reads &quot;Needs a pickaxe&quot; or &quot;Needs an iron pickaxe&quot;.</p>
+<p>Below the minimum tier the prompt reads &quot;Needs a pickaxe&quot; or &quot;Needs an iron pickaxe&quot;. Tiers run from stone (1) through iron (2) to starforged (3).</p>
+<p>Rare finds get likelier further out: the band is the difficulty band where the rock stands. In a mine it is the band of the mine&#39;s door outside (<code>GatheringSystem.bandAt</code>).</p>
 <p>Drops are seeded by the tile and the region&#39;s visit counter, so the same plant gives the same drop until its region regenerates. Gathered decorations are removed through <code>WorldManager.harvest()</code>. They stay gone until the region regenerates, except plants that regrow (<a href="living-world.html#regrowth">living-world.md</a>).</p>
-<p>If the bag is full, the overflow is lost and a notice says so.</p>
+<p>If the bag is full, what does not fit is left on the ground at the player&#39;s feet (outside the door, if indoors) and a notice says so. The same goes for enemy drops (where the enemy fell), quest rewards and the village defence reward.</p>
 <h3 id="drinking">Drinking<a class="anchor" href="#drinking" aria-label="Link to this section">#</a></h3>
 <p>Facing water with nothing on it, E drinks:</p>
 <div class="table-wrap"><table>
@@ -389,19 +396,19 @@
 <td>Gold Ore</td>
 <td>Rare</td>
 <td>99</td>
-<td>Sell (12c)</td>
+<td>Star ingots; sell (12c)</td>
 </tr>
 <tr>
 <td>Crystal</td>
 <td>Epic</td>
 <td>99</td>
-<td>Sell (35c)</td>
+<td>Crystal Bow, Frost and Spirit Blades; sell (35c)</td>
 </tr>
 <tr>
 <td>Herb</td>
 <td>Common</td>
 <td>99</td>
-<td>Bandages, stew, antidote</td>
+<td>Bandages, stew, antidote, Health Potion, Frost Draught</td>
 </tr>
 <tr>
 <td>Berries</td>
@@ -452,10 +459,22 @@
 <td>+60 health</td>
 </tr>
 <tr>
+<td>Frost Draught</td>
+<td>Uncommon</td>
+<td>99</td>
+<td>+45 thirst, +10 health</td>
+</tr>
+<tr>
 <td>Iron Ingot</td>
 <td>Uncommon</td>
 <td>99</td>
 <td>Iron tools, weapons, armor, lantern</td>
+</tr>
+<tr>
+<td>Star Ingot</td>
+<td>Epic</td>
+<td>99</td>
+<td>Starforged tools, weapons and armour; sell (120c)</td>
 </tr>
 <tr>
 <td>Stone Axe</td>
@@ -482,10 +501,22 @@
 <td>Pickaxe tier 2</td>
 </tr>
 <tr>
+<td>Starforged Axe</td>
+<td>Epic</td>
+<td>1</td>
+<td>Axe tier 3</td>
+</tr>
+<tr>
+<td>Starforged Pickaxe</td>
+<td>Epic</td>
+<td>1</td>
+<td>Pickaxe tier 3</td>
+</tr>
+<tr>
 <td>Gemstone</td>
 <td>Epic</td>
 <td>99</td>
-<td>Sell (60c)</td>
+<td>Starforged Sword; sell (60c)</td>
 </tr>
 <tr>
 <td>Golden Idol</td>
@@ -506,8 +537,26 @@
 <td>Weapon</td>
 </tr>
 <tr>
+<td>Frost Blade, Venom Blade, Spirit Blade</td>
+<td>Epic</td>
+<td>1</td>
+<td>Weapons with a damage type</td>
+</tr>
+<tr>
+<td>Starforged Sword</td>
+<td>Legendary</td>
+<td>1</td>
+<td>Weapon</td>
+</tr>
+<tr>
 <td>Hunting Bow</td>
 <td>Uncommon</td>
+<td>1</td>
+<td>Weapon, uses arrows</td>
+</tr>
+<tr>
+<td>Crystal Bow</td>
+<td>Epic</td>
 <td>1</td>
 <td>Weapon, uses arrows</td>
 </tr>
@@ -566,10 +615,40 @@
 <td>Foot armour, 6%</td>
 </tr>
 <tr>
+<td>Starforged Helm</td>
+<td>Epic</td>
+<td>1</td>
+<td>Head armour, 11%</td>
+</tr>
+<tr>
+<td>Starforged Plate</td>
+<td>Legendary</td>
+<td>1</td>
+<td>Chest armour, 22%</td>
+</tr>
+<tr>
+<td>Starforged Greaves</td>
+<td>Epic</td>
+<td>1</td>
+<td>Leg armour, 14%</td>
+</tr>
+<tr>
+<td>Starforged Boots</td>
+<td>Epic</td>
+<td>1</td>
+<td>Foot armour, 9%</td>
+</tr>
+<tr>
 <td>Wooden Shield</td>
 <td>Common</td>
 <td>1</td>
 <td>Off hand: blocks 85% of a blow for 6 stamina</td>
+</tr>
+<tr>
+<td>Chitin Shield</td>
+<td>Uncommon</td>
+<td>1</td>
+<td>Off hand: blocks 90% of a blow for 5 stamina</td>
 </tr>
 <tr>
 <td>Iron Shield</td>
@@ -593,37 +672,37 @@
 <td>Hide</td>
 <td>Common</td>
 <td>99</td>
-<td>Leather armor, iron armor</td>
+<td>Leather, iron and starforged armour</td>
 </tr>
 <tr>
 <td>Spider Silk</td>
 <td>Common</td>
 <td>99</td>
-<td>Bow</td>
+<td>Bows</td>
 </tr>
 <tr>
 <td>Chitin</td>
 <td>Common</td>
 <td>99</td>
-<td>Sell (3c)</td>
+<td>Chitin Shield, Starforged Plate; sell (3c)</td>
 </tr>
 <tr>
 <td>Venom Sac</td>
 <td>Uncommon</td>
 <td>99</td>
-<td>Sell (6c)</td>
+<td>Venom Blade; sell (6c)</td>
 </tr>
 <tr>
 <td>Ice Shard</td>
 <td>Uncommon</td>
 <td>99</td>
-<td>Sell (6c)</td>
+<td>Frost Draught, Frost Blade; sell (6c)</td>
 </tr>
 <tr>
 <td>Bone</td>
 <td>Common</td>
 <td>99</td>
-<td>Sell (1c)</td>
+<td>Arrows; sell (1c)</td>
 </tr>
 <tr>
 <td>Antidote</td>
@@ -653,7 +732,7 @@
 <td>Spirit Essence</td>
 <td>Uncommon</td>
 <td>99</td>
-<td>Lantern</td>
+<td>Lantern, Health Potion, Spirit Blade; sell (8c)</td>
 </tr>
 <tr>
 <td>Wanderer&#39;s Lantern</td>
@@ -665,20 +744,27 @@
 <td>Star Metal</td>
 <td>Epic</td>
 <td>99</td>
-<td>Sell (45c)</td>
+<td>Star ingots; sell (45c)</td>
+</tr>
+<tr>
+<td>Forgotten Schematic</td>
+<td>Epic</td>
+<td>99</td>
+<td>Use it to learn a rare recipe</td>
 </tr>
 </tbody></table></div>
-<p>Sell prices come from <code>SELL_PRICES</code> in <code>src/systems/TradeSystem.ts</code>. Items without a price can&#39;t be sold.</p>
+<p>Every rare material now has a use in a recipe. Sell prices come from <code>SELL_PRICES</code> in <code>src/systems/TradeSystem.ts</code>. Items without a price can&#39;t be sold.</p>
 <h2 id="inventory-and-hotbar">Inventory and hotbar<a class="anchor" href="#inventory-and-hotbar" aria-label="Link to this section">#</a></h2>
 <p><code>src/systems/InventorySystem.ts</code> has 24 slots (<code>INVENTORY_SIZE</code>). The first 8 (<code>HOTBAR_SIZE</code>) form the hotbar.</p>
 <ul>
 <li><code>add()</code> tops up existing stacks first, then fills empty slots, and returns what didn&#39;t fit.</li>
 <li><code>remove()</code> takes from the last slots first, and only if the whole amount is there.</li>
 <li>In the menu, click a slot and then another to move it. Equal stacks merge; anything else swaps.</li>
-<li>Weapons carry <code>durability</code>, which drops by one per attack. At 0 the weapon breaks and its slot empties.</li>
+<li>Weapons carry <code>durability</code>, which drops by one per attack. At 0 the weapon breaks and its slot empties. A worn weapon shows a durability bar in its slot.</li>
+<li><strong>Sort bag</strong> (beside the load line) tidies every slot below the hotbar (<code>Inventory.sort()</code>): like items merge into full stacks (worn weapons never stack), then weapons, tools, armour, food, materials and treasure (Epic and above) follow in that order, rarest first, then by name. The hotbar is left alone.</li>
 </ul>
 <h3 id="weight">Weight<a class="anchor" href="#weight" aria-label="Link to this section">#</a></h3>
-<p>Every item has a carry weight (<code>weightOf</code> in <code>src/items/Items.ts</code>): set per item for some (coin 0.01, arrow 0.1, herb 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, lantern 1, star metal 1.5, idol 2, the Wanderer&#39;s Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10) and shields (wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.</p>
+<p>Every item has a carry weight (<code>weightOf</code> in <code>src/items/Items.ts</code>): set per item for some (coin 0.01, arrow 0.1, herb 0.1, schematic 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, star ingot 1, lantern 1, star metal 1.5, idol 2, the Wanderer&#39;s Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10; starforged boots 2, helm 3, greaves 4, plate 7) and shields (chitin 2, wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.</p>
 <p>The player can carry 100, plus 25 per Pack Mule rank. Over that the player is <strong>overloaded</strong>: 60% speed and no running, with an &quot;overloaded&quot; badge on the HUD. The bag shows the load under the grid.</p>
 <h3 id="dropping-and-picking-up">Dropping and picking up<a class="anchor" href="#dropping-and-picking-up" aria-label="Link to this section">#</a></h3>
 <ul>
@@ -693,18 +779,18 @@
 <li><strong>Equip:</strong> select an item in the bag and press <strong>Equip</strong> (or <strong>Hold in off hand</strong>), or select it and click its slot. Whatever was there goes back to the bag. Click a filled slot to take it off.</li>
 <li><strong>Armour</strong> only protects while worn: every piece adds its share, up to 60% in all (<code>armor()</code>). Equipped items still count toward carry weight.</li>
 <li><strong>Off hand:</strong> a shield (stronger blocks, see <a href="combat.html#taking-damage">combat.md</a>), or a torch or lantern. A whole stack of torches goes into the off hand, and burns down from there.</li>
-<li><strong>On the player:</strong> each worn piece is drawn over the figure in every direction and walk frame: leather in browns, iron in steel with a red crest. The off-hand item is held in the other hand (a shield at the side, a torch up, a lantern hanging), and the shield comes up in front while blocking.</li>
+<li><strong>On the player:</strong> each worn piece is drawn over the figure in every direction and walk frame: leather in browns, iron in steel with a red crest, starforged in violet plate with gold trim (<code>ARMOR_SETS</code> = 3). The off-hand item is held in the other hand (a shield at the side, a torch up, a lantern hanging), and the shield comes up in front while blocking.</li>
 <li>Saves keep what is worn. Older saves put on the best armour carried for each slot.</li>
 </ul>
-<p>Keys 1–8 select a hotbar slot. F, or tapping the selected slot again, uses it. Food is eaten; tools and other items just show a notice. The selected slot is also the weapon used for attacks.</p>
+<p>Keys 1–8 select a hotbar slot, and its name (and a weapon&#39;s durability) shows above the bar for a moment. F, or tapping the selected slot again, uses it. Food is eaten, a Forgotten Schematic is read; tools and other items just show a notice. The selected slot is also the weapon used for attacks.</p>
 <h2 id="crafting">Crafting<a class="anchor" href="#crafting" aria-label="Link to this section">#</a></h2>
 <p><code>src/systems/CraftingSystem.ts</code>. The player never builds, so stations are found in the world instead:</p>
 <ul>
 <li><strong>Campfire:</strong> found in camps and the Village of Graves.</li>
-<li><strong>Anvil:</strong> found in villages and castles.</li>
+<li><strong>Anvil:</strong> found in villages, castles and nomad camps.</li>
 </ul>
-<p>A station counts if its decoration is within 3 tiles of the player (<code>STATION_RANGE</code>). &quot;By hand&quot; recipes work anywhere. The menu&#39;s Crafting tab lists every recipe, what you have against what you need, and the station each requires.</p>
-<p>Crafting removes the inputs, then adds the output. If the output doesn&#39;t fit, everything is put back and the result is <code>full</code>.</p>
+<p>A station counts if its decoration is within 3 tiles of the player (<code>STATION_RANGE</code>). Indoors, only the room&#39;s own furniture counts, not the world outside the door. &quot;By hand&quot; recipes work anywhere. The menu&#39;s Crafting tab lists every known recipe, what you have against what you need, and the station each requires.</p>
+<p>Crafting removes the inputs, then adds the output. If the output doesn&#39;t fit, everything is put back and the result is <code>full</code>. Next to Craft, a ×N button crafts as many as the bag&#39;s materials allow, up to 20, when that is more than one.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -870,6 +956,115 @@
 <td>Anvil</td>
 <td>1 Iron Ingot, 2 Spirit Essence</td>
 </tr>
+<tr>
+<td>Health Potion</td>
+<td>1</td>
+<td>By hand</td>
+<td>2 Herb, 1 Spirit Essence, 1 Berries</td>
+</tr>
+<tr>
+<td>Frost Draught</td>
+<td>1</td>
+<td>By hand</td>
+<td>2 Ice Shard, 1 Herb</td>
+</tr>
+<tr>
+<td>Arrow</td>
+<td>8</td>
+<td>By hand</td>
+<td>1 Bone, 1 Wood</td>
+</tr>
+<tr>
+<td>Chitin Shield</td>
+<td>1</td>
+<td>By hand</td>
+<td>4 Chitin, 2 Wood</td>
+</tr>
+<tr>
+<td>Star Ingot</td>
+<td>1</td>
+<td>Anvil</td>
+<td>1 Star Metal, 2 Gold Ore, 1 Coal</td>
+</tr>
+<tr>
+<td>Starforged Axe</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Star Ingot, 2 Wood</td>
+</tr>
+<tr>
+<td>Starforged Pickaxe</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Star Ingot, 2 Wood</td>
+</tr>
+<tr>
+<td>Starforged Helm</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Star Ingot</td>
+</tr>
+<tr>
+<td>Starforged Greaves</td>
+<td>1</td>
+<td>Anvil</td>
+<td>3 Star Ingot, 1 Hide</td>
+</tr>
+<tr>
+<td>Starforged Boots</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Star Ingot</td>
+</tr>
+</tbody></table></div>
+<p>Star metal comes from meteorites (and some legends), so the starforged tier is for the far lands.</p>
+<h3 id="rare-recipes">Rare recipes<a class="anchor" href="#rare-recipes" aria-label="Link to this section">#</a></h3>
+<p>Recipes marked <code>rare</code> in <code>RECIPES</code> stay hidden until learned. The Crafting tab says how many are still to discover. Using a <strong>Forgotten Schematic</strong> (from the hotbar or the bag) teaches one unknown rare recipe at random and says where to make it; with none left to learn, the schematic is kept. Schematics are in the Epic chest pool and are dropped by every legend and the Arena Guardian. Learned recipes are saved in progression (<code>recipes</code>).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Output</th>
+<th>Count</th>
+<th>Station</th>
+<th>Inputs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Crystal Bow</td>
+<td>1</td>
+<td>Anvil</td>
+<td>2 Crystal, 3 Spider Silk, 2 Wood</td>
+</tr>
+<tr>
+<td>Frost Blade</td>
+<td>1</td>
+<td>Anvil</td>
+<td>1 Iron Sword, 4 Ice Shard, 1 Crystal</td>
+</tr>
+<tr>
+<td>Venom Blade</td>
+<td>1</td>
+<td>Anvil</td>
+<td>1 Iron Sword, 4 Venom Sac</td>
+</tr>
+<tr>
+<td>Spirit Blade</td>
+<td>1</td>
+<td>Anvil</td>
+<td>1 Iron Sword, 4 Spirit Essence, 1 Crystal</td>
+</tr>
+<tr>
+<td>Starforged Sword</td>
+<td>1</td>
+<td>Anvil</td>
+<td>3 Star Ingot, 1 Gemstone</td>
+</tr>
+<tr>
+<td>Starforged Plate</td>
+<td>1</td>
+<td>Anvil</td>
+<td>4 Star Ingot, 2 Chitin</td>
+</tr>
 </tbody></table></div>
 <h2 id="loot">Loot<a class="anchor" href="#loot" aria-label="Link to this section">#</a></h2>
 <p><code>src/systems/Loot.ts</code>.</p>
@@ -924,7 +1119,7 @@
 </tr>
 <tr>
 <td>Epic</td>
-<td>Crystal, Gemstone, Iron Pickaxe, Iron Axe, Iron Sword, Iron Chestplate, Iron Greaves, Iron Shield</td>
+<td>Forgotten Schematic, Crystal, Gemstone, Iron Pickaxe, Iron Axe, Iron Sword, Iron Chestplate, Iron Greaves, Iron Shield</td>
 </tr>
 <tr>
 <td>Legendary</td>
@@ -971,7 +1166,7 @@
 </article>
     <nav class="pager"><a class="prev" href="saves.html"><small>Previous</small>Saves</a><a class="next" href="combat.html"><small>Next</small>Combat</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#vitals">Vitals</a></li><li class="l3"><a href="#drain">Drain</a></li><li class="l3"><a href="#health">Health</a></li><li class="l3"><a href="#low-warnings">Low warnings</a></li><li class="l3"><a href="#status-effects">Status effects</a></li><li class="l3"><a href="#collapse">Collapse</a></li><li class="l2"><a href="#stamina">Stamina</a></li><li class="l2"><a href="#gathering">Gathering</a></li><li class="l3"><a href="#drinking">Drinking</a></li><li class="l2"><a href="#swimming">Swimming</a></li><li class="l2"><a href="#items">Items</a></li><li class="l2"><a href="#inventory-and-hotbar">Inventory and hotbar</a></li><li class="l3"><a href="#weight">Weight</a></li><li class="l3"><a href="#dropping-and-picking-up">Dropping and picking up</a></li><li class="l3"><a href="#equipment">Equipment</a></li><li class="l2"><a href="#crafting">Crafting</a></li><li class="l2"><a href="#loot">Loot</a></li><li class="l3"><a href="#chests">Chests</a></li><li class="l3"><a href="#barrels">Barrels</a></li><li class="l3"><a href="#buried-treasure">Buried treasure</a></li><li class="l3"><a href="#enemy-drops">Enemy drops</a></li><li class="l2"><a href="#light">Light</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#vitals">Vitals</a></li><li class="l3"><a href="#drain">Drain</a></li><li class="l3"><a href="#health">Health</a></li><li class="l3"><a href="#low-warnings">Low warnings</a></li><li class="l3"><a href="#status-effects">Status effects</a></li><li class="l3"><a href="#collapse">Collapse</a></li><li class="l2"><a href="#stamina">Stamina</a></li><li class="l2"><a href="#gathering">Gathering</a></li><li class="l3"><a href="#drinking">Drinking</a></li><li class="l2"><a href="#swimming">Swimming</a></li><li class="l2"><a href="#items">Items</a></li><li class="l2"><a href="#inventory-and-hotbar">Inventory and hotbar</a></li><li class="l3"><a href="#weight">Weight</a></li><li class="l3"><a href="#dropping-and-picking-up">Dropping and picking up</a></li><li class="l3"><a href="#equipment">Equipment</a></li><li class="l2"><a href="#crafting">Crafting</a></li><li class="l3"><a href="#rare-recipes">Rare recipes</a></li><li class="l2"><a href="#loot">Loot</a></li><li class="l3"><a href="#chests">Chests</a></li><li class="l3"><a href="#barrels">Barrels</a></li><li class="l3"><a href="#buried-treasure">Buried treasure</a></li><li class="l3"><a href="#enemy-drops">Enemy drops</a></li><li class="l2"><a href="#light">Light</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

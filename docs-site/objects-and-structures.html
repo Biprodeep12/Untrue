@@ -79,7 +79,7 @@
 </tr>
 <tr>
 <td><code>semi-persistent</code></td>
-<td>Behaves as temporary until discovered. Once discovered, it is kept when its chunks unload, for 3 in-game days (<code>SEMI_KEEP_MINUTES</code>) after the player last left it, so coming back soon finds it as it was: same layout, chests still looted, mined rock still gone. After that it is forgotten like a temporary object (and the lantern remembers it). Kept objects are saved with their idle time. Used by villages, castles and mines.</td>
+<td>Behaves as temporary until discovered. Once discovered, it is kept when its chunks unload, for 3 in-game days (<code>SEMI_KEEP_MINUTES</code>) after the player last left it, so coming back soon finds it as it was: same layout, chests still looted, mined rock still gone. After that it is forgotten like a temporary object (and the lantern remembers it). Kept objects are saved with their idle time. Used by villages, castles, mines and nomad camps.</td>
 </tr>
 <tr>
 <td><code>persistent</code></td>
@@ -218,6 +218,19 @@
 <td>8–10</td>
 </tr>
 <tr>
+<td><code>nomad-camp</code></td>
+<td>Nomad Camp</td>
+<td>Uncommon</td>
+<td>3</td>
+<td>Desert</td>
+<td>120</td>
+<td>260</td>
+<td>Yes</td>
+<td>Mirror</td>
+<td>Semi-persistent</td>
+<td>11</td>
+</tr>
+<tr>
 <td><code>mine</code></td>
 <td>Mine</td>
 <td>Uncommon</td>
@@ -227,7 +240,7 @@
 <td>150</td>
 <td>No</td>
 <td>Mirror</td>
-<td>Temporary</td>
+<td>Semi-persistent</td>
 <td>17 × 14</td>
 </tr>
 <tr>
@@ -240,8 +253,8 @@
 <td>500</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Temporary</td>
-<td>40–54</td>
+<td>Semi-persistent</td>
+<td>46–56</td>
 </tr>
 <tr>
 <td><code>temple</code></td>
@@ -369,10 +382,11 @@
 </tr>
 </tbody></table></div>
 <p><strong>Mines</strong> are cut into a ragged rocky hill (dark rock at its heart, lighter at the edges). A timber-framed entrance (a <code>mine</code> building) sits at the foot of the hill, with lamps either side. In front is a dirt yard with rails running out of the entrance to a mine cart, ore heaps, a crate, a barrel and a stone. The entrance leads into a cave; see <a href="buildings-and-interiors.html#mines">buildings-and-interiors.md</a>.</p>
+<p><strong>Nomad camps</strong> (<code>nomadCamp()</code>, 11 tiles square) are the desert&#39;s travellers, since the desert has no villages: a round patch of path cleared of plants, a campfire in the middle, three tents, an anvil and two barrels. Two people live there: a quest giver and a trader by the fire (<a href="living-world.html#npcs">living-world.md</a>).</p>
 <p><strong>Villages</strong> (<code>village()</code>, 46–56 tiles square) are laid out along streets: a main street right across, through a cobbled square with the well, an anvil, two benches and four lamps; a cross street north to south; and back lanes 12–13 tiles above and below the main street. Houses (6–8 × 5–6) stand in rows on the north side of each street with 2–4 tiles between them, each with a path from its door to the street, flowers or a barrel by the door, and room cleared around it. Lamps line the main and cross streets. Three to five fenced gardens of tilled soil with rows of vegetables fill open ground. Trees are cleared only on the streets, the square and around houses, so the village sits among trees.</p>
 <p><strong>Castles</strong> (<code>castle()</code>) stand in a moat (shallow at the banks, deep in the middle) crossed by a two-tile drawbridge. Inside it, a curtain wall two tiles thick has round towers at the corners and midway along the east and west walls, and two towers flank the gatehouse. A paved road runs from the gate past lamps to a square before the keep, with a well, a statue and banners. The keep (a <code>keep</code> building, 18–22 × 7) stands at the head of the courtyard, with banners along the north wall and a fenced kitchen garden on each side. Two barracks (<code>stone</code>) face the road with paths to it; below them are a training yard (three dummies, a weapon rack and an armour stand), a smithy (an anvil, a crate and a barrel) and a stable (a <code>cabin</code>). The paved parts are cleared of trees; the rest of the courtyard keeps its own.</p>
 <p>Building footprints keep the ground they stand on: <code>building()</code> marks the footprint with an invisible solid decoration (<code>Deco.Footprint</code>) instead of a tile, so nothing but the sprite and its own ground ever shows around a building&#39;s outline. <code>clearDecos()</code> only clears where the layout has not placed anything, and <code>areaFree()</code> treats footprints as taken.</p>
-<p>Villages and castles hold an anvil, a crafting station. Camps have a campfire, the other station and a place to rest, beside a canvas tent (abandoned camps keep the tent but not the fire). Villages have lamp posts along their roads that light up at night.</p>
+<p>Villages, castles and nomad camps hold an anvil, a crafting station. Camps and nomad camps have a campfire, the other station and a place to rest, beside a canvas tent (abandoned camps keep the tent but not the fire). Villages have lamp posts along their roads that light up at night.</p>
 <p><strong>Ruins</strong> are the shell of an old stone hall: outer walls that stand in runs and collapse in others (switching about every six tiles, with fallen stones spilling inward), a gap in the south wall, an inner wall with a doorway, a colonnade with some pillars fallen to rubble, overgrown patches where the floor has given way, and bushes and flowers creeping in. Chests are always found in castles, dungeons, the Sun Temple, ancient temples and lost cities, and sometimes in villages, temples, towers, ruins, cabins and abandoned camps.</p>
 <h2 id="lakes">Lakes<a class="anchor" href="#lakes" aria-label="Link to this section">#</a></h2>
 <p><code>lake()</code> builds a natural-looking lake rather than an ellipse:</p>

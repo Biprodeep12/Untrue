@@ -1,5 +1,6 @@
 // Draws enemies, NPCs, projectiles and combat feedback: health bars, alert
-// marks, floating damage numbers and sword swings.
+// marks, floating damage numbers and sword swings. Display objects are pooled:
+// enemies come and go all the time, and making a Text costs a texture upload.
 
 import { Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import { TILE_SIZE } from '../config';
@@ -11,6 +12,8 @@ import { creatureFrame, Dir, playerCell } from './Atlas';
 const ELITE_TINT = 0xffd27a;
 const HIT_TINT = 0xff6a6a;
 const WINDUP_TINT = 0xffb0b0;
+/** The mark over an enemy about to strike: red, against the yellow "!" of noticing you. */
+const STRIKE_MARK_TINT = 0xff5040;
 const NUMBER_SECONDS = 0.8;
 const SWING_SECONDS = 0.14;
 
@@ -18,11 +21,14 @@ interface Drawn {
   sprite: Sprite;
   bar: Graphics;
   mark: Text;
+  /** What the health bar shows, so it is only redrawn when that changes. */
+  barKey: string;
 }
 
 interface Floating {
   text: Text;
   life: number;
+  style: string;
 }
 
 export class EntityRenderer {
@@ -32,6 +38,10 @@ export class EntityRenderer {
   private readonly shots: Sprite[] = [];
   private readonly numbers: Floating[] = [];
   private readonly swings: Array<{ g: Graphics; life: number }> = [];
+  /** Pools of hidden objects, ready for reuse. */
+  private readonly spareDrawn: Drawn[] = [];
+  private readonly spareNumbers = new Map<string, Text[]>();
+  private readonly spareSwings: Graphics[] = [];
   private time = 0;
 
   constructor(
@@ -52,29 +62,41 @@ export class EntityRenderer {
   }
 
   damageNumber(x: number, y: number, amount: number, crit: boolean, toPlayer: boolean): void {
-    const text = new Text({
-      text: crit ? `${amount}!` : String(amount),
-      style: {
-        fontFamily: 'Pixelify Sans, monospace',
-        fontSize: crit ? 12 : 9,
-        fill: toPlayer ? 0xff6a5a : crit ? 0xffd040 : 0xffffff,
-        stroke: { color: 0x2a1a10, width: 2 },
-      },
-    });
-    text.anchor.set(0.5, 1);
+    const style = toPlayer ? 'hurt' : crit ? 'crit' : 'hit';
+    let text = this.spareNumbers.get(style)?.pop();
+    if (!text) {
+      text = new Text({
+        text: '',
+        style: {
+          fontFamily: 'Pixelify Sans, monospace',
+          fontSize: crit ? 12 : 9,
+          fill: toPlayer ? 0xff6a5a : crit ? 0xffd040 : 0xffffff,
+          stroke: { color: 0x2a1a10, width: 2 },
+        },
+      });
+      text.anchor.set(0.5, 1);
+      this.overlay.addChild(text);
+    }
+    text.text = crit ? `${amount}!` : String(amount);
+    text.visible = true;
+    text.alpha = 1;
     text.position.set(x * TILE_SIZE + (Math.random() - 0.5) * 6, y * TILE_SIZE);
-    this.overlay.addChild(text);
-    this.numbers.push({ text, life: NUMBER_SECONDS });
+    this.numbers.push({ text, life: NUMBER_SECONDS, style });
   }
 
   swing(x: number, y: number, dx: number, dy: number, reach: number): void {
-    const g = new Graphics();
+    let g = this.spareSwings.pop();
+    if (!g) {
+      g = new Graphics();
+      this.overlay.addChild(g);
+    }
+    g.clear();
+    g.visible = true;
     const angle = Math.atan2(dy, dx);
     const r = reach * TILE_SIZE;
     g.arc(0, 0, r, angle - 1, angle + 1).stroke({ width: 3, color: 0xffffff, alpha: 0.85 });
     g.arc(0, 0, r - 3, angle - 0.8, angle + 0.8).stroke({ width: 1, color: 0xfff2b0, alpha: 0.6 });
     g.position.set(x * TILE_SIZE, y * TILE_SIZE);
-    this.overlay.addChild(g);
     this.swings.push({ g, life: SWING_SECONDS });
   }
 
@@ -100,10 +122,19 @@ export class EntityRenderer {
   }
 
   private create(): Drawn {
+    const spare = this.spareDrawn.pop();
+    if (spare) {
+      spare.sprite.visible = spare.bar.visible = true;
+      spare.sprite.alpha = 1;
+      spare.mark.tint = spare.sprite.tint = 0xffffff;
+      spare.sprite.scale.set(1);
+      return spare;
+    }
     const d = {
       sprite: new Sprite({ anchor: { x: 0.5, y: 1 } }),
       bar: new Graphics(),
       mark: new Text({ text: '!', style: { fontFamily: 'Pixelify Sans, monospace', fontSize: 12, fill: 0xffd040, stroke: { color: 0x2a1a10, width: 2 } } }),
+      barKey: '',
     };
     d.mark.anchor.set(0.5, 1);
     this.entities.addChild(d.sprite);
@@ -111,12 +142,14 @@ export class EntityRenderer {
     return d;
   }
 
+  /** Hides what is no longer in the world and keeps it for reuse. */
   private prune(map: Map<number, Drawn>, live: Set<number>): void {
     for (const [id, d] of map) {
       if (live.has(id)) continue;
-      d.sprite.destroy();
-      d.bar.destroy();
-      d.mark.destroy();
+      d.sprite.visible = d.bar.visible = d.mark.visible = false;
+      d.bar.clear();
+      d.barKey = '';
+      this.spareDrawn.push(d);
       map.delete(id);
     }
   }
@@ -151,30 +184,40 @@ export class EntityRenderer {
       let d = this.drawn.get(e.id);
       if (!d) this.drawn.set(e.id, (d = this.create()));
       const { sprite, bar, mark } = d;
-      const size = e.elite ? 1.25 : 1;
+      const size = (e.elite ? 1.25 : 1) * (e.species.size ?? 1);
       if (e.species.outfit) {
         // Humanoids use the four-direction human sprites instead of mirroring.
         sprite.texture = this.human(e.species.outfit, e.facing > 0 ? Dir.Right : Dir.Left, e.moving ? Math.floor(this.time * 8) % 4 : 0);
         sprite.scale.set(size);
       } else {
         const frame = e.moving ? Math.floor(this.time * 7) % 2 : 0;
-        sprite.texture = this.texture(e.state === 'burrowed' ? 'lurker:buried' : `${e.species.id}:${frame}`);
+        const art = e.species.art ?? e.species.id;
+        sprite.texture = this.texture(e.state === 'burrowed' ? `${art}:buried` : `${art}:${frame}`);
         sprite.scale.set(e.facing * size, size);
       }
       sprite.position.set(Math.round(e.x * TILE_SIZE), Math.round(e.y * TILE_SIZE));
       sprite.zIndex = e.y * TILE_SIZE;
-      sprite.tint = e.hitFlash > 0 ? HIT_TINT : e.windingUp && Math.floor(this.time * 16) % 2 ? WINDUP_TINT : e.elite ? ELITE_TINT : 0xffffff;
+      sprite.tint = e.hitFlash > 0 ? HIT_TINT : e.windingUp && Math.floor(this.time * 16) % 2 ? WINDUP_TINT : e.elite ? ELITE_TINT : (e.species.tint ?? 0xffffff);
 
       const top = sprite.y - sprite.height - 3;
-      bar.clear();
-      if (e.hp < e.maxHp && !e.species.boss) {
-        const w = 16;
-        bar.rect(sprite.x - w / 2, top, w, 3).fill({ color: 0x2a1a10 });
-        bar.rect(sprite.x - w / 2 + 1, top + 1, (w - 2) * (e.hp / e.maxHp), 1).fill({ color: e.elite ? 0xffb030 : 0xe04a3a });
+      // The bar is drawn around (0, 0) and moved, so walking does not redraw it.
+      const shown = e.hp < e.maxHp && !e.species.boss;
+      const key = shown ? `${Math.ceil((e.hp / e.maxHp) * 14)}${e.elite ? 'e' : ''}` : '';
+      if (key !== d.barKey) {
+        d.barKey = key;
+        bar.clear();
+        if (shown) {
+          const w = 16;
+          bar.rect(-w / 2, 0, w, 3).fill({ color: 0x2a1a10 });
+          bar.rect(-w / 2 + 1, 1, (w - 2) * (e.hp / e.maxHp), 1).fill({ color: e.elite ? 0xffb030 : 0xe04a3a });
+        }
       }
-      mark.visible = e.state === 'aggro';
+      bar.position.set(sprite.x, top);
+      // "!" when it notices you; a red "!" while it winds up a blow.
+      mark.visible = e.state === 'aggro' || e.windingUp;
       mark.text = '!';
-      mark.position.set(sprite.x, top);
+      mark.tint = e.windingUp ? STRIKE_MARK_TINT : 0xffffff;
+      mark.position.set(sprite.x, top - (e.windingUp ? 2 : 0));
     }
     this.prune(this.drawn, live);
   }
@@ -202,7 +245,10 @@ export class EntityRenderer {
       n.text.y -= dt * 18;
       n.text.alpha = Math.min(1, n.life / 0.3);
       if (n.life <= 0) {
-        n.text.destroy();
+        n.text.visible = false;
+        let pool = this.spareNumbers.get(n.style);
+        if (!pool) this.spareNumbers.set(n.style, (pool = []));
+        pool.push(n.text);
         this.numbers.splice(i, 1);
       }
     }
@@ -211,7 +257,8 @@ export class EntityRenderer {
       s.life -= dt;
       s.g.alpha = s.life / SWING_SECONDS;
       if (s.life <= 0) {
-        s.g.destroy();
+        s.g.visible = false;
+        this.spareSwings.push(s.g);
         this.swings.splice(i, 1);
       }
     }

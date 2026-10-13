@@ -14,6 +14,7 @@ export interface Offer {
 export const SELL_PRICES = new Map<ItemDef, number>([
   [Items.vegetables, 2],
   [Items.idol, 250],
+  [Items.starIngot, 120],
   [Items.gem, 60],
   [Items.starMetal, 45],
   [Items.crystal, 35],
@@ -82,9 +83,11 @@ export function buy(inv: Inventory, offer: Offer): TradeResult {
   return 'ok';
 }
 
-export function sell(inv: Inventory, item: ItemDef): TradeResult {
+/** Sells up to `count` of an item, one price each. */
+export function sell(inv: Inventory, item: ItemDef, count = 1): TradeResult {
   const price = SELL_PRICES.get(item);
-  if (!price || !inv.remove(item, 1)) return 'none';
-  inv.add(Items.coin, price);
+  const n = Math.min(count, inv.count(item));
+  if (!price || n <= 0 || !inv.remove(item, n)) return 'none';
+  inv.add(Items.coin, price * n);
   return 'ok';
 }

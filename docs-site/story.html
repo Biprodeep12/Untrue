@@ -145,7 +145,7 @@
 <li><code>src/story/StoryPlaces.ts</code>: the story&#39;s places and their layouts</li>
 <li><code>src/story/StoryScript.ts</code>: every line of text</li>
 <li><code>src/ui/Vision.ts</code>: full-screen visions</li>
-<li><code>src/audio/Sfx.ts</code>: the bell</li>
+<li><code>src/audio/AudioSystem.ts</code>: the bell (<code>AudioSystem.bell</code>)</li>
 </ul>
 <p><code>LivingWorld</code> owns the <code>StorySystem</code> and routes talk, rest, prompts and interactions through it.</p>
 <h3 id="starting">Starting<a class="anchor" href="#starting" aria-label="Link to this section">#</a></h3>
@@ -192,8 +192,8 @@
 </tr>
 <tr>
 <td><code>observatory</code></td>
-<td>Seek the observatory</td>
-<td>The Astronomer&#39;s speech is finished</td>
+<td>Seek the observatory and speak to the old man</td>
+<td>The Astronomer&#39;s speech is finished. He shows a &quot;!&quot; through this stage, even if he was met before.</td>
 <td>80</td>
 </tr>
 <tr>
@@ -222,6 +222,7 @@
 </tr>
 </tbody></table></div>
 <p>The Observatory&#39;s journal (the Book) shows the entry in the player&#39;s handwriting until the <code>return</code> stage, and blank pages after.</p>
+<p>Reaching a new stage also moves the player&#39;s waking spot (where they wake after collapsing) to where they stand, outdoors (<a href="survival.html#collapse">survival.md</a>). Nothing is saved while a vision is open, so a reload never lands half way through a stage change.</p>
 <h3 id="places">Places<a class="anchor" href="#places" aria-label="Link to this section">#</a></h3>
 <p>All story places are persistent objects with id <code>story:&lt;id&gt;</code> and kind <code>story-&lt;id&gt;</code>. They&#39;re saved and restored like other persistent objects, and generated structures keep clear of them through ordinary object collision.</p>
 <p><strong>Placement:</strong> each place except the monument has a bearing seeded from the world seed. Placement starts at the place&#39;s distance and steps outward 12 tiles at a time, the bearing drifting 0.05 radians per step, for up to 80 steps. It stops at the first spot where a 5×5 grid of sample points across the footprint is all flat, dry ground (<code>TerrainFields.isBuildable</code>).</p>
@@ -246,7 +247,7 @@
 <td><code>graves</code></td>
 <td>Village of Graves</td>
 <td>260</td>
-<td>village (40–54) + 14</td>
+<td>village (46–56) + 14</td>
 <td>A generated village (houses, well, anvil, paths), a 12×12 cemetery on its east side with 12 gravestones, a campfire by the well</td>
 </tr>
 <tr>
@@ -261,7 +262,7 @@
 <td>Sunken Archive</td>
 <td>3,200</td>
 <td>64×64</td>
-<td>Dark stone halls, shelves and rubble. Three memory rooms (north, west, east), each with a pedestal. A central 22×22 Hall of Lanterns with 16 lantern racks. 6 skeleton guards (<a href="combat.html#guarded-places">combat.md</a>).</td>
+<td>Dark stone halls, shelves and rubble. Three memory rooms (north, west, east), each with a pedestal. A central 22×22 Hall of Lanterns with 16 lantern racks. 4 skeleton guards and 2 skeleton archers (<a href="combat.html#guarded-places">combat.md</a>).</td>
 </tr>
 <tr>
 <td><code>anchor</code></td>
@@ -274,7 +275,7 @@
 <p>The distances put the archive in the Medium band and the Anchor in the Hard band (<a href="combat.html#difficulty-scaling-and-elites">combat.md</a>).</p>
 <p>The pedestals are numbered in reading order: north shows &quot;the builders&quot;, west &quot;the war&quot;, and east &quot;the Anchors&quot;.</p>
 <h3 id="people">People<a class="anchor" href="#people" aria-label="Link to this section">#</a></h3>
-<p>Story people are ordinary NPCs. They appear while their place&#39;s centre chunk is in the simulation radius and their stage is active, and leave otherwise. They show a &quot;!&quot; until spoken to, and conversations go page by page (Continue, then Farewell).</p>
+<p>Story people are ordinary NPCs. They appear while their place&#39;s centre chunk is in the simulation radius and their stage is active, and leave otherwise. They show a &quot;!&quot; until spoken to (the Astronomer also during the <code>observatory</code> stage), and conversations go page by page (Continue, then Farewell).</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -377,7 +378,7 @@
 <h3 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h3>
 <p><code>StorySave</code> holds the stage, the flags (who has been spoken to, pedestals read, the village gone, the lantern dark, the cabin found), the ending and the memories. It&#39;s stored inside the living-world save (<a href="saves.html">saves.md</a>).</p>
 <h3 id="story-playground">Story playground<a class="anchor" href="#story-playground" aria-label="Link to this section">#</a></h3>
-<p>For testing, development builds open a story playground at <code>?playground</code> (or <code>?playground=SEED</code>; the default seed is 1). It is a fresh world that is never saved, so the real save is untouched.</p>
+<p>For testing, development builds open a story playground at <code>?playground</code> (or <code>?playground=SEED</code>; the default seed is 1). It is a fresh world that is never saved, so the real save is untouched. It does not take the save lock, so it can run beside a tab of the real game, and it shows no first-time tips.</p>
 <ul>
 <li><strong>Compact places:</strong> <code>StorySystem.compact</code> makes <code>placeStory</code> put the places near the spawn, one per direction: the Village of Graves 70 tiles east, the Observatory 80 south, the Sunken Archive 110 west and the Original Anchor 140 north.</li>
 <li><strong>Start chapter:</strong> <code>StorySystem.jumpTo(stage)</code> rebuilds every story place, clears memories, flags, the ending and its world rules, then sets the flags of every earlier chapter (villagers spoken to and the grave read, the village gone, the astronomer spoken to, the three pedestals read, the younger self met and the lantern dark). The monument is already crumbled from the bell onwards. The panel then takes the player to that chapter&#39;s place.</li>

@@ -28,7 +28,7 @@ Generation is deterministic: the same seed and the same visit counters give the 
 | `detail` | Ground patches, decoration density, per-biome offsets |
 | `trail` | Trail centrelines: the zero lines of two warped fields (see [Trails](#trails)) |
 | `trailGate` | Where each trail network exists |
-| `zone` | Landscape zones (scale 80): meadows, deep woods, dune seas, open snowfields; and rock fields (scale 22) |
+| `zone` | Landscape zones (scale 80): meadows, deep woods, dune seas, open snowfields; marshes (scale 150); and rock fields (scale 22) |
 
 The same class runs in the workers (tile generation) and on the main thread (biome climate and structure ground checks).
 
@@ -88,6 +88,14 @@ Each palette (biome type × variant) has four ground kinds: `Base`, `Alt`, `Deta
 
 `open` and `deep` come from the `zone` field `z` at scale 80: `open = smooth((−z − 0.25) / 0.25)`, `deep = smooth((z − 0.3) / 0.25)`.
 
+### Marshes
+
+Marshes are a forest landscape zone, kept more than 200 tiles from the start (`MARSH_MIN_DISTANCE`). `marsh = smooth((z − 0.4) / 0.15)`, with `z` the `zone` field at scale 150 (sampled at its own offset). Where `marsh` is above 0, on forest ground:
+
+- **Pools:** a tile becomes shallow `Water` where `detail` at scale 6 is above `0.8 − marsh × 0.62`, so pools grow thicker toward the marsh's heart. No pool forms within the river's width + 8 tiles, so bridges always land on dry ground.
+- **Darker ground:** elsewhere, the `Detail` ground kind is used where the ground noise is below `−0.3 + marsh × 0.4`.
+- **Plants:** see the forest row under [Decorations](#decorations).
+
 The six palettes are Forest, Autumn Forest, Desert, Red Desert, Snowfield and Crystal Tundra (`BIOME_NAMES` in `src/generation/Tiles.ts`).
 
 ## Decorations
@@ -96,11 +104,11 @@ Decorations are rolled per tile on ground tiles only (not water, rock, shared ti
 
 | Biome | Roll thresholds (cumulative) |
 | --- | --- |
-| Forest | Trees `(0.01 + density × 0.17) × (1 − open × 0.95) + deep × 0.22`, × 0.4 in rock fields (`18% + deep × 30%` pines, otherwise oaks or autumn oaks), then bush +0.02 (+0.05 near rivers), flowers `+0.015 + open × 0.07` (+0.02 near rivers), mushroom `+0.007 + deep × 0.025`, stone +0.004 (+0.05 in rock fields), ore +0.0015 (+0.006 in rock fields) |
+| Forest | Trees `((0.01 + density × 0.17) × (1 − open × 0.95) + deep × 0.22) × (1 − marsh × 0.75)`, × 0.4 in rock fields (`18% + deep × 30%` pines, none in marshes, otherwise oaks or autumn oaks), then bush `+0.02 + marsh × 0.06` (+0.05 instead of 0.02 near rivers), dead bush `+marsh × 0.05`, flowers `+0.015 + open × 0.07` (+0.02 near rivers), mushroom `+0.007 + deep × 0.025 + marsh × 0.03`, stone +0.004 (+0.05 in rock fields), ore +0.0015 (+0.006 in rock fields) |
 | Desert | Palms +0.09 near rivers (oases), cactus `(0.008 + density × 0.03) × (1 + open × 3) × (1 − deep × 0.8)`, dead bush +0.012, rock +0.006 (+0.06 in rock fields; red rock in the red variant, half red in rock fields), ore +0.0015 (+0.005 in rock fields) |
 | Snow | Snowy pines `(0.01 + density × 0.11) × (1 − open × 0.9) + deep × 0.14`, snow rock +0.008 (+0.05 in rock fields), crystal +0.012 in the crystal variant or +0.0015 otherwise, ore +0.0015 (+0.005 in rock fields) |
 
-So forests have flowery meadows and dark deep woods, deserts have cactus stands, bare dune seas and palm oases, and snow has open snowfields between stands of taiga. Rock fields (`zone` at scale 22 above 0.5) are scattered in every biome. "Near rivers" means within `width + 5` tiles.
+So forests have flowery meadows, dark deep woods and, further out, marshes thick with bushes, reeds (dead brush) and mushrooms but few trees; deserts have cactus stands, bare dune seas and palm oases, and snow has open snowfields between stands of taiga. Rock fields (`zone` at scale 22 above 0.5) are scattered in every biome. "Near rivers" means within `width + 5` tiles.
 
 Tall decorations (oaks, pines, palms, cacti) are wider than a tile, so one is dropped if another tall one already sits left, above, above-left or above-right of it.
 
@@ -145,6 +153,6 @@ The story's endings change `WorldManager.rules.regenChance`: the visit counter o
 | Hard | 5,000 to 10,000 |
 | Extreme | 10,000 and beyond |
 
-The band raises the odds of rarer structure tiers (see [Objects and structures](objects-and-structures.md)), and rare structures have minimum distances, so rarer things appear farther out. Enemies scale with the band too (see [Combat](combat.md)).
+The band raises the odds of rarer structure tiers (see [Objects and structures](objects-and-structures.md)), and rare structures have minimum distances, so rarer things appear farther out. Enemies and legendary creatures scale with the band too (see [Combat](combat.md)), ore and crystal give rarer finds ([Survival](survival.md#gathering)), and the light and music grow grimmer ([Living world](living-world.md#light), [Audio](audio.md#music)).
 
 See also: [World streaming](world-streaming.md), [Objects and structures](objects-and-structures.md)
