@@ -1,10 +1,16 @@
-// Keyboard, mouse, wheel and touch input. A touch drives a virtual stick from
-// wherever it starts. The mouse aims: left button attacks, right button blocks.
+// Keyboard, mouse, wheel and touch input. A touch on the left part of the
+// screen drives a virtual stick from wherever it starts; a quick tap anywhere
+// acts like E. The mouse aims: left button attacks, right button blocks.
 
 /** Stick radius in CSS pixels. */
 export const STICK_RADIUS = 48;
 /** Stick deflection beyond which the player runs. */
 const RUN_DEFLECTION = 0.8;
+/** Share of the screen width, from the left, where a touch starts the stick. */
+export const STICK_ZONE = 0.5;
+/** A touch shorter and stiller than this is a tap (ms, CSS pixels). */
+const TAP_TIME = 300;
+const TAP_SLOP = 12;
 
 export interface Stick {
   active: boolean;
@@ -23,6 +29,8 @@ export class Input {
 
   readonly stick: Stick = { active: false, originX: 0, originY: 0, dx: 0, dy: 0 };
   private stickId: number | null = null;
+  /** Touches that may still turn out to be taps. */
+  private readonly taps = new Map<number, { x: number; y: number; t: number }>();
   /** Mouse position in CSS pixels, once the mouse has moved over the game. */
   mouse: { x: number; y: number } | null = null;
   /** Left button pressed this frame. */
@@ -95,13 +103,17 @@ export class Input {
       if (e.button === 2) this.mouseBlock = true;
       return;
     }
-    if (e.pointerType !== 'touch' || this.stickId !== null) return;
+    if (e.pointerType !== 'touch') return;
+    this.taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
+    if (this.stickId !== null || e.clientX > window.innerWidth * STICK_ZONE) return;
     this.stickId = e.pointerId;
     Object.assign(this.stick, { active: true, originX: e.clientX, originY: e.clientY, dx: 0, dy: 0 });
   }
 
   private pointerMove(e: PointerEvent): void {
     if (e.pointerType === 'mouse') this.mouse = { x: e.clientX, y: e.clientY };
+    const tap = this.taps.get(e.pointerId);
+    if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP) this.taps.delete(e.pointerId);
     if (e.pointerId !== this.stickId) return;
     let dx = (e.clientX - this.stick.originX) / STICK_RADIUS;
     let dy = (e.clientY - this.stick.originY) / STICK_RADIUS;
@@ -116,6 +128,9 @@ export class Input {
 
   private pointerUp(e: PointerEvent): void {
     if (e.pointerType === 'mouse' && e.button === 2) this.mouseBlock = false;
+    const tap = this.taps.get(e.pointerId);
+    this.taps.delete(e.pointerId);
+    if (tap && e.type === 'pointerup' && performance.now() - tap.t < TAP_TIME) this.pressed.add('KeyE');
     if (e.pointerId !== this.stickId) return;
     this.stickId = null;
     Object.assign(this.stick, { active: false, dx: 0, dy: 0 });

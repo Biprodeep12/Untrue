@@ -245,12 +245,109 @@ body {
 .vital-hunger .vital-fill { background: #e8963a; }
 .vital-thirst .vital-fill { background: #4a9ad8; }
 
-.vital.low .vital-track {
+.vital.low .vital-track,
+.vital.critical .vital-track {
   animation: pulse 0.8s infinite alternate;
 }
 
+.vital.critical .vital-track {
+  animation-duration: 0.35s;
+}
+
+.vital.low span,
+.vital.critical span {
+  color: #c0281a;
+  font-weight: bold;
+}
+
+.vital.critical {
+  animation: shake 0.5s infinite;
+}
+
 @keyframes pulse {
-  to { border-color: #ff5a4a; }
+  to {
+    border-color: #ff5a4a;
+    box-shadow: 0 0 8px 2px #ff5a4a;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1px); }
+  75% { transform: translateX(1px); }
+}
+
+/* Low vital warnings: top centre, worst first. */
+.hud-warnings {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.warning {
+  padding: 4px 14px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #a8501e;
+  text-align: center;
+  animation: warning-in 0.25s ease-out;
+}
+
+.warning.critical {
+  color: #fff;
+  background: #b8261a;
+  border-color: #5a0f08;
+  animation: warning-in 0.25s ease-out, warning-blink 0.7s 0.25s infinite alternate;
+}
+
+@keyframes warning-in {
+  from { transform: scale(1.4); opacity: 0; }
+}
+
+@keyframes warning-blink {
+  to { background: #e0402c; }
+}
+
+/* Red screen edges while health is low; a heartbeat when critical. */
+.hud-danger {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 120px 20px rgba(200, 20, 10, 0.8);
+  transition: opacity 0.5s;
+}
+
+.hud-danger.level-1 {
+  opacity: 0.45;
+}
+
+.hud-danger.level-2 {
+  opacity: 1;
+  animation: heartbeat 0.9s infinite;
+}
+
+@keyframes heartbeat {
+  0%, 40%, 100% { opacity: 0.55; }
+  15% { opacity: 1; }
+  25% { opacity: 0.7; }
+  32% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vital.critical,
+  .warning.critical,
+  .hud-danger.level-2 {
+    animation: none;
+  }
 }
 
 /* Main menu. */
@@ -977,4 +1074,233 @@ body {
 .fatal p {
   max-width: 480px;
   line-height: 1.5;
+}
+
+/* Story playground (development builds): top left. */
+.playground {
+  position: absolute;
+  top: 76px;
+  left: 12px;
+  width: min(300px, calc(100vw - 24px));
+  max-height: calc(100dvh - 160px);
+  overflow-y: auto;
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.pg-title {
+  cursor: pointer;
+}
+
+.pg-title::after {
+  content: ' ▾';
+}
+
+/* Folded: only the title shows. */
+.playground.hidden > :not(.pg-title) {
+  display: none;
+}
+
+.playground.hidden .pg-title::after {
+  content: ' ▸';
+}
+
+/* Touch: open, the panel sits over the game; folded, above the buttons. */
+@media (pointer: coarse) {
+  .playground {
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-height: calc(100dvh - 24px);
+    z-index: 5;
+  }
+
+  .playground.hidden {
+    top: auto;
+    left: auto;
+    right: 12px;
+    bottom: calc(212px + env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+    padding: 4px 10px;
+  }
+
+  .playground.hidden .pg-title {
+    font-size: 12px;
+  }
+}
+
+.playground h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.playground h4 {
+  margin: 8px 0 4px;
+  font-size: 12px;
+}
+
+.pg-hint {
+  opacity: 0.7;
+}
+
+.pg-status {
+  margin: 6px 0 0;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pg-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.playground .btn {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* Touch screens: stick bottom left, buttons bottom right, vitals under the
+   compass, prompt tappable. */
+.stick.rest {
+  opacity: 0.45;
+}
+
+@media (pointer: coarse) {
+  .touch-buttons {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    right: calc(12px + env(safe-area-inset-right));
+    grid-template-columns: repeat(3, 54px);
+    grid-template-areas:
+      '. act bag'
+      'block dodge attack';
+  }
+
+  .touch-btn {
+    width: 54px;
+    height: 54px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .touch-btn.act { grid-area: act; }
+  .touch-btn.bag { grid-area: bag; }
+  .touch-btn.block { grid-area: block; grid-column: auto; justify-self: auto; }
+  .touch-btn.dodge { grid-area: dodge; }
+  .touch-btn.attack { grid-area: attack; }
+
+  .touch-btn:active {
+    background: var(--wood-light);
+  }
+
+  .hud-prompt.tap {
+    pointer-events: auto;
+    padding: 8px 16px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+
+  .hud-prompt.tap::before {
+    content: '▶ ';
+    color: #c8402c;
+  }
+
+  .hud-vitals {
+    top: 76px;
+    left: 12px;
+    right: auto;
+    bottom: auto;
+    padding: 6px;
+  }
+
+  .vital-track {
+    height: 40px;
+  }
+
+  .hud-level {
+    top: 152px;
+    left: 12px;
+    right: auto;
+    bottom: auto;
+  }
+
+  .hud-status {
+    top: 184px;
+    left: 12px;
+    right: auto;
+    bottom: auto;
+    align-items: flex-start;
+  }
+
+  .hud-notes {
+    bottom: auto;
+    top: 216px;
+    max-width: 45vw;
+  }
+
+  .hotbar {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Touch, and the hotbar and buttons do not fit side by side. */
+@media (pointer: coarse) and (max-width: 820px) {
+  .touch-buttons {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Phones held upright. */
+@media (max-width: 520px) {
+  .hotbar {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .slot {
+    width: min(44px, calc((100vw - 56px) / 8));
+    height: min(44px, calc((100vw - 56px) / 8));
+  }
+
+  .hud-compass,
+  .hud-location {
+    max-width: calc(50vw - 18px);
+    min-width: 0;
+  }
+
+  .hud-biome {
+    font-size: 15px;
+  }
+
+  .hud-tracker {
+    max-width: calc(55vw - 18px);
+  }
+
+  .hud-prompt {
+    bottom: calc(216px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+    white-space: normal;
+    text-align: center;
+  }
+
+  .hud-warnings {
+    top: auto;
+    bottom: 290px;
+  }
+
+  .hud-boss {
+    top: 120px;
+  }
+}
+
+/* Menus fit the visible screen, under mobile browser bars too. */
+.menu {
+  max-height: calc(100dvh - 32px);
+}
+
+.dialog {
+  max-height: calc(100dvh - 120px);
 }

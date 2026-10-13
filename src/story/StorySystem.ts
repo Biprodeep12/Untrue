@@ -15,6 +15,7 @@ import { PLACE_ORDER, placeStory, type PlaceId } from './StoryPlaces';
 import { ECHOES, ENDINGS, FRAGMENTS, INSCRIPTIONS, QUIET_BOOK, SPEECH, VISIONS, WHISPERS, type Ending, type Speech, type Vision } from './StoryScript';
 
 export type Stage = 'waking' | 'bell' | 'village' | 'night' | 'observatory' | 'archive' | 'return' | 'anchor' | 'epilogue';
+export const STAGES: readonly Stage[] = ['waking', 'bell', 'village', 'night', 'observatory', 'archive', 'return', 'anchor', 'epilogue'];
 
 /** A place the world forgot, kept by the lantern. */
 export interface Memory {
@@ -50,6 +51,8 @@ export interface StoryHooks {
 const MAX_MEMORIES = 40;
 const STORY_XP = 80;
 
+const DEFAULT_RULES = { regenChance: 1, rareBoost: 1 };
+
 /** World rules each ending leaves behind. */
 const ENDING_RULES: Record<Ending, { regenChance: number; rareBoost: number }> = {
   remembered: { regenChance: 0.25, rareBoost: 1 },
@@ -58,7 +61,7 @@ const ENDING_RULES: Record<Ending, { regenChance: number; rareBoost: number }> =
 };
 
 /** Where each stage points the player. */
-const STAGE_TARGET: Partial<Record<Stage, PlaceId>> = {
+export const STAGE_TARGET: Partial<Record<Stage, PlaceId>> = {
   waking: 'monument',
   bell: 'graves',
   village: 'graves',
@@ -94,6 +97,8 @@ export class StorySystem {
   stage: Stage = 'waking';
   ending: Ending | null = null;
   memories: Memory[] = [];
+  /** Story playground: places sit near the spawn. */
+  compact = false;
   private flags = new Set<string>();
   private readonly people = new Map<string, Npc>();
   private readonly whispered = new Set<Memory>();
@@ -121,13 +126,58 @@ export class StorySystem {
   begin(isNew: boolean): void {
     for (const id of PLACE_ORDER) {
       if (id === 'graves' && this.flags.has('village-gone')) continue;
-      if (!this.world.objects.objects.has(`story:${id}`)) this.world.addObject(placeStory(id, this.world.seed, this.world.fields));
+      if (!this.world.objects.objects.has(`story:${id}`)) this.world.addObject(placeStory(id, this.world.seed, this.world.fields, this.compact));
     }
     if (this.ending) Object.assign(this.world.rules, ENDING_RULES[this.ending]);
     if (isNew) {
       if (!this.inventory.count(Items.wanderersLantern)) this.inventory.add(Items.wanderersLantern, 1);
       this.hooks.vision(VISIONS.prologue);
     }
+  }
+
+  /** Story playground: starts `stage` afresh, as if every part before it
+   *  were done. The places are rebuilt, so nothing is left half-finished. */
+  jumpTo(stage: Stage): void {
+    const done = (s: Stage) => STAGES.indexOf(s) < STAGES.indexOf(stage);
+    for (const key of [...this.people.keys()]) this.removePerson(key);
+    for (const id of PLACE_ORDER) {
+      const o = this.world.objects.objects.get(`story:${id}`);
+      if (o) this.world.removeObject(o);
+    }
+    // Removing found places makes the lantern remember them; start clean.
+    this.memories = [];
+    this.whispered.clear();
+    this.flags.clear();
+    this.ending = null;
+    this.world.rules = { ...DEFAULT_RULES };
+    if (done('village')) {
+      for (const key of ['elder', 'merchant', 'child']) this.flags.add(`talked-${key}`);
+      this.flags.add('read-grave');
+    }
+    if (done('night')) this.flags.add('village-gone');
+    if (done('observatory')) this.flags.add('talked-oldman');
+    if (done('archive')) for (const n of [1, 2, 3]) this.flags.add(`pedestal-${n}`);
+    if (done('return')) this.flags.add('talked-younger').add('lantern-dark');
+    this.stage = stage;
+    this.begin(false);
+    // The monument crumbles once read.
+    const monument = this.world.objects.objects.get('story:monument');
+    if (monument && done('waking')) {
+      const i = monument.layout.decos.indexOf(Deco.Monument);
+      if (i >= 0) monument.layout.decos[i] = Deco.Clear;
+      this.world.refreshObject(monument);
+    }
+  }
+
+  /** Story playground: plays an ending's vision and ends the story with it. */
+  chooseEnding(e: Ending): void {
+    if (this.stage !== 'anchor') this.jumpTo('anchor');
+    this.hooks.vision(ENDINGS[e].vision, () => this.end(e));
+  }
+
+  /** Every flag, for the playground's readout. */
+  get flagList(): string[] {
+    return [...this.flags];
   }
 
   /** The current objective, and where it points. */

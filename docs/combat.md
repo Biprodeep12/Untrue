@@ -9,7 +9,7 @@ Code: `src/systems/CombatSystem.ts`, `src/entities/Enemy.ts`, `src/entities/Spec
 | Action | Keyboard and mouse | Touch |
 | --- | --- | --- |
 | Attack | Left click (toward the mouse) or J (the way you face) | Hit |
-| Block | Hold right click or K | – |
+| Block | Hold right click or K | Hold Block |
 | Dodge roll | Space | Roll |
 | Choose weapon | 1–8 selects the hotbar slot | Tap a slot |
 

@@ -14,7 +14,7 @@ Generation is deterministic: the same seed and the same visit counters give the 
 
 ## Noise fields
 
-`TerrainFields` (`src/generation/TerrainGenerator.ts`) builds eight seeded simplex noise fields (`src/generation/Noise.ts`), each seeded with `hash(Stream.Noise, seed, n)`. Each field is also shifted by a seeded offset, so the origin is not a noise grid point (there simplex noise is always 0 and its contours run in straight lines):
+`TerrainFields` (`src/generation/TerrainGenerator.ts`) builds eleven seeded simplex noise fields (`src/generation/Noise.ts`), each seeded with `hash(Stream.Noise, seed, n)`. Each field is also shifted by a seeded offset, so the origin is not a noise grid point (there simplex noise is always 0 and its contours run in straight lines):
 
 | Field | Used for |
 | --- | --- |
@@ -24,8 +24,11 @@ Generation is deterministic: the same seed and the same visit counters give the 
 | `riverGate` | Where rivers exist at all (scale 900) and their width (scale 260) |
 | `temperature` | Climate, per chunk (scale 26 chunks) |
 | `moisture` | Climate, per chunk (scale 22 chunks) |
-| `warp` | Biome border blending, roughening biome footprints, and river meanders |
+| `warp` | Biome border blending, roughening biome footprints, river meanders and trail bends |
 | `detail` | Ground patches, decoration density, per-biome offsets |
+| `trail` | Trail centrelines: the zero lines of two warped fields (see [Trails](#trails)) |
+| `trailGate` | Where each trail network exists |
+| `zone` | Landscape zones (scale 80): meadows, deep woods, dune seas, open snowfields; and rock fields (scale 22) |
 
 The same class runs in the workers (tile generation) and on the main thread (biome climate and structure ground checks).
 
@@ -36,6 +39,7 @@ The same class runs in the workers (tile generation) and on the main thread (bio
 | Test | Tile |
 | --- | --- |
 | On a river (`dist < width`) and below `MOUNTAIN_HIGH` (0.62) | Snow biomes: `Ice` (frozen, walkable). Otherwise `WaterDeep` near the centreline (`dist < width × 0.45`), else `Water`. |
+| On a trail, and not above `MOUNTAIN_HIGH` | `Path` (so trails cross low rock as passes, but go round peaks) |
 | Height above `MOUNTAIN` (0.52) | `RockDark` above 0.62, else `Rock` |
 | Within `width + 1.2` tiles of a river | The palette's shore tile |
 | Otherwise | A ground tile from the biome palette |
@@ -47,12 +51,29 @@ Rivers (`riverAt`):
 - **Ends:** width is scaled by a fade that rises smoothly as the gate noise goes from −0.15 to 0.15, so rivers narrow to a point instead of stopping square. Below 0.8 tiles there is no water.
 - **Dry spawn:** the fade is also 0 within 36 tiles of the origin and rises over the next 40, so the player always wakes on dry land.
 
+### Trails
+
+Two trail networks wind across the world, each the zero line of its own `trail` field, found the same way as river centrelines (value over slope):
+
+| Network | Field scale | Half-width | Exists where `trailGate` is above |
+| --- | --- | --- | --- |
+| Main trails | 260 | 1.05 tiles | −0.3 (scale 700) |
+| Footpaths | 140 | 0.55 tiles | 0.2 (scale 420) |
+
+- **Bends:** the field is sampled at a position warped by `warp` at scale 90 (±14 tiles).
+- **Spawn:** within 150 tiles of the origin the main field is shifted by its own value at the origin (fading out over the next 250), and its gate is held open, so a main trail always runs through the spawn.
+- **Worn edges:** a tile within 0.6 tiles of a trail's edge is also `Path` 30% of the time (hashed from the seed and position).
+- **Clear of trees:** no tall decoration within a tile of a trail.
+- Trails depend only on the seed, like rivers.
+
+Cost: `generateChunk` samples the river and trail fields once per tile corner (shared between neighbouring tiles), checks trail fields first on a 4-tile grid, and skips the slope where the value shows the trail is far away. Trail widths are blended from the chunk's corners. The biome border warp is skipped where no neighbouring chunk within reach has a different biome.
+
 ### Bridges
 
 Plank bridges cross rivers (`TerrainFields.bridgeAt`). The world is split into cells of 80 × 80 tiles, and each cell has an 85% chance of a bridge:
 
 1. The cell's middle (8 tiles in from each edge) is sampled every 3 tiles for river centreline points (`dist` < 1.2, half-width at least 1.5, not near mountains).
-2. The point where the river runs closest to straight north–south or east–west wins (the river's slope direction is at least 85% along one axis), so the bridge crosses square.
+2. The point where the river runs closest to straight north–south or east–west wins (the river's slope direction is at least 85% along one axis), so the bridge crosses square. Points where a trail crosses (within about a tile) score 0.6 higher and need only 72%, so the bridge carries the trail; a cell with a trail crossing always gets a bridge.
 3. The bridge is two tiles wide and runs across the river: from the site it walks out along both rows until it reaches dry ground (anything that is not water or shore). Bridges longer than 22 tiles are dropped.
 4. `generateChunk` turns water, ice and shore tiles under a bridge into `BridgeH`/`BridgeH2` (running east–west, rails on the north and south sides) or `BridgeV`/`BridgeV2` (running north–south, rails on the west and east sides).
 
@@ -62,8 +83,10 @@ Players can also swim; see [survival.md](survival.md#swimming).
 
 Each palette (biome type × variant) has four ground kinds: `Base`, `Alt`, `Detail` and `Shore`. Tile id = `palette × 4 + kind`; shared tiles (water, rock, floors, walls, roofs and so on) start at id 24. Ground kind comes from `detail` noise at scale 11, offset by the biome's seed:
 
-- Forest and snow: `Alt` where the noise is above 0.38, `Detail` below −0.64, else `Base`.
-- Desert: dune stripes (`sin(gx × 0.11 + gy × 0.04 + d × 3) > 0.8`) are `Alt`, `Detail` below −0.6, else `Base`.
+- Forest and snow: `Alt` where the noise is above `0.38 − open × 0.3`, `Detail` below −0.64, else `Base`.
+- Desert: dune stripes (`sin(gx × 0.11 + gy × 0.04 + d × 3) > 0.8 − deep × 0.35`) are `Alt`, `Detail` below −0.6, else `Base`.
+
+`open` and `deep` come from the `zone` field `z` at scale 80: `open = smooth((−z − 0.25) / 0.25)`, `deep = smooth((z − 0.3) / 0.25)`.
 
 The six palettes are Forest, Autumn Forest, Desert, Red Desert, Snowfield and Crystal Tundra (`BIOME_NAMES` in `src/generation/Tiles.ts`).
 
@@ -73,9 +96,11 @@ Decorations are rolled per tile on ground tiles only (not water, rock, shared ti
 
 | Biome | Roll thresholds (cumulative) |
 | --- | --- |
-| Forest | Trees `0.01 + density × 0.17` (18% pines, otherwise oaks or autumn oaks), then bush +0.02, flowers +0.015, mushroom +0.007, stone +0.004, ore +0.0015 |
-| Desert | Cactus `0.008 + density × 0.03`, dead bush +0.012, rock +0.006 (red rock in the red variant), ore +0.0015 |
-| Snow | Snowy pines `0.01 + density × 0.11`, snow rock +0.008, crystal +0.012 in the crystal variant or +0.0015 otherwise, ore +0.0015 |
+| Forest | Trees `(0.01 + density × 0.17) × (1 − open × 0.95) + deep × 0.22`, × 0.4 in rock fields (`18% + deep × 30%` pines, otherwise oaks or autumn oaks), then bush +0.02 (+0.05 near rivers), flowers `+0.015 + open × 0.07` (+0.02 near rivers), mushroom `+0.007 + deep × 0.025`, stone +0.004 (+0.05 in rock fields), ore +0.0015 (+0.006 in rock fields) |
+| Desert | Palms +0.09 near rivers (oases), cactus `(0.008 + density × 0.03) × (1 + open × 3) × (1 − deep × 0.8)`, dead bush +0.012, rock +0.006 (+0.06 in rock fields; red rock in the red variant, half red in rock fields), ore +0.0015 (+0.005 in rock fields) |
+| Snow | Snowy pines `(0.01 + density × 0.11) × (1 − open × 0.9) + deep × 0.14`, snow rock +0.008 (+0.05 in rock fields), crystal +0.012 in the crystal variant or +0.0015 otherwise, ore +0.0015 (+0.005 in rock fields) |
+
+So forests have flowery meadows and dark deep woods, deserts have cactus stands, bare dune seas and palm oases, and snow has open snowfields between stands of taiga. Rock fields (`zone` at scale 22 above 0.5) are scattered in every biome. "Near rivers" means within `width + 5` tiles.
 
 Tall decorations (oaks, pines, palms, cacti) are wider than a tile, so one is dropped if another tall one already sits left, above, above-left or above-right of it.
 

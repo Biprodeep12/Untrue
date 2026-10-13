@@ -19,7 +19,8 @@ export type Sfx =
   | 'quest'
   | 'ui'
   | 'chest'
-  | 'thunder';
+  | 'thunder'
+  | 'warn';
 
 /** Scales (semitones from the root) for each mood. */
 const SCALES = {
@@ -139,6 +140,10 @@ export class AudioSystem {
         break;
       case 'thunder':
         this.noiseBurst(t + 0.1, 1.6, 180, 0.6, 'lowpass');
+        break;
+      case 'warn':
+        // A two-note alarm, twice.
+        [880, 660, 880, 660].forEach((f, i) => this.tone(t + i * 0.12, f, 0.1, 0.16, 'square'));
         break;
     }
   }

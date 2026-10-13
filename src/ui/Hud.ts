@@ -10,6 +10,27 @@ const BARS: Array<[keyof VitalValues, string]> = [
   ['thirst', 'WT'],
 ];
 
+/** How bad a vital is: 0 fine, 1 low, 2 critical. */
+export type Danger = 0 | 1 | 2;
+
+/** Shares of the bar below which a vital is low and critical. Stamina comes
+ *  back in seconds, so it only warns when nearly gone. */
+const DANGER: Record<keyof VitalValues, [number, number]> = {
+  health: [0.3, 0.12],
+  stamina: [0, 0.12],
+  hunger: [0.2, 0.001],
+  thirst: [0.2, 0.001],
+};
+/** A warning clears only this far above its threshold, so it does not flicker. */
+const HYSTERESIS = 0.03;
+
+const WARNINGS: Record<keyof VitalValues, [string, string]> = {
+  health: ['Low health: eat, rest or keep out of fights', 'Near death!'],
+  stamina: ['', 'Exhausted: stop running to recover'],
+  hunger: ['Hungry: eat something soon', 'Starving! You are losing health'],
+  thirst: ['Thirsty: find water soon', 'Dehydrated! You are losing health'],
+};
+
 export class Hud {
   onAction?: () => void;
   onBag?: () => void;
@@ -30,7 +51,13 @@ export class Hud {
   private readonly notes: HTMLElement;
   private readonly loading: HTMLElement;
   private readonly prompt: HTMLElement;
+  private readonly touch = matchMedia('(pointer: coarse)');
   private readonly fills = new Map<keyof VitalValues, HTMLElement>();
+  private readonly warnings: HTMLElement;
+  private readonly danger: HTMLElement;
+  private readonly dangers: Record<keyof VitalValues, Danger> = { health: 0, stamina: 0, hunger: 0, thirst: 0 };
+  /** Called when a vital gets worse: fine to low, or to critical. */
+  onDanger?: (key: keyof VitalValues, level: Danger) => void;
 
   constructor(root: HTMLElement) {
     root.innerHTML = `
@@ -43,7 +70,9 @@ export class Hud {
       <div class="panel hud-level"><span class="hud-level-n"></span><div class="xp-track"><div class="xp-fill"></div></div></div>
       <div class="hud-status"></div>
       <div class="panel hud-boss"><div class="boss-name"></div><div class="boss-track"><div class="boss-fill"></div></div></div>
+      <div class="hud-danger"></div>
       <div class="hud-hurt"></div>
+      <div class="hud-warnings"></div>
       <div class="panel hud-help">WASD move · Shift run · Click / J attack · Right-click / K block · Space dodge · E talk / gather · 1–8 hotbar · F use · Q drop · Tab bag · Ctrl+S save</div>
       <div class="touch-buttons">
         <button class="touch-btn bag">Bag</button><button class="touch-btn act">Use</button>
@@ -60,6 +89,8 @@ export class Hud {
     this.statuses = root.querySelector('.hud-status')!;
     this.boss = root.querySelector('.hud-boss')!;
     this.hurt = root.querySelector('.hud-hurt')!;
+    this.warnings = root.querySelector('.hud-warnings')!;
+    this.danger = root.querySelector('.hud-danger')!;
     this.clock = root.querySelector('.hud-clock')!;
     this.tracker = root.querySelector('.hud-tracker')!;
     this.help = root.querySelector('.hud-help')!;
@@ -78,6 +109,11 @@ export class Hud {
         e.stopPropagation();
         fn()?.();
       });
+    // On touch screens the prompt is a button too.
+    this.prompt.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.onAction?.();
+    });
     button('act', () => this.onAction);
     button('bag', () => this.onBag);
     button('attack', () => this.onAttack);
@@ -101,11 +137,35 @@ export class Hud {
   }
 
   setVitals(v: VitalValues, maxHealth: number): void {
+    let changed = false;
     for (const [key, el] of this.fills) {
-      const max = key === 'health' ? maxHealth : 100;
-      el.style.height = `${(v[key] / max) * 100}%`;
-      el.parentElement!.parentElement!.classList.toggle('low', v[key] / max < 0.2);
+      const share = v[key] / (key === 'health' ? maxHealth : 100);
+      el.style.height = `${share * 100}%`;
+      const was = this.dangers[key];
+      const level = dangerOf(key, share, was);
+      if (level === was) continue;
+      changed = true;
+      this.dangers[key] = level;
+      const bar = el.parentElement!.parentElement!;
+      bar.classList.toggle('low', level === 1);
+      bar.classList.toggle('critical', level === 2);
+      if (level > was) this.onDanger?.(key, level);
     }
+    if (!changed) return;
+    // Worst first; among equals, in bar order (health first).
+    const active = BARS.map(([key]) => key)
+      .filter((key) => this.dangers[key])
+      .sort((a, b) => this.dangers[b] - this.dangers[a]);
+    this.warnings.replaceChildren(
+      ...active.map((key) => {
+        const el = document.createElement('div');
+        el.className = `panel warning warning-${key}${this.dangers[key] === 2 ? ' critical' : ''}`;
+        el.textContent = `⚠ ${WARNINGS[key][this.dangers[key] - 1]}`;
+        return el;
+      }),
+    );
+    // The screen edges glow red while health is low, and throb when critical.
+    this.danger.className = `hud-danger${this.dangers.health ? ` level-${this.dangers.health}` : ''}`;
   }
 
   setClock(clock: string, weather: string): void {
@@ -176,7 +236,11 @@ export class Hud {
 
   setPrompt(text: string | null): void {
     this.prompt.style.display = text ? 'block' : 'none';
-    if (text) this.prompt.textContent = text;
+    if (!text) return;
+    // Touch screens have no E key: tap the prompt instead.
+    const tap = this.touch.matches && text.startsWith('E  ');
+    this.prompt.textContent = tap ? text.slice(3) : text;
+    this.prompt.classList.toggle('tap', tap);
   }
 
   notify(text: string): void {
@@ -188,4 +252,11 @@ export class Hud {
     setTimeout(() => el.classList.add('fade'), 3000);
     setTimeout(() => el.remove(), 3700);
   }
+}
+
+function dangerOf(key: keyof VitalValues, share: number, was: Danger): Danger {
+  const [low, critical] = DANGER[key];
+  if (share < critical || (was === 2 && share < critical + HYSTERESIS)) return 2;
+  if (share < low || (was >= 1 && share < low + HYSTERESIS)) return 1;
+  return 0;
 }

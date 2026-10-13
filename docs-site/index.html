@@ -129,7 +129,7 @@
 <td>Debug, development builds only: jump 20,000 tiles east, then come back</td>
 </tr>
 </tbody></table></div>
-<p>Touch screens get a virtual stick (drag anywhere on the game) and Use, Bag, Hit and Roll buttons.</p>
+<p>Touch screens get a virtual stick (drag on the left half of the game; a faint one rests bottom left), tap-to-interact (a quick tap anywhere on the game, or on the action prompt, acts like E) and Use, Bag, Hit and Roll buttons. On touch screens the vitals sit under the compass and the buttons bottom right.</p>
 <h2 id="url-parameters">URL parameters<a class="anchor" href="#url-parameters" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -159,6 +159,14 @@
 <td>Force a weather kind in every biome for 24 hours (development builds only): <code>clear</code>, <code>rain</code>, <code>storm</code>, <code>fog</code>, <code>sandstorm</code>, <code>heat</code>, <code>snow</code>, <code>blizzard</code>.</td>
 </tr>
 <tr>
+<td><code>?vitals=N</code></td>
+<td>Start health, stamina, hunger and thirst at <code>N</code>% (development builds only), to see the low warnings.</td>
+</tr>
+<tr>
+<td><code>?playground</code> or <code>?playground=SEED</code></td>
+<td>Story playground (development builds only): a fresh world, never saved, with the story places packed near the spawn and a panel (F4 or tapping its title folds it) to start any chapter, travel to any story place, trigger each ending and the epilogue finds, set night or morning, and toggle god mode.</td>
+</tr>
+<tr>
 <td><code>?fps=30</code></td>
 <td>Cap the frame rate at 30.</td>
 </tr>
@@ -175,7 +183,7 @@
 <li><strong>Errors</strong> in a frame are logged and the game carries on (Pixi would otherwise stop ticking). If the game cannot start at all (no WebGL), the page says so.</li>
 <li><strong>Cheats are off:</strong> <code>?spawn</code>, <code>?hour</code>, <code>?weather</code>, the G/B teleport and <code>window.game</code> only exist in development builds. <code>?seed</code>, <code>?new</code> and <code>?fps=30</code> work everywhere.</li>
 <li><strong>Two tabs</strong> of the game warn each other, since both would save over the same slot.</li>
-<li><strong>Touch screens</strong> get Use, Bag, Hit, Roll and a hold-to-Block button.</li>
+<li><strong>Touch screens</strong> get a left-half stick, tap-to-interact, a tappable action prompt, Use, Bag, Hit, Roll and a hold-to-Block button, and a layout that fits phones upright or sideways.</li>
 </ul>
 <h2 id="pages">Pages<a class="anchor" href="#pages" aria-label="Link to this section">#</a></h2>
 <p>Engine:</p>

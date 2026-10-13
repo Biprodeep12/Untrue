@@ -9,7 +9,7 @@ import { SEMI_KEEP_MINUTES, WorldManager } from '../world/WorldManager';
 import type { WorldObject } from '../world/WorldObject';
 import { restore, snapshot } from '../save/SaveManager';
 import { PLACES } from './StoryPlaces';
-import { StorySystem } from './StorySystem';
+import { STAGES, StorySystem } from './StorySystem';
 
 function view(px: number, py: number) {
   return { minX: px - 15, minY: py - 9, maxX: px + 15, maxY: py + 9, playerX: px, playerY: py, dirX: 0, dirY: 0 };
@@ -275,5 +275,68 @@ describe('endings change the world', () => {
     fresh.world.update(view(204, 14));
     expect(fresh.world.known.has('house@gone')).toBe(false);
     expect(fresh.story.memories.some((m) => m.name === 'Old House')).toBe(true);
+  });
+});
+
+describe('story playground', () => {
+  it('packs the places near the spawn without overlapping', () => {
+    const { story, place } = setup();
+    story.compact = true;
+    story.begin(false);
+    const ids = ['monument', 'graves', 'observatory', 'archive', 'anchor'];
+    for (const id of ids) expect(Math.hypot(place(id).x, place(id).y)).toBeLessThan(400);
+    for (const a of ids) {
+      for (const b of ids) {
+        if (a === b) continue;
+        const p = place(a);
+        const q = place(b);
+        expect(p.x + p.w <= q.x || q.x + q.w <= p.x || p.y + p.h <= q.y || q.y + q.h <= p.y, `${a} overlaps ${b}`).toBe(true);
+      }
+    }
+  });
+
+  it('starts any chapter as if the ones before it were done', () => {
+    const s = setup();
+    const { story, world, place, go, decoAt, listen } = s;
+    story.compact = true;
+    story.begin(false);
+    for (const stage of STAGES.slice(0, -1)) {
+      story.jumpTo(stage);
+      expect(story.stage).toBe(stage);
+      expect(story.ending).toBeNull();
+      expect(story.objective()).not.toBeNull();
+      expect(world.objects.objects.has('story:graves')).toBe(STAGES.indexOf(stage) < STAGES.indexOf('observatory'));
+      expect(story.lanternDark).toBe(stage === 'anchor');
+    }
+    // A jump lands where the chapter can be played: the night's rest moves on.
+    story.jumpTo('night');
+    const graves = place('graves');
+    go(graves);
+    expect(story.rest(...decoAt(graves, Deco.Campfire))).toBe(true);
+    expect(story.stage).toBe('observatory');
+    // And the return finds the younger self waiting.
+    story.jumpTo('return');
+    go(place('observatory'));
+    story.talk(s.people().find((n) => n.ghost)!);
+    listen();
+    expect(story.stage).toBe('anchor');
+  });
+
+  it('plays every ending, from any chapter', () => {
+    for (const e of ['remembered', 'living', 'memory'] as const) {
+      const { story, world } = setup();
+      story.compact = true;
+      story.begin(false);
+      story.jumpTo('village');
+      story.chooseEnding(e);
+      expect(story.ending).toBe(e);
+      expect(story.stage).toBe('epilogue');
+      expect(story.lanternDark).toBe(e === 'living');
+      expect(world.rules.rareBoost).toBe(e === 'living' ? 3 : 1);
+      // Starting a chapter again undoes the ending's rules.
+      story.jumpTo('anchor');
+      expect(story.ending).toBeNull();
+      expect(world.rules).toEqual({ regenChance: 1, rareBoost: 1 });
+    }
   });
 });

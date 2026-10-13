@@ -222,4 +222,16 @@ Ending the story unlocks three world events ([living-world.md](living-world.md#w
 
 `StorySave` holds the stage, the flags (who has been spoken to, pedestals read, the village gone, the lantern dark, the cabin found), the ending and the memories. It's stored inside the living-world save ([saves.md](saves.md)).
 
+### Story playground
+
+For testing, development builds open a story playground at `?playground` (or `?playground=SEED`; the default seed is 1). It is a fresh world that is never saved, so the real save is untouched.
+
+- **Compact places:** `StorySystem.compact` makes `placeStory` put the places near the spawn, one per direction: the Village of Graves 70 tiles east, the Observatory 80 south, the Sunken Archive 110 west and the Original Anchor 140 north.
+- **Start chapter:** `StorySystem.jumpTo(stage)` rebuilds every story place, clears memories, flags, the ending and its world rules, then sets the flags of every earlier chapter (villagers spoken to and the grave read, the village gone, the astronomer spoken to, the three pedestals read, the younger self met and the lantern dark). The monument is already crumbled from the bell onwards. The panel then takes the player to that chapter's place.
+- **Endings:** `StorySystem.chooseEnding(e)` jumps to the Anchor chapter if needed and plays that ending's vision.
+- **Epilogue finds:** after an ending, the Echo Monument, Memory Fragment and Quiet Cabin can be placed nearby on demand, through the same world events that place them in play.
+- **World:** travel to any story place or the spawn, set the clock to night or morning, god mode (on by default: vitals stay full), and restart.
+
+F4, or tapping the panel's title, folds and unfolds it. On touch screens it starts folded above the buttons and folds again after each chapter, ending, find or travel button.
+
 See also: [README.md](README.md) · [living-world.md](living-world.md) · [combat.md](combat.md) · [survival.md](survival.md) · [objects-and-structures.md](objects-and-structures.md) · [world-generation.md](world-generation.md)

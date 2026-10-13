@@ -21,11 +21,12 @@ import { GatheringSystem, interactionAt, type Interaction } from '../systems/Gat
 import { Inventory } from '../systems/InventorySystem';
 import type { ItemDef } from '../items/Items';
 import { Progression, type SkillId } from '../systems/Progression';
-import { SLOW_FACTOR, Vitals } from '../systems/Vitals';
+import { SLOW_FACTOR, VITAL_MAX, Vitals } from '../systems/Vitals';
 import { WEATHER, type WeatherKind } from '../systems/WeatherSystem';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import { Hotbar } from '../ui/Hotbar';
 import { Hud } from '../ui/Hud';
+import { Playground, type PlaygroundFind } from '../ui/Playground';
 import type { Landmark } from '../ui/MapView';
 import { Menu } from '../ui/Menu';
 import { PauseMenu } from '../ui/PauseMenu';
@@ -34,7 +35,9 @@ import { TouchStick } from '../ui/TouchStick';
 import { biomeName } from '../world/BiomeManager';
 import { hashString, streamRng, Stream } from '../generation/Random';
 import type { BuildingSpec } from '../generation/StructureGenerator';
+import type { PlaceId } from '../story/StoryPlaces';
 import { BOOKS } from '../story/StoryScript';
+import { STAGE_TARGET } from '../story/StorySystem';
 import { rollChest } from '../systems/Loot';
 import { chunkKey, tileToChunk } from '../coords';
 import type { Npc } from '../entities/NPC';
@@ -161,6 +164,8 @@ export class Game {
   private menu!: Menu;
   private stick!: TouchStick;
   private debug!: DebugOverlay;
+  /** The story playground, when the game runs as one. */
+  private playground: Playground | null = null;
   private pixelScale = 1;
   /** Where the player is waiting to be placed once the ground loads. */
   private spawnTarget: { x: number; y: number } | null = null;
@@ -172,7 +177,9 @@ export class Game {
   async start(host: HTMLElement, ui: HTMLElement): Promise<void> {
     // ?new or ?seed=N start a fresh world; otherwise the save is loaded.
     const params = new URLSearchParams(location.search);
-    const fresh = params.has('new') || params.has('seed');
+    // ?playground (development builds): a story test world, never saved.
+    const playground = import.meta.env.DEV && params.has('playground');
+    const fresh = params.has('new') || params.has('seed') || playground;
     let saved: SaveData | null = fresh ? null : await this.saves.load().catch(() => null);
     // A save that cannot be read is kept aside, and a new world begins.
     let recovered = false;
@@ -181,13 +188,13 @@ export class Game {
       saved = null;
       recovered = true;
     }
-    const seed = saved?.seed ?? (Number(params.get('seed')) || Math.floor(Math.random() * 1e9));
+    const seed = playground ? Number(params.get('playground')) || 1 : (saved?.seed ?? (Number(params.get('seed')) || Math.floor(Math.random() * 1e9)));
     // Debug-only: ?spawn=x,y, ?hour=N and ?weather=kind (development builds).
     const dev = import.meta.env.DEV;
     const spawn = dev ? params.get('spawn')?.split(',').map(Number) : undefined;
     this.spawnTarget = spawn ? { x: spawn[0] || 0, y: spawn[1] || 0 } : (saved?.player ?? { x: 0, y: 0 });
     // Reloading should continue this world, not start another.
-    history.replaceState(null, '', location.pathname);
+    history.replaceState(null, '', playground ? `${location.pathname}?playground=${seed}` : location.pathname);
 
     TextureStyle.defaultOptions.scaleMode = 'nearest';
     await this.app.init({
@@ -254,7 +261,9 @@ export class Game {
       save: () => this.save(true),
       settings: () => this.menu.show('settings'),
       newWorld: () => {
-        void this.saves.clear().finally(() => (location.href = `${location.pathname}?new`));
+        // The playground never touches the real save.
+        if (this.playground) location.href = `${location.pathname}?playground=${this.world.seed}`;
+        else void this.saves.clear().finally(() => (location.href = `${location.pathname}?new`));
       },
     });
     this.stick = new TouchStick(ui);
@@ -333,12 +342,20 @@ export class Game {
         console.error('Could not restore the living world; starting it afresh.', e);
       }
     }
+    if (playground) this.startPlayground(ui);
     this.living.beginStory();
     // Debug: ?hour=22 sets the clock, ?weather=storm forces the weather everywhere.
     const hour = dev ? params.get('hour') : null;
     if (hour !== null) this.living.time.minutes = (Number(hour) % 24) * 60;
     const weather = dev ? params.get('weather') : null;
     if (weather && weather in WEATHER) for (const b of BIOME_TYPES) this.living.weather.set(b, weather as WeatherKind, 24);
+    // ?vitals=15 starts every vital at that much, to see the low warnings.
+    const vitals = dev ? params.get('vitals') : null;
+    if (vitals !== null) {
+      const v = Math.max(0, Math.min(100, Number(vitals)));
+      this.vitals.hunger = this.vitals.thirst = this.vitals.stamina = v;
+      this.vitals.health = (this.vitals.maxHealth * v) / 100;
+    }
     this.settings.onChange = () => this.applySettings();
     this.applySettings();
     this.hud.onAttack = () => this.attack(false);
@@ -346,6 +363,10 @@ export class Game {
     this.hotbar.onUse = (slot) => this.useItem(slot);
     this.hud.onAction = () => this.interact();
     this.hud.onBag = () => this.menu.toggle();
+    // Running low rings an alarm; running out of stamina is too common to.
+    this.hud.onDanger = (key) => {
+      if (key !== 'stamina') this.audio.play('warn');
+    };
     this.world.onDiscover = (o) => {
       this.hud.notify(`Discovered: ${o.name}`);
       this.combat.grantXp(DISCOVERY_XP);
@@ -510,6 +531,12 @@ export class Game {
     if (this.uiTimer <= 0) {
       this.uiTimer = 0.25;
       this.updateUi();
+      this.playground?.update(this.living.story);
+    }
+    if (this.playground?.god) {
+      const v = this.vitals;
+      v.health = v.maxHealth;
+      v.hunger = v.thirst = v.stamina = VITAL_MAX;
     }
     input.endFrame();
   }
@@ -741,6 +768,7 @@ export class Game {
   private handleKeys(): void {
     const { input, camera, player } = this;
     if (input.hit('F3')) this.debug.toggle();
+    if (input.hit('F4')) this.playground?.toggle();
     if (input.hit('Tab') || input.hit('KeyI')) this.menu.toggle();
     if (this.living.vision.isOpen && (input.hit('Space') || input.hit('KeyE') || input.hit('Enter'))) this.living.vision.next();
     if (input.hit('Escape')) {
@@ -1070,6 +1098,55 @@ export class Game {
     else if (result === 'full') this.hud.notify('Bag full');
   }
 
+  /** Story playground: places packed near the spawn, and a panel to drive the story. */
+  private startPlayground(ui: HTMLElement): void {
+    const { story } = this.living;
+    story.compact = true;
+    const goTo = (place: PlaceId | 'spawn') => {
+      if (place === 'spawn') return this.teleport(0, 0);
+      const o = this.world.objects.objects.get(`story:${place}`);
+      if (!o) return this.hud.notify('That place is gone at this point in the story');
+      // Just outside the south side, where the entrances are.
+      this.teleport(o.x + o.w / 2, o.y + o.h + 2);
+    };
+    this.playground = new Playground(ui, {
+      goTo,
+      jump: (stage) => {
+        this.living.dialog.close();
+        story.jumpTo(stage);
+        const target = STAGE_TARGET[stage];
+        if (target) goTo(target);
+        this.hud.notify(`Playground: chapter "${stage}"`);
+      },
+      ending: (e) => {
+        this.living.dialog.close();
+        story.chooseEnding(e);
+      },
+      find: (kind: PlaygroundFind) => {
+        const { player } = this;
+        const placed = this.living.events.trigger(kind, {
+          x: player.x,
+          y: player.y,
+          night: this.living.time.isNight,
+          village: null,
+          merchantNearby: false,
+          now: this.living.time.total,
+          ending: story.ending,
+          cabinFound: story.cabinFound,
+        });
+        if (!placed) this.hud.notify('No open ground nearby; move somewhere clearer');
+      },
+      setHour: (hour) => (this.living.time.minutes = hour * 60),
+      restart: () => (location.href = `${location.pathname}?playground=${this.world.seed}`),
+    });
+  }
+
+  private teleport(x: number, y: number): void {
+    if (this.room) this.leave();
+    this.gathering.cancel();
+    this.travel(x, y);
+  }
+
   /** Health ran out: wake up back at the start, keeping your things. */
   private collapse(): void {
     if (this.room) this.leave();
@@ -1080,6 +1157,10 @@ export class Game {
   }
 
   private save(manual: boolean): void {
+    if (this.playground) {
+      if (manual) this.hud.notify('The story playground is never saved');
+      return;
+    }
     if (this.spawnTarget) {
       if (manual) this.hud.notify('Cannot save while travelling');
       return;

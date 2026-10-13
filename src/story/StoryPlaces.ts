@@ -131,18 +131,30 @@ export const PLACES: Record<PlaceId, StoryPlace> = {
 
 export const PLACE_ORDER: readonly PlaceId[] = ['monument', 'graves', 'observatory', 'archive', 'anchor'];
 
-/** Builds a story place at its seeded spot, as a persistent object. */
-export function placeStory(id: PlaceId, seed: number, fields: TerrainFields): WorldObject {
+/** The story playground packs the places around the spawn, one per compass
+ *  direction so they never run into each other: [distance, bearing]. */
+const COMPACT: Record<PlaceId, [number, number]> = {
+  monument: [0, 0],
+  graves: [70, 0],
+  observatory: [80, Math.PI / 2],
+  archive: [110, Math.PI],
+  anchor: [140, -Math.PI / 2],
+};
+
+/** Builds a story place at its seeded spot, as a persistent object; `compact`
+ *  puts it near the spawn instead, for the story playground. */
+export function placeStory(id: PlaceId, seed: number, fields: TerrainFields, compact = false): WorldObject {
   const place = PLACES[id];
   const rng = new Rng(hash(seed, PLACE_ORDER.indexOf(id), 0x5707));
   const layout = place.build(rng);
   let x = -Math.floor(layout.w / 2);
   let y = -Math.floor(layout.h / 2) - 3;
-  if (place.distance > 0) {
-    const angle = unit(hash(seed, PLACE_ORDER.indexOf(id), 0xa11e)) * Math.PI * 2;
+  const distance = compact ? COMPACT[id][0] : place.distance;
+  if (distance > 0) {
+    const angle = compact ? COMPACT[id][1] : unit(hash(seed, PLACE_ORDER.indexOf(id), 0xa11e)) * Math.PI * 2;
     // Walk outward along the bearing until the whole footprint is buildable.
     for (let step = 0; step < 80; step++) {
-      const d = place.distance + step * 12;
+      const d = distance + step * 12;
       const cx = Math.round(Math.cos(angle + step * 0.05) * d);
       const cy = Math.round(Math.sin(angle + step * 0.05) * d);
       x = cx - Math.floor(layout.w / 2);

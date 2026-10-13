@@ -35,6 +35,23 @@ Health changes once per frame from the sum of these rates:
 
 Starvation and healing never apply at the same time: any empty bar stops healing.
 
+### Low warnings
+
+The HUD (`src/ui/Hud.ts`) warns when a bar runs low. Each bar is low or critical below a share of its maximum, and clears 3% above it, so warnings do not flicker:
+
+| Bar | Low | Critical |
+| --- | --- | --- |
+| Health | 30% ("Low health") | 12% ("Near death!") |
+| Hunger | 20% ("Hungry") | empty ("Starving!") |
+| Thirst | 20% ("Thirsty") | empty ("Dehydrated!") |
+| Stamina | – | 12% ("Exhausted") |
+
+- A banner at the top centre lists the warnings, worst first; critical ones are red and blink.
+- The bar's frame glows and pulses, its label turns red, and a critical bar shakes.
+- Low health tints the screen edges red; critical health makes them throb like a heartbeat.
+- Each time a bar gets worse an alarm sounds (not for stamina, which runs out often).
+- Animations stop under the system's reduced-motion setting.
+
 ### Status effects
 
 | Status | Effect | Source | Cure |

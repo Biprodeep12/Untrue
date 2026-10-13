@@ -93,6 +93,44 @@
 </tr>
 </tbody></table></div>
 <p>Starvation and healing never apply at the same time: any empty bar stops healing.</p>
+<h3 id="low-warnings">Low warnings<a class="anchor" href="#low-warnings" aria-label="Link to this section">#</a></h3>
+<p>The HUD (<code>src/ui/Hud.ts</code>) warns when a bar runs low. Each bar is low or critical below a share of its maximum, and clears 3% above it, so warnings do not flicker:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Bar</th>
+<th>Low</th>
+<th>Critical</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Health</td>
+<td>30% (&quot;Low health&quot;)</td>
+<td>12% (&quot;Near death!&quot;)</td>
+</tr>
+<tr>
+<td>Hunger</td>
+<td>20% (&quot;Hungry&quot;)</td>
+<td>empty (&quot;Starving!&quot;)</td>
+</tr>
+<tr>
+<td>Thirst</td>
+<td>20% (&quot;Thirsty&quot;)</td>
+<td>empty (&quot;Dehydrated!&quot;)</td>
+</tr>
+<tr>
+<td>Stamina</td>
+<td>–</td>
+<td>12% (&quot;Exhausted&quot;)</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>A banner at the top centre lists the warnings, worst first; critical ones are red and blink.</li>
+<li>The bar&#39;s frame glows and pulses, its label turns red, and a critical bar shakes.</li>
+<li>Low health tints the screen edges red; critical health makes them throb like a heartbeat.</li>
+<li>Each time a bar gets worse an alarm sounds (not for stamina, which runs out often).</li>
+<li>Animations stop under the system&#39;s reduced-motion setting.</li>
+</ul>
 <h3 id="status-effects">Status effects<a class="anchor" href="#status-effects" aria-label="Link to this section">#</a></h3>
 <div class="table-wrap"><table>
 <thead>
@@ -933,7 +971,7 @@
 </article>
     <nav class="pager"><a class="prev" href="saves.html"><small>Previous</small>Saves</a><a class="next" href="combat.html"><small>Next</small>Combat</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#vitals">Vitals</a></li><li class="l3"><a href="#drain">Drain</a></li><li class="l3"><a href="#health">Health</a></li><li class="l3"><a href="#status-effects">Status effects</a></li><li class="l3"><a href="#collapse">Collapse</a></li><li class="l2"><a href="#stamina">Stamina</a></li><li class="l2"><a href="#gathering">Gathering</a></li><li class="l3"><a href="#drinking">Drinking</a></li><li class="l2"><a href="#swimming">Swimming</a></li><li class="l2"><a href="#items">Items</a></li><li class="l2"><a href="#inventory-and-hotbar">Inventory and hotbar</a></li><li class="l3"><a href="#weight">Weight</a></li><li class="l3"><a href="#dropping-and-picking-up">Dropping and picking up</a></li><li class="l3"><a href="#equipment">Equipment</a></li><li class="l2"><a href="#crafting">Crafting</a></li><li class="l2"><a href="#loot">Loot</a></li><li class="l3"><a href="#chests">Chests</a></li><li class="l3"><a href="#barrels">Barrels</a></li><li class="l3"><a href="#buried-treasure">Buried treasure</a></li><li class="l3"><a href="#enemy-drops">Enemy drops</a></li><li class="l2"><a href="#light">Light</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#vitals">Vitals</a></li><li class="l3"><a href="#drain">Drain</a></li><li class="l3"><a href="#health">Health</a></li><li class="l3"><a href="#low-warnings">Low warnings</a></li><li class="l3"><a href="#status-effects">Status effects</a></li><li class="l3"><a href="#collapse">Collapse</a></li><li class="l2"><a href="#stamina">Stamina</a></li><li class="l2"><a href="#gathering">Gathering</a></li><li class="l3"><a href="#drinking">Drinking</a></li><li class="l2"><a href="#swimming">Swimming</a></li><li class="l2"><a href="#items">Items</a></li><li class="l2"><a href="#inventory-and-hotbar">Inventory and hotbar</a></li><li class="l3"><a href="#weight">Weight</a></li><li class="l3"><a href="#dropping-and-picking-up">Dropping and picking up</a></li><li class="l3"><a href="#equipment">Equipment</a></li><li class="l2"><a href="#crafting">Crafting</a></li><li class="l2"><a href="#loot">Loot</a></li><li class="l3"><a href="#chests">Chests</a></li><li class="l3"><a href="#barrels">Barrels</a></li><li class="l3"><a href="#buried-treasure">Buried treasure</a></li><li class="l3"><a href="#enemy-drops">Enemy drops</a></li><li class="l2"><a href="#light">Light</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

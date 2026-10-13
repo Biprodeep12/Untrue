@@ -15,7 +15,7 @@ How the source is organised, what runs each frame, and how the parts talk to eac
 | `LivingWorld.ts` | Owns time, weather, hazards, NPCs, quests, events, the story, lighting and weather rendering. |
 | `Player.ts` | Movement, collision, dodge roll, knockback and invulnerability. |
 | `Camera.ts` | Smooth follow and zoom (0.25 to 2). |
-| `Input.ts` | Keyboard, mouse, wheel and the touch stick. |
+| `Input.ts` | Keyboard, mouse, wheel, the touch stick (left half) and tap-to-interact. |
 | `Settings.ts` | Player settings kept in `localStorage`. |
 | **`src/world/`** | The streamed world, independent of rendering. |
 | `WorldManager.ts` | Ties streaming, biomes, objects, regions and the harvest log together. |

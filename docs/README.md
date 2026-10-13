@@ -36,7 +36,7 @@ Untrue is an endless 2D procedural survival and exploration game for the browser
 | F3 | Debug overlay |
 | G, then B | Debug, development builds only: jump 20,000 tiles east, then come back |
 
-Touch screens get a virtual stick (drag anywhere on the game) and Use, Bag, Hit and Roll buttons.
+Touch screens get a virtual stick (drag on the left half of the game; a faint one rests bottom left), tap-to-interact (a quick tap anywhere on the game, or on the action prompt, acts like E) and Use, Bag, Hit and Roll buttons. On touch screens the vitals sit under the compass and the buttons bottom right.
 
 ## URL parameters
 
@@ -47,6 +47,8 @@ Touch screens get a virtual stick (drag anywhere on the game) and Use, Bag, Hit 
 | `?spawn=x,y` | Spawn at tile `x,y` (development builds only). |
 | `?hour=H` | Set the clock to hour `H` (development builds only). |
 | `?weather=kind` | Force a weather kind in every biome for 24 hours (development builds only): `clear`, `rain`, `storm`, `fog`, `sandstorm`, `heat`, `snow`, `blizzard`. |
+| `?vitals=N` | Start health, stamina, hunger and thirst at `N`% (development builds only), to see the low warnings. |
+| `?playground` or `?playground=SEED` | Story playground (development builds only): a fresh world, never saved, with the story places packed near the spawn and a panel (F4 or tapping its title folds it) to start any chapter, travel to any story place, trigger each ending and the epilogue finds, set night or morning, and toggle god mode. |
 | `?fps=30` | Cap the frame rate at 30. |
 
 The game strips the query string after reading it, so reloading continues the same world.
@@ -65,7 +67,7 @@ What keeps a live build safe:
 - **Errors** in a frame are logged and the game carries on (Pixi would otherwise stop ticking). If the game cannot start at all (no WebGL), the page says so.
 - **Cheats are off:** `?spawn`, `?hour`, `?weather`, the G/B teleport and `window.game` only exist in development builds. `?seed`, `?new` and `?fps=30` work everywhere.
 - **Two tabs** of the game warn each other, since both would save over the same slot.
-- **Touch screens** get Use, Bag, Hit, Roll and a hold-to-Block button.
+- **Touch screens** get a left-half stick, tap-to-interact, a tappable action prompt, Use, Bag, Hit, Roll and a hold-to-Block button, and a layout that fits phones upright or sideways.
 
 ## Pages
 

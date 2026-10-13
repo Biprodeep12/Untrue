@@ -31,7 +31,7 @@
 </ul>
 <p>Generation is deterministic: the same seed and the same visit counters give the same world (see <code>is repeatable for the same seed and path</code> in <code>src/world/WorldManager.test.ts</code>).</p>
 <h2 id="noise-fields">Noise fields<a class="anchor" href="#noise-fields" aria-label="Link to this section">#</a></h2>
-<p><code>TerrainFields</code> (<code>src/generation/TerrainGenerator.ts</code>) builds eight seeded simplex noise fields (<code>src/generation/Noise.ts</code>), each seeded with <code>hash(Stream.Noise, seed, n)</code>. Each field is also shifted by a seeded offset, so the origin is not a noise grid point (there simplex noise is always 0 and its contours run in straight lines):</p>
+<p><code>TerrainFields</code> (<code>src/generation/TerrainGenerator.ts</code>) builds eleven seeded simplex noise fields (<code>src/generation/Noise.ts</code>), each seeded with <code>hash(Stream.Noise, seed, n)</code>. Each field is also shifted by a seeded offset, so the origin is not a noise grid point (there simplex noise is always 0 and its contours run in straight lines):</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -65,11 +65,23 @@
 </tr>
 <tr>
 <td><code>warp</code></td>
-<td>Biome border blending, roughening biome footprints, and river meanders</td>
+<td>Biome border blending, roughening biome footprints, river meanders and trail bends</td>
 </tr>
 <tr>
 <td><code>detail</code></td>
 <td>Ground patches, decoration density, per-biome offsets</td>
+</tr>
+<tr>
+<td><code>trail</code></td>
+<td>Trail centrelines: the zero lines of two warped fields (see <a href="#trails">Trails</a>)</td>
+</tr>
+<tr>
+<td><code>trailGate</code></td>
+<td>Where each trail network exists</td>
+</tr>
+<tr>
+<td><code>zone</code></td>
+<td>Landscape zones (scale 80): meadows, deep woods, dune seas, open snowfields; and rock fields (scale 22)</td>
 </tr>
 </tbody></table></div>
 <p>The same class runs in the workers (tile generation) and on the main thread (biome climate and structure ground checks).</p>
@@ -85,6 +97,10 @@
 <tbody><tr>
 <td>On a river (<code>dist &lt; width</code>) and below <code>MOUNTAIN_HIGH</code> (0.62)</td>
 <td>Snow biomes: <code>Ice</code> (frozen, walkable). Otherwise <code>WaterDeep</code> near the centreline (<code>dist &lt; width × 0.45</code>), else <code>Water</code>.</td>
+</tr>
+<tr>
+<td>On a trail, and not above <code>MOUNTAIN_HIGH</code></td>
+<td><code>Path</code> (so trails cross low rock as passes, but go round peaks)</td>
 </tr>
 <tr>
 <td>Height above <code>MOUNTAIN</code> (0.52)</td>
@@ -106,11 +122,43 @@
 <li><strong>Ends:</strong> width is scaled by a fade that rises smoothly as the gate noise goes from −0.15 to 0.15, so rivers narrow to a point instead of stopping square. Below 0.8 tiles there is no water.</li>
 <li><strong>Dry spawn:</strong> the fade is also 0 within 36 tiles of the origin and rises over the next 40, so the player always wakes on dry land.</li>
 </ul>
+<h3 id="trails">Trails<a class="anchor" href="#trails" aria-label="Link to this section">#</a></h3>
+<p>Two trail networks wind across the world, each the zero line of its own <code>trail</code> field, found the same way as river centrelines (value over slope):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Network</th>
+<th>Field scale</th>
+<th>Half-width</th>
+<th>Exists where <code>trailGate</code> is above</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Main trails</td>
+<td>260</td>
+<td>1.05 tiles</td>
+<td>−0.3 (scale 700)</td>
+</tr>
+<tr>
+<td>Footpaths</td>
+<td>140</td>
+<td>0.55 tiles</td>
+<td>0.2 (scale 420)</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><strong>Bends:</strong> the field is sampled at a position warped by <code>warp</code> at scale 90 (±14 tiles).</li>
+<li><strong>Spawn:</strong> within 150 tiles of the origin the main field is shifted by its own value at the origin (fading out over the next 250), and its gate is held open, so a main trail always runs through the spawn.</li>
+<li><strong>Worn edges:</strong> a tile within 0.6 tiles of a trail&#39;s edge is also <code>Path</code> 30% of the time (hashed from the seed and position).</li>
+<li><strong>Clear of trees:</strong> no tall decoration within a tile of a trail.</li>
+<li>Trails depend only on the seed, like rivers.</li>
+</ul>
+<p>Cost: <code>generateChunk</code> samples the river and trail fields once per tile corner (shared between neighbouring tiles), checks trail fields first on a 4-tile grid, and skips the slope where the value shows the trail is far away. Trail widths are blended from the chunk&#39;s corners. The biome border warp is skipped where no neighbouring chunk within reach has a different biome.</p>
 <h3 id="bridges">Bridges<a class="anchor" href="#bridges" aria-label="Link to this section">#</a></h3>
 <p>Plank bridges cross rivers (<code>TerrainFields.bridgeAt</code>). The world is split into cells of 80 × 80 tiles, and each cell has an 85% chance of a bridge:</p>
 <ol>
 <li>The cell&#39;s middle (8 tiles in from each edge) is sampled every 3 tiles for river centreline points (<code>dist</code> &lt; 1.2, half-width at least 1.5, not near mountains).</li>
-<li>The point where the river runs closest to straight north–south or east–west wins (the river&#39;s slope direction is at least 85% along one axis), so the bridge crosses square.</li>
+<li>The point where the river runs closest to straight north–south or east–west wins (the river&#39;s slope direction is at least 85% along one axis), so the bridge crosses square. Points where a trail crosses (within about a tile) score 0.6 higher and need only 72%, so the bridge carries the trail; a cell with a trail crossing always gets a bridge.</li>
 <li>The bridge is two tiles wide and runs across the river: from the site it walks out along both rows until it reaches dry ground (anything that is not water or shore). Bridges longer than 22 tiles are dropped.</li>
 <li><code>generateChunk</code> turns water, ice and shore tiles under a bridge into <code>BridgeH</code>/<code>BridgeH2</code> (running east–west, rails on the north and south sides) or <code>BridgeV</code>/<code>BridgeV2</code> (running north–south, rails on the west and east sides).</li>
 </ol>
@@ -118,9 +166,10 @@
 <p>Players can also swim; see <a href="survival.html#swimming">survival.md</a>.</p>
 <p>Each palette (biome type × variant) has four ground kinds: <code>Base</code>, <code>Alt</code>, <code>Detail</code> and <code>Shore</code>. Tile id = <code>palette × 4 + kind</code>; shared tiles (water, rock, floors, walls, roofs and so on) start at id 24. Ground kind comes from <code>detail</code> noise at scale 11, offset by the biome&#39;s seed:</p>
 <ul>
-<li>Forest and snow: <code>Alt</code> where the noise is above 0.38, <code>Detail</code> below −0.64, else <code>Base</code>.</li>
-<li>Desert: dune stripes (<code>sin(gx × 0.11 + gy × 0.04 + d × 3) &gt; 0.8</code>) are <code>Alt</code>, <code>Detail</code> below −0.6, else <code>Base</code>.</li>
+<li>Forest and snow: <code>Alt</code> where the noise is above <code>0.38 − open × 0.3</code>, <code>Detail</code> below −0.64, else <code>Base</code>.</li>
+<li>Desert: dune stripes (<code>sin(gx × 0.11 + gy × 0.04 + d × 3) &gt; 0.8 − deep × 0.35</code>) are <code>Alt</code>, <code>Detail</code> below −0.6, else <code>Base</code>.</li>
 </ul>
+<p><code>open</code> and <code>deep</code> come from the <code>zone</code> field <code>z</code> at scale 80: <code>open = smooth((−z − 0.25) / 0.25)</code>, <code>deep = smooth((z − 0.3) / 0.25)</code>.</p>
 <p>The six palettes are Forest, Autumn Forest, Desert, Red Desert, Snowfield and Crystal Tundra (<code>BIOME_NAMES</code> in <code>src/generation/Tiles.ts</code>).</p>
 <h2 id="decorations">Decorations<a class="anchor" href="#decorations" aria-label="Link to this section">#</a></h2>
 <p>Decorations are rolled per tile on ground tiles only (not water, rock, shared tiles or shore), with <code>unit(hash3(decoSeed, lx, ly))</code>. <code>decoSeed = hash(Stream.Decoration, seed, cx, cy, visit)</code>, so a regenerated region gets new decorations. A smooth density field (<code>detail</code> at scale 45, offset by the biome seed, clamped at 0) clusters trees into groves.</p>
@@ -133,17 +182,18 @@
 </thead>
 <tbody><tr>
 <td>Forest</td>
-<td>Trees <code>0.01 + density × 0.17</code> (18% pines, otherwise oaks or autumn oaks), then bush +0.02, flowers +0.015, mushroom +0.007, stone +0.004, ore +0.0015</td>
+<td>Trees <code>(0.01 + density × 0.17) × (1 − open × 0.95) + deep × 0.22</code>, × 0.4 in rock fields (<code>18% + deep × 30%</code> pines, otherwise oaks or autumn oaks), then bush +0.02 (+0.05 near rivers), flowers <code>+0.015 + open × 0.07</code> (+0.02 near rivers), mushroom <code>+0.007 + deep × 0.025</code>, stone +0.004 (+0.05 in rock fields), ore +0.0015 (+0.006 in rock fields)</td>
 </tr>
 <tr>
 <td>Desert</td>
-<td>Cactus <code>0.008 + density × 0.03</code>, dead bush +0.012, rock +0.006 (red rock in the red variant), ore +0.0015</td>
+<td>Palms +0.09 near rivers (oases), cactus <code>(0.008 + density × 0.03) × (1 + open × 3) × (1 − deep × 0.8)</code>, dead bush +0.012, rock +0.006 (+0.06 in rock fields; red rock in the red variant, half red in rock fields), ore +0.0015 (+0.005 in rock fields)</td>
 </tr>
 <tr>
 <td>Snow</td>
-<td>Snowy pines <code>0.01 + density × 0.11</code>, snow rock +0.008, crystal +0.012 in the crystal variant or +0.0015 otherwise, ore +0.0015</td>
+<td>Snowy pines <code>(0.01 + density × 0.11) × (1 − open × 0.9) + deep × 0.14</code>, snow rock +0.008 (+0.05 in rock fields), crystal +0.012 in the crystal variant or +0.0015 otherwise, ore +0.0015 (+0.005 in rock fields)</td>
 </tr>
 </tbody></table></div>
+<p>So forests have flowery meadows and dark deep woods, deserts have cactus stands, bare dune seas and palm oases, and snow has open snowfields between stands of taiga. Rock fields (<code>zone</code> at scale 22 above 0.5) are scattered in every biome. &quot;Near rivers&quot; means within <code>width + 5</code> tiles.</p>
 <p>Tall decorations (oaks, pines, palms, cacti) are wider than a tile, so one is dropped if another tall one already sits left, above, above-left or above-right of it.</p>
 <h2 id="biomes">Biomes<a class="anchor" href="#biomes" aria-label="Link to this section">#</a></h2>
 <p>A biome is a record that owns many chunks (<code>BiomeRecord</code> in <code>src/world/BiomeManager.ts</code>): type, variant, a seed, its chunk keys and how many of them are in the cache area.</p>
@@ -197,7 +247,7 @@
 </article>
     <nav class="pager"><a class="prev" href="world-streaming.html"><small>Previous</small>World streaming</a><a class="next" href="objects-and-structures.html"><small>Next</small>Objects and structures</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#seeds-and-streams">Seeds and streams</a></li><li class="l2"><a href="#noise-fields">Noise fields</a></li><li class="l2"><a href="#tiles">Tiles</a></li><li class="l3"><a href="#bridges">Bridges</a></li><li class="l2"><a href="#decorations">Decorations</a></li><li class="l2"><a href="#biomes">Biomes</a></li><li class="l2"><a href="#regions-and-regeneration">Regions and regeneration</a></li><li class="l2"><a href="#world-scale-rules">World-scale rules</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#seeds-and-streams">Seeds and streams</a></li><li class="l2"><a href="#noise-fields">Noise fields</a></li><li class="l2"><a href="#tiles">Tiles</a></li><li class="l3"><a href="#trails">Trails</a></li><li class="l3"><a href="#bridges">Bridges</a></li><li class="l2"><a href="#decorations">Decorations</a></li><li class="l2"><a href="#biomes">Biomes</a></li><li class="l2"><a href="#regions-and-regeneration">Regions and regeneration</a></li><li class="l2"><a href="#world-scale-rules">World-scale rules</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>
