@@ -1,0 +1,9 @@
+{
+  "name": "Untrue",
+  "short_name": "Untrue",
+  "description": "An endless procedural pixel-art adventure about a world that forgets.",
+  "start_url": ".",
+  "display": "fullscreen",
+  "background_color": "#1d1a17",
+  "theme_color": "#1d1a17"
+}

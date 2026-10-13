@@ -1,5 +1,5 @@
 // Main menu (spec 7.2): a full-screen wood panel with tabs for inventory,
-// crafting, skills, quests, the map, the lantern and settings.
+// crafting, skills, quests, the map, the lantern, settings and about.
 
 import type { Settings } from '../game/Settings';
 import type { Memory } from '../story/StorySystem';
@@ -8,10 +8,11 @@ import { armorCell, Dir, playerCell } from '../rendering/Atlas';
 import { MAX_RANK, SKILLS, type Progression, type SkillId } from '../systems/Progression';
 import { hasInputs, RECIPES, STATION_NAMES, type Recipe, type Station } from '../systems/CraftingSystem';
 import { HOTBAR_SIZE, INVENTORY_SIZE, type Inventory } from '../systems/InventorySystem';
+import { aboutView } from './About';
 import { itemIcon, slotContent } from './ItemIcon';
 import { MapView, type MapSource } from './MapView';
 
-type Tab = 'inventory' | 'crafting' | 'skills' | 'quests' | 'map' | 'lantern' | 'settings';
+type Tab = 'inventory' | 'crafting' | 'skills' | 'quests' | 'map' | 'lantern' | 'settings' | 'about';
 
 export interface QuestView {
   title: string;
@@ -97,6 +98,7 @@ export class Menu {
       ['map', 'Map', true],
       ['lantern', 'Lantern', true],
       ['settings', 'Settings', true],
+      ['about', 'About', true],
     ] as const) {
       const b = document.createElement('button');
       b.className = 'menu-tab';
@@ -147,6 +149,7 @@ export class Menu {
       lantern: () => this.lanternView(),
       map: () => (this.mapView ??= new MapView(this.actions.map)).show(),
       settings: () => this.settingsView(),
+      about: aboutView,
     };
     this.body.replaceChildren(views[this.tab]());
   }

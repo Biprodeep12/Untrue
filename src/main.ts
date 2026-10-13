@@ -1,3 +1,6 @@
+// The font ships with the game: no request to Google Fonts.
+import '@fontsource/pixelify-sans/400.css';
+import '@fontsource/pixelify-sans/600.css';
 import { Game } from './game/Game';
 
 const game = new Game();

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap');
-
 :root {
   --wood: #b07a3e;
   --wood-dark: #6b4220;
@@ -1174,7 +1172,7 @@ body {
     right: calc(12px + env(safe-area-inset-right));
     grid-template-columns: repeat(3, 54px);
     grid-template-areas:
-      '. act bag'
+      'full act bag'
       'block dodge attack';
   }
 
@@ -1191,6 +1189,8 @@ body {
   .touch-btn.block { grid-area: block; grid-column: auto; justify-self: auto; }
   .touch-btn.dodge { grid-area: dodge; }
   .touch-btn.attack { grid-area: attack; }
+  .touch-btn.full { grid-area: full; font-size: 12px; }
+  .touch-btn[hidden] { display: none; }
 
   .touch-btn:active {
     background: var(--wood-light);
@@ -1303,4 +1303,35 @@ body {
 
 .dialog {
   max-height: calc(100dvh - 120px);
+}
+
+/* About tab: privacy, credits, licenses. */
+.about {
+  font-size: 14px;
+}
+
+.about h4 {
+  margin: 10px 0 4px;
+}
+
+.about ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.about li {
+  margin: 2px 0;
+}
+
+.about-notices {
+  max-height: 40vh;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 8px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #fbefcf;
+  border: 2px solid var(--wood);
+  border-radius: 3px;
 }

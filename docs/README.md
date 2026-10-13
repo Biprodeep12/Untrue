@@ -36,7 +36,7 @@ Untrue is an endless 2D procedural survival and exploration game for the browser
 | F3 | Debug overlay |
 | G, then B | Debug, development builds only: jump 20,000 tiles east, then come back |
 
-Touch screens get a virtual stick (drag on the left half of the game; a faint one rests bottom left), tap-to-interact (a quick tap anywhere on the game, or on the action prompt, acts like E) and Use, Bag, Hit and Roll buttons. On touch screens the vitals sit under the compass and the buttons bottom right.
+Touch screens get a virtual stick (drag on the left half of the game; a faint one rests bottom left), tap-to-interact (a quick tap anywhere on the game, or on the action prompt, acts like E) Use, Bag, Hit and Roll buttons, and a Full button for full screen (also in the pause menu). iPhones have no full screen for pages, so the button is hidden there; Add to Home Screen opens the game full screen instead (`public/manifest.webmanifest`). On touch screens the vitals sit under the compass and the buttons bottom right.
 
 ## URL parameters
 
@@ -59,7 +59,7 @@ In dev builds (`npm run dev`), the running game is available in the browser cons
 
 `npm run build` writes a static site to `dist/`: upload the folder to any static host (Netlify, GitHub Pages, itch.io, an S3 bucket, nginx). Paths are relative, so it works from a subfolder too. The game code (about 100 KB gzipped) and Pixi (about 160 KB gzipped) are separate files, so players keep Pixi cached across updates; serve `dist/assets/` with long cache headers, since its file names change with every build.
 
-**On Vercel:** import the project (or run `vercel` in its folder). `vercel.json` already sets everything: `npm ci`, `npm run build`, output `dist/`, a year of immutable caching for `dist/assets/`, and a few safe security headers. Node 22.12 or newer is required (`engines` in `package.json`; Vercel's default Node 22 is fine). No environment variables or server functions are needed: the game is entirely static, and saves stay in each player's browser. The only outside request is the Pixelify Sans font from Google Fonts.
+**On Vercel:** import the project (or run `vercel` in its folder). `vercel.json` already sets everything: `npm ci`, `npm run build`, output `dist/`, a year of immutable caching for `dist/assets/`, and a few safe security headers. Node 22.12 or newer is required (`engines` in `package.json`; Vercel's default Node 22 is fine). No environment variables or server functions are needed: the game is entirely static, and saves stay in each player's browser. The game makes no outside requests: the Pixelify Sans font ships with it (`@fontsource/pixelify-sans`), so no player data reaches Google Fonts.
 
 What keeps a live build safe:
 - **Saves** live in IndexedDB in the player's browser. If storage is blocked (some private modes), the game still runs and says once that it cannot save. A save that cannot be read is kept as a backup and a new world begins, instead of the game failing to start. Older save versions are upgraded.
@@ -68,6 +68,13 @@ What keeps a live build safe:
 - **Cheats are off:** `?spawn`, `?hour`, `?weather`, the G/B teleport and `window.game` only exist in development builds. `?seed`, `?new` and `?fps=30` work everywhere.
 - **Two tabs** of the game warn each other, since both would save over the same slot.
 - **Touch screens** get a left-half stick, tap-to-interact, a tappable action prompt, Use, Bag, Hit, Roll and a hold-to-Block button, and a layout that fits phones upright or sideways.
+
+## Privacy and licenses
+
+- **No personal data:** no accounts, analytics, ads or cookies. Saves (IndexedDB) and settings (`localStorage`) stay in the player's browser, which counts as strictly necessary storage, so no consent banner is needed. The host's server logs (Vercel) are the only data anyone else sees.
+- **About tab** (beside Settings in the menu, `src/ui/About.ts`): a short privacy note, credits (original art and sound; inspired by Stardew Valley, not affiliated) and the open source licenses, with the full texts on demand.
+- **Third-party notices:** `npm run build` first runs `scripts/build-notices.mjs` (also `npm run notices`), which writes the license of every shipped package (Pixi.js and its dependencies, Pixelify Sans under the SIL OFL 1.1) to `public/THIRD_PARTY_NOTICES.txt`. Type-only packages are skipped.
+- **Before the app stores, analytics, ads, accounts or sales:** the stores want a privacy policy URL; tracking needs a full privacy policy and consent; selling needs a trademark check on the name.
 
 ## Pages
 

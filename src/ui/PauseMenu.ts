@@ -1,4 +1,7 @@
-// The pause menu: resume, save, settings, controls, or start a new world.
+// The pause menu: resume, save, settings, full screen, controls, or start a
+// new world.
+
+import { fullscreenSupported, isFullscreen, onFullscreenChange, toggleFullscreen } from './Fullscreen';
 
 const CONTROLS: Array<[string, string]> = [
   ['WASD / arrows', 'Move'],
@@ -43,6 +46,7 @@ export class PauseMenu {
       b.textContent = label;
       b.addEventListener('click', fn);
       buttons.appendChild(b);
+      return b;
     };
     add('Resume', () => this.close());
     add('Save', () => actions.save());
@@ -50,6 +54,10 @@ export class PauseMenu {
       this.close();
       actions.settings();
     });
+    if (fullscreenSupported()) {
+      const full = add('Full screen', () => toggleFullscreen());
+      onFullscreenChange(() => (full.textContent = isFullscreen() ? 'Exit full screen' : 'Full screen'));
+    }
     add('New world', () => {
       if (confirm('Start a new world? Your current world will be lost.')) actions.newWorld();
     });

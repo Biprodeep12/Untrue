@@ -116,9 +116,9 @@ The interface is HTML and CSS over the canvas (`src/ui/`, styled in `src/style.c
 | --- | --- |
 | `Hud` | Compass, location panel (clock, weather, biome, difficulty, position), quest tracker with direction arrows, notifications, action prompt, vitals, level and XP, status effects, boss bar, hurt flash, controls bar, touch buttons, loading screen |
 | `Hotbar` | The first 8 inventory slots, with counts |
-| `Menu` | Tabs: Inventory, Crafting, Quests, Map, Lantern, Settings |
+| `Menu` | Tabs: Inventory, Crafting, Skills, Quests, Map, Lantern, Settings, About (privacy, credits, licenses) |
 | `MapView` | The world map canvas; see [exploration.md](exploration.md) |
-| `PauseMenu` | Esc: Resume, Save, Settings, New world, and the controls table |
+| `PauseMenu` | Esc: Resume, Save, Settings, Full screen (where supported), New world, and the controls table |
 | `Dialog` | NPC conversation and trade |
 | `Vision` | Full-screen story text, one page at a time, with queued visions |
 | `DebugOverlay` | F3: seed, frame rate, chunk counts, biomes, objects, enemies, regions, and a minimap of the cache area |

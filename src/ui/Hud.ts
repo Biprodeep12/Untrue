@@ -2,6 +2,7 @@
 // notifications bottom left, the action prompt above the hotbar.
 
 import type { VitalValues } from '../systems/Vitals';
+import { fullscreenSupported, isFullscreen, onFullscreenChange, toggleFullscreen } from './Fullscreen';
 
 const BARS: Array<[keyof VitalValues, string]> = [
   ['health', 'HP'],
@@ -77,7 +78,7 @@ export class Hud {
       <div class="touch-buttons">
         <button class="touch-btn bag">Bag</button><button class="touch-btn act">Use</button>
         <button class="touch-btn dodge">Roll</button><button class="touch-btn attack">Hit</button>
-        <button class="touch-btn block">Block</button>
+        <button class="touch-btn block">Block</button><button class="touch-btn full">Full</button>
       </div>
       <div class="hud-loading"><div class="panel">Generating world…</div></div>`;
     this.location = root.querySelector('.hud-location')!;
@@ -118,6 +119,12 @@ export class Hud {
     button('bag', () => this.onBag);
     button('attack', () => this.onAttack);
     button('dodge', () => this.onDodge);
+    // Full screen: hidden where the browser cannot do it (iPhone).
+    const full = root.querySelector<HTMLElement>('.touch-btn.full')!;
+    full.hidden = !fullscreenSupported();
+    full.addEventListener('pointerdown', (e) => e.stopPropagation());
+    full.addEventListener('click', () => toggleFullscreen());
+    onFullscreenChange(() => (full.textContent = isFullscreen() ? 'Exit' : 'Full'));
     // Block is held, not tapped.
     const block = root.querySelector('.touch-btn.block')!;
     block.addEventListener('pointerdown', (e) => {
