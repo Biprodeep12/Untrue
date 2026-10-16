@@ -60,6 +60,8 @@ export class Hud {
   private readonly bossName: HTMLElement;
   private readonly bossFill: HTMLElement;
   private readonly touch = matchMedia('(pointer: coarse)');
+  /** The interact key's name; prompts are written with E. */
+  private interactKey = 'E';
   private readonly fills = new Map<keyof VitalValues, HTMLElement>();
   private readonly warnings: HTMLElement;
   private readonly danger: HTMLElement;
@@ -216,10 +218,16 @@ export class Hud {
 
   /** The controls bar, naming the player's own keys. */
   setHelp(visible: boolean, keys: Bindings): void {
-    this.help.style.display = visible ? '' : 'none';
+    // Called on every settings change, slider drags included.
+    if (this.changed('helpShown', String(visible))) this.help.style.display = visible ? '' : 'none';
     const k = (a: Action) => keyName(keys[a][0]);
+    if (k('interact') !== this.interactKey) {
+      this.interactKey = k('interact');
+      this.last.delete('prompt');
+    }
     const move = `${k('up')}${k('left')}${k('down')}${k('right')}`;
-    this.help.textContent = `${move} move · ${k('run')} run · Click / ${k('attack')} attack · Right-click / ${k('block')} block · ${k('dodge')} dodge · ${k('interact')} talk / gather · 1–8 hotbar · ${k('use')} use · ${k('drop')} drop · ${k('bag')} bag · Ctrl+S save`;
+    const help = `${move} move · ${k('run')} run · Click / ${k('attack')} attack · Right-click / ${k('block')} block · ${k('dodge')} dodge · ${k('interact')} talk / gather · 1–8 hotbar · ${k('use')} use · ${k('drop')} drop · ${k('bag')} bag · Ctrl+S save`;
+    if (this.changed('help', help)) this.help.textContent = help;
   }
 
   /** Quest lines, the first with an optional arrow (radians) toward its target. */
@@ -288,9 +296,11 @@ export class Hud {
     if (!this.changed('prompt', text ?? '')) return;
     this.prompt.style.display = text ? 'block' : 'none';
     if (!text) return;
-    // Touch screens have no E key: tap the prompt instead.
-    const tap = this.touch.matches && text.startsWith('E  ');
-    this.prompt.textContent = tap ? text.slice(3) : text;
+    // Touch screens have no E key: tap the prompt instead. Elsewhere, name
+    // the key the player bound to interact.
+    const keyed = text.startsWith('E  ');
+    const tap = this.touch.matches && keyed;
+    this.prompt.textContent = tap ? text.slice(3) : keyed ? `${this.interactKey}  ${text.slice(3)}` : text;
     this.prompt.classList.toggle('tap', tap);
   }
 

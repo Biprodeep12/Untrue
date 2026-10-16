@@ -2,7 +2,7 @@
 // effects can be switched off and the frame rate capped at 30; plus volume,
 // screen flashes, HUD size and key bindings. Kept in this browser only.
 
-import type { Action } from './Keys';
+import { DEFAULT_KEYS, type Action } from './Keys';
 
 export interface SettingsValues {
   lighting: boolean;
@@ -38,6 +38,25 @@ const DEFAULTS: SettingsValues = {
   keys: {},
 };
 
+/** Stored values over the defaults, keeping only those of the right type: a
+ *  damaged entry (say, keys: null) would otherwise break the game at start. */
+export function sanitize(stored: unknown): SettingsValues {
+  const out: SettingsValues = { ...DEFAULTS, keys: {} };
+  if (!stored || typeof stored !== 'object') return out;
+  const s = stored as Record<string, unknown>;
+  for (const k of Object.keys(DEFAULTS) as Array<keyof SettingsValues>) {
+    const v = s[k];
+    if (k === 'keys') {
+      if (v && typeof v === 'object') {
+        for (const [a, code] of Object.entries(v)) if (Object.hasOwn(DEFAULT_KEYS, a) && typeof code === 'string') out.keys[a as Action] = code;
+      }
+    } else if (typeof v === typeof DEFAULTS[k] && (typeof v !== 'number' || Number.isFinite(v))) {
+      (out as unknown as Record<string, unknown>)[k] = v;
+    }
+  }
+  return out;
+}
+
 export class Settings {
   values: SettingsValues = { ...DEFAULTS, keys: {} };
   onChange?: (v: SettingsValues) => void;
@@ -45,7 +64,7 @@ export class Settings {
   constructor() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) this.values = { ...DEFAULTS, ...JSON.parse(raw) };
+      if (raw) this.values = sanitize(JSON.parse(raw));
     } catch {
       // Storage blocked: run with defaults.
     }

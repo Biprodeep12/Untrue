@@ -87,13 +87,10 @@ export type CraftResult = 'ok' | 'missing' | 'station' | 'full';
 export function craft(inv: Inventory, r: Recipe, stations: ReadonlySet<Station>): CraftResult {
   if (!stations.has(r.station)) return 'station';
   if (!hasInputs(inv, r)) return 'missing';
-  for (const [item, n] of r.inputs) inv.remove(item, n);
-  const left = inv.add(r.output, r.count);
-  if (left > 0) {
-    // No room: undo so nothing is lost.
-    inv.remove(r.output, r.count - left);
-    for (const [item, n] of r.inputs) inv.add(item, n);
-    return 'full';
-  }
-  return 'ok';
+  // No room: undo exactly, so nothing is lost and worn inputs keep their wear.
+  const made = inv.tryChange(() => {
+    for (const [item, n] of r.inputs) inv.remove(item, n);
+    return inv.add(r.output, r.count) === 0;
+  });
+  return made ? 'ok' : 'full';
 }

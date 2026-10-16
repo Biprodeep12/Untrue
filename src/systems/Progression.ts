@@ -85,6 +85,7 @@ export class Progression {
   /** Adds experience; returns how many levels were gained. */
   add(xp: number): number {
     let gained = 0;
+    if (!Number.isFinite(xp)) return 0;
     this.xp += Math.round(xp);
     while (this.level < MAX_LEVEL && this.xp >= Progression.needed(this.level)) {
       this.xp -= Progression.needed(this.level);
@@ -99,9 +100,11 @@ export class Progression {
   }
 
   load(s: ProgressionSave): void {
-    this.xp = s.xp;
-    this.level = s.level;
-    for (const def of SKILLS) this.skills[def.id] = Math.min(MAX_RANK, s.skills?.[def.id] ?? 0);
+    // Kept in range, so a damaged save cannot leave NaN or impossible levels.
+    const int = (v: number | undefined, min: number, max: number) => (Number.isFinite(v) ? Math.max(min, Math.min(max, Math.floor(v!))) : min);
+    this.xp = int(s.xp, 0, Number.MAX_SAFE_INTEGER);
+    this.level = int(s.level, 1, MAX_LEVEL);
+    for (const def of SKILLS) this.skills[def.id] = int(s.skills?.[def.id], 0, MAX_RANK);
     Object.assign(this.trophies, s.trophies ?? {});
     for (const id of s.recipes ?? []) this.recipes.add(id);
   }

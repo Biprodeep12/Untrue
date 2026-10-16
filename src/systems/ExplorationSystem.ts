@@ -72,8 +72,9 @@ export class ExplorationSystem {
   load(s: ExplorationSave): void {
     this.explored.clear();
     for (let i = 0; i + 1 < s.explored.length; i += 2) this.explored.set(s.explored[i], s.explored[i + 1]);
-    this.markers = s.markers;
+    // Markers with a broken id or position would never draw and break new ids.
+    this.markers = s.markers.filter((m) => Number.isFinite(m.id) && Number.isFinite(m.x) && Number.isFinite(m.y));
     this.tracked = s.tracked;
-    this.nextId = Math.max(0, ...s.markers.map((m) => m.id)) + 1;
+    this.nextId = Math.max(0, ...this.markers.map((m) => m.id)) + 1;
   }
 }

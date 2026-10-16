@@ -5,6 +5,17 @@ import { CHUNK_SIZE, REGION_SIZE } from './config';
 const OFFSET = 2 ** 23;
 const SPAN = 2 ** 24;
 
+/** Keys hold chunk coordinates in [-2^23, 2^23), about ±268 million tiles.
+ *  Player positions stay within half of that (±134 million tiles), leaving
+ *  room for the areas loaded around them. Far beyond any walk: rendering
+ *  loses float precision long before. */
+export const WORLD_LIMIT = (OFFSET / 2) * CHUNK_SIZE;
+
+/** A tile coordinate kept inside the world the keys can hold; NaN becomes 0. */
+export function clampTile(t: number): number {
+  return Number.isFinite(t) ? Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, t)) : 0;
+}
+
 export function chunkKey(cx: number, cy: number): number {
   return (cx + OFFSET) * SPAN + (cy + OFFSET);
 }

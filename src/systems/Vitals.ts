@@ -83,7 +83,8 @@ export class Vitals implements VitalValues {
 
   /** Takes damage; returns true if it was fatal. */
   hurt(amount: number): boolean {
-    this.health = Math.max(0, this.health - amount);
+    // A NaN blow would leave health NaN: never fatal, and saved that way.
+    if (amount > 0) this.health = Math.max(0, this.health - amount);
     return this.health <= 0;
   }
 
@@ -104,8 +105,13 @@ export class Vitals implements VitalValues {
     return { health: this.health, stamina: this.stamina, hunger: this.hunger, thirst: this.thirst };
   }
 
+  /** Restores saved bars, each kept in range (a missing or broken value is full). */
   load(v: VitalValues): void {
-    Object.assign(this, v);
+    const bar = (x: number, max: number) => (Number.isFinite(x) ? Math.max(0, Math.min(max, x)) : max);
+    this.health = bar(v.health, this.maxHealth);
+    this.stamina = bar(v.stamina, VITAL_MAX);
+    this.hunger = bar(v.hunger, VITAL_MAX);
+    this.thirst = bar(v.thirst, VITAL_MAX);
   }
 }
 

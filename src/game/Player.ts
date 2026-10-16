@@ -26,6 +26,8 @@ export const DODGE_STAMINA = 20;
 /** Invulnerability after taking a hit. */
 const HURT_SECONDS = 0.6;
 const KNOCKBACK = 0.45;
+/** Longest single collision step, in tiles: well under a tile, the thinnest wall. */
+const MAX_STEP = 0.5;
 /** While swimming, only the top of the body shows, this many pixels lower. */
 const SWIM_SHOWN = 24;
 const SWIM_SINK = 4;
@@ -202,21 +204,26 @@ export class Player {
     return [Math.floor(this.x + this.faceX * 0.8), Math.floor(this.y - 0.15 + this.faceY * 0.8)];
   }
 
+  /** The feet box's four corners against the collider. No arrays: this runs
+   *  several times a frame, and thousands of times in a spawn search. */
   blocked(x: number, y: number, world: Collider): boolean {
-    for (const [cx, cy] of [
-      [x - PLAYER_HALF_W, y - PLAYER_DEPTH],
-      [x + PLAYER_HALF_W, y - PLAYER_DEPTH],
-      [x - PLAYER_HALF_W, y - 0.01],
-      [x + PLAYER_HALF_W, y - 0.01],
-    ]) {
-      if (world.isSolidAt(Math.floor(cx), Math.floor(cy))) return true;
-    }
-    return false;
+    const x0 = Math.floor(x - PLAYER_HALF_W);
+    const x1 = Math.floor(x + PLAYER_HALF_W);
+    const y0 = Math.floor(y - PLAYER_DEPTH);
+    const y1 = Math.floor(y - 0.01);
+    return world.isSolidAt(x0, y0) || world.isSolidAt(x1, y0) || world.isSolidAt(x0, y1) || world.isSolidAt(x1, y1);
   }
 
   private move(dx: number, dy: number, world: Collider): void {
-    if (!this.blocked(this.x + dx, this.y, world)) this.x += dx;
-    if (!this.blocked(this.x, this.y + dy, world)) this.y += dy;
+    // Long moves (a roll on a slow frame) go in short steps, so they cannot
+    // hop over a one-tile wall.
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / MAX_STEP));
+    const sx = dx / steps;
+    const sy = dy / steps;
+    for (let i = 0; i < steps; i++) {
+      if (!this.blocked(this.x + sx, this.y, world)) this.x += sx;
+      if (!this.blocked(this.x, this.y + sy, world)) this.y += sy;
+    }
   }
 
   private syncSprite(frame: number): void {

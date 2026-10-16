@@ -61,6 +61,20 @@ describe('rivers', () => {
     }
     expect(found).toBeGreaterThan(0);
   });
+
+  it('keep their bridges far from the origin, whatever was looked at first', () => {
+    const site = (f: TerrainFields, cx: number, cy: number) => (f as unknown as { bridgeSite(cx: number, cy: number): unknown }).bridgeSite(cx, cy);
+    for (let cx = 0; cx < 200; cx++) {
+      const fresh = site(new TerrainFields(SEED), cx, 32768);
+      if (!fresh) continue;
+      // A 16-bit key packing gave this far-off cell the same cache slot.
+      const warmed = new TerrainFields(SEED);
+      site(warmed, cx + 1, -32768);
+      expect(site(warmed, cx, 32768)).toEqual(fresh);
+      return;
+    }
+    throw new Error('no bridge found');
+  });
 });
 
 describe('the spawn', () => {

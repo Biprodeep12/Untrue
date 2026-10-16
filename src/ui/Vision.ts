@@ -15,7 +15,11 @@ export class Vision {
     this.root = document.createElement('div');
     this.root.className = 'vision';
     this.root.innerHTML = `<div class="vision-box"><h2></h2><p></p><button class="btn">Continue ▸</button></div>`;
-    this.root.querySelector('button')!.addEventListener('click', () => this.next());
+    const button = this.root.querySelector('button')!;
+    button.addEventListener('click', () => this.next());
+    // Clicked, it would keep focus: Enter would then press it and also turn
+    // the page through the game's own Enter, skipping a page.
+    button.addEventListener('mousedown', (e) => e.preventDefault());
     parent.appendChild(this.root);
   }
 

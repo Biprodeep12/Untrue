@@ -48,6 +48,8 @@ export interface PauseActions {
 export class PauseMenu {
   isOpen = false;
   private readonly root: HTMLElement;
+  /** The controls last listed, so a settings change that keeps them is free. */
+  private listed = '';
 
   constructor(parent: HTMLElement, actions: PauseActions) {
     this.root = document.createElement('div');
@@ -87,8 +89,12 @@ export class PauseMenu {
   setKeys(keys: Bindings): void {
     const table = this.root.querySelector('.controls')!;
     const touch = matchMedia('(pointer: coarse)').matches;
+    const rows = touch ? TOUCH_CONTROLS : controls(keys);
+    const listed = rows.join('|');
+    if (listed === this.listed) return;
+    this.listed = listed;
     table.replaceChildren();
-    for (const [key, what] of touch ? TOUCH_CONTROLS : controls(keys)) {
+    for (const [key, what] of rows) {
       const row = document.createElement('tr');
       row.innerHTML = '<td></td><td></td>';
       row.children[0].textContent = key;

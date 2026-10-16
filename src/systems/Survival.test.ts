@@ -9,6 +9,8 @@ import { WorldManager } from '../world/WorldManager';
 import { craft, RECIPES } from './CraftingSystem';
 import { GatheringSystem, interactionAt } from './GatheringSystem';
 import { Inventory } from './InventorySystem';
+import { TimeSystem } from './TimeSystem';
+import { sell } from './TradeSystem';
 import { Vitals } from './Vitals';
 
 function view(px: number, py: number) {
@@ -179,5 +181,48 @@ describe('chests never refill', () => {
     const back = new Inventory();
     back.load(data.player.inventory);
     expect(back.count(Items.berries)).toBe(5);
+  });
+});
+
+describe('edge cases', () => {
+  it('never sells for coins that do not fit', () => {
+    const inv = new Inventory();
+    inv.add(Items.coin, 999);
+    inv.add(Items.hide, 5);
+    while (inv.slots.includes(null)) inv.add(Items.stone, 99);
+    expect(sell(inv, Items.hide, 1)).toBe('full');
+    expect(inv.count(Items.hide)).toBe(5);
+    expect(inv.count(Items.coin)).toBe(999);
+  });
+
+  it('loads damaged saves in range', () => {
+    const inv = new Inventory();
+    inv.load([
+      { id: 'wood', count: Number.NaN },
+      { id: 'stone', count: 0 },
+      { id: 'berries', count: -3 },
+      { id: 'wooden-sword', count: 1, durability: Number.NaN },
+      { id: 'no-such-item', count: 4 },
+      { id: 'herb', count: 2.7 },
+    ]);
+    expect(inv.slots.slice(0, 3)).toEqual([null, null, null]);
+    expect(inv.slots[3]!.durability).toBe(Items.woodenSword.weapon!.durability);
+    expect(inv.slots[4]).toBeNull();
+    expect(inv.slots[5]!.count).toBe(2);
+    expect(inv.add(Items.wood, Number.NaN)).toBe(0);
+
+    const vitals = new Vitals();
+    vitals.load({ health: Number.NaN, stamina: -5, hunger: 400, thirst: 30 });
+    expect(vitals.save()).toEqual({ health: 100, stamina: 0, hunger: 100, thirst: 30 });
+    vitals.hurt(Number.NaN);
+    expect(vitals.health).toBe(100);
+  });
+
+  it('skips many days at once', () => {
+    const time = new TimeSystem();
+    time.load({ day: 2, minutes: 1e9 });
+    expect(time.minutes).toBeLessThan(1440);
+    expect(time.update(960 * 1000)).toBe(24 * 1000);
+    expect(time.day).toBe(1002);
   });
 });

@@ -40,6 +40,10 @@ const BEATS: Partial<Record<BiomeType, number>> = { [BiomeType.Desert]: 0.62, [B
 const VOICES: Partial<Record<BiomeType, OscillatorType>> = { [BiomeType.Desert]: 'square', [BiomeType.Snow]: 'sine' };
 /** Creature calls, at most this often (seconds). */
 const CALL_GAP = 18;
+/** Sound effects are dropped while this many voices already sound. */
+const MAX_VOICES = 32;
+/** The same effect twice within this many seconds plays once (ten hits in a frame would clip). */
+const REPEAT_GAP = 0.03;
 
 export interface MusicMood {
   biome: BiomeType | undefined;
@@ -72,16 +76,25 @@ export class AudioSystem {
   private beat = 0;
   private rootIndex = 0;
   private volumes = { music: 0.35, sfx: 0.6 };
+  /** Oscillators and noise bursts still sounding. */
+  private voices = 0;
+  private readonly lastPlayed = new Map<Sfx, number>();
 
   /** Browsers only allow audio after a user gesture; call from one. */
   unlock(): void {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // Suspended, or 'interrupted' on iOS (a call, another app's audio).
+      if (this.ctx.state !== 'running' && this.ctx.state !== 'closed' && !document.hidden) this.ctx.resume().catch(() => {});
       return;
     }
     try {
       const ctx = new AudioContext();
       this.ctx = ctx;
+      // Silent in a hidden tab: frames stop there, but the rain loop would play on.
+      document.addEventListener('visibilitychange', () => {
+        if (ctx.state === 'closed') return;
+        (document.hidden ? ctx.suspend() : ctx.resume()).catch(() => {});
+      });
       this.master = ctx.createGain();
       this.master.connect(ctx.destination);
       this.sfxBus = ctx.createGain();
@@ -98,6 +111,9 @@ export class AudioSystem {
   }
 
   setVolumes(music: number, sfx: number): void {
+    // An AudioParam throws on NaN, e.g. from a damaged saved setting.
+    music = Number.isFinite(music) ? Math.max(0, music) : 0.35;
+    sfx = Number.isFinite(sfx) ? Math.max(0, sfx) : 0.6;
     this.volumes = { music, sfx };
     if (!this.ctx) return;
     this.musicBus.gain.value = music;
@@ -106,8 +122,10 @@ export class AudioSystem {
 
   play(kind: Sfx): void {
     const ctx = this.ctx;
-    if (!ctx || ctx.state !== 'running') return;
+    if (!ctx || ctx.state !== 'running' || this.voices >= MAX_VOICES) return;
     const t = ctx.currentTime;
+    if (t - (this.lastPlayed.get(kind) ?? -1) < REPEAT_GAP) return;
+    this.lastPlayed.set(kind, t);
     switch (kind) {
       case 'step':
         this.noiseBurst(t, 0.04, 500 + Math.random() * 300, 0.12, 'lowpass');
@@ -268,8 +286,11 @@ export class AudioSystem {
     const wet = kind === 'rain' || kind === 'storm';
     const windy = kind === 'sandstorm' || kind === 'blizzard';
     const level = (wet ? (kind === 'storm' ? 0.22 : 0.14) : windy ? 0.12 : 0) * mood.weatherStrength;
+    // Scheduled only when the level moves, not every frame.
+    const rounded = Math.round(level * 100) / 100;
     if (!this.rain) {
-      if (level <= 0) return;
+      // A level that rounds to silence would start a loop never stopped.
+      if (rounded <= 0) return;
       const src = ctx.createBufferSource();
       src.buffer = this.noise;
       src.loop = true;
@@ -280,8 +301,6 @@ export class AudioSystem {
       src.start();
       this.rain = { src, gain, filter };
     }
-    // Scheduled only when the level moves, not every frame.
-    const rounded = Math.round(level * 100) / 100;
     if (rounded === this.rainLevel) return;
     this.rainLevel = rounded;
     this.rain.filter.type = windy ? 'bandpass' : 'lowpass';
@@ -308,6 +327,16 @@ export class AudioSystem {
     osc.connect(gain).connect(bus);
     osc.start(at);
     osc.stop(at + length + 0.05);
+    this.track(osc, gain);
+  }
+
+  /** Counts a voice until it ends, then unhooks it from the bus. */
+  private track(src: AudioScheduledSourceNode, out: AudioNode): void {
+    this.voices++;
+    src.onended = () => {
+      this.voices--;
+      out.disconnect();
+    };
   }
 
   private noiseBurst(at: number, length: number, freq: number, level: number, type: BiquadFilterType, sweepTo?: number): void {
@@ -324,5 +353,6 @@ export class AudioSystem {
     src.connect(filter).connect(gain).connect(this.sfxBus);
     src.start(at, Math.random());
     src.stop(at + length + 0.05);
+    this.track(src, gain);
   }
 }

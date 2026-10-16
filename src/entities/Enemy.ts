@@ -131,7 +131,7 @@ export class Enemy {
           break;
         }
         // Ranged attackers hold their distance while reloading.
-        if (!(sp.ranged && dist <= sp.ranged.range * 0.6 && !inMelee)) this.step(dx / dist, dy / dist, sp.speed * dt, ctx);
+        if (dist > 0 && !(sp.ranged && dist <= sp.ranged.range * 0.6 && !inMelee)) this.step(dx / dist, dy / dist, sp.speed * dt, ctx);
         this.face(dx);
         break;
       }

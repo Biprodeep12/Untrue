@@ -10,6 +10,10 @@ import type { ExplorationSystem } from '../systems/ExplorationSystem';
 const BIOME_COLORS = ['#5f9e3a', '#c08a3a', '#e0bf7d', '#cf7f52', '#dfe9f2', '#b8b0e8'];
 const MIN_ZOOM = 2;
 const MAX_ZOOM = 40;
+/** The map's size in CSS pixels. The canvas holds up to twice as many on
+ *  sharp screens, so labels stay crisp; drawing is in CSS pixels. */
+const MAP_W = 560;
+const MAP_H = 360;
 
 export interface Landmark {
   name: string;
@@ -45,12 +49,14 @@ export class MapView {
     this.root = document.createElement('div');
     this.root.className = 'map-view';
     this.root.innerHTML = `
-      <div class="map-main"><canvas width="560" height="360"></canvas>
+      <div class="map-main"><canvas></canvas>
       <div class="map-readout hint"></div></div>
       <div class="map-side"><div class="map-buttons"><button class="btn map-centre">Centre on me</button><button class="btn map-zoom-in" title="Zoom in">+</button><button class="btn map-zoom-out" title="Zoom out">−</button></div><h4>Markers</h4><div class="map-markers"></div>
       <p class="hint">Tap or click the map to drop a marker. Drag to pan; zoom with + and −, the wheel or a pinch.</p></div>`;
     this.canvas = this.root.querySelector('canvas')!;
     this.ctx = this.canvas.getContext('2d')!;
+    this.canvas.style.width = `${MAP_W}px`;
+    this.fitCanvas();
     this.list = this.root.querySelector('.map-markers')!;
     this.readout = this.root.querySelector('.map-readout')!;
     this.root.querySelector('.map-centre')!.addEventListener('click', () => this.centre());
@@ -117,10 +123,22 @@ export class MapView {
     this.requestDraw();
   }
 
-  /** Pointer position in canvas pixels; the canvas may be shown scaled down. */
+  /** Pointer position in map pixels; the canvas may be shown scaled down. */
   private local(e: PointerEvent): [number, number] {
     const r = this.canvas.getBoundingClientRect();
-    return [((e.clientX - r.left) * this.canvas.width) / (r.width || 1), ((e.clientY - r.top) * this.canvas.height) / (r.height || 1)];
+    return [((e.clientX - r.left) * MAP_W) / (r.width || 1), ((e.clientY - r.top) * MAP_H) / (r.height || 1)];
+  }
+
+  /** Matches the canvas to the screen's pixel density (it changes with the
+   *  browser zoom or another monitor). Returns the scale to draw at. */
+  private fitCanvas(): number {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(MAP_W * dpr);
+    if (this.canvas.width !== w) {
+      this.canvas.width = w;
+      this.canvas.height = Math.round(MAP_H * dpr);
+    }
+    return dpr;
   }
 
   /** Draws once per frame at most, however many events arrive. */
@@ -152,23 +170,25 @@ export class MapView {
   }
 
   private toScreen(tx: number, ty: number): [number, number] {
-    return [(tx - this.cx) / CHUNK_SIZE * this.zoom + this.canvas.width / 2, (ty - this.cy) / CHUNK_SIZE * this.zoom + this.canvas.height / 2];
+    return [(tx - this.cx) / CHUNK_SIZE * this.zoom + MAP_W / 2, (ty - this.cy) / CHUNK_SIZE * this.zoom + MAP_H / 2];
   }
 
   private toTiles(sx: number, sy: number): [number, number] {
-    return [this.cx + ((sx - this.canvas.width / 2) / this.zoom) * CHUNK_SIZE, this.cy + ((sy - this.canvas.height / 2) / this.zoom) * CHUNK_SIZE];
+    return [this.cx + ((sx - MAP_W / 2) / this.zoom) * CHUNK_SIZE, this.cy + ((sy - MAP_H / 2) / this.zoom) * CHUNK_SIZE];
   }
 
   private draw(): void {
-    const { ctx, canvas, zoom } = this;
+    const { ctx, zoom } = this;
     const { exploration } = this.src;
+    const dpr = this.fitCanvas();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#1a1612';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, MAP_W, MAP_H);
 
     // Explored chunks.
     for (const [key, palette] of exploration.explored) {
       const [sx, sy] = this.toScreen(keyX(key) * CHUNK_SIZE, keyY(key) * CHUNK_SIZE);
-      if (sx < -zoom || sy < -zoom || sx > canvas.width || sy > canvas.height) continue;
+      if (sx < -zoom || sy < -zoom || sx > MAP_W || sy > MAP_H) continue;
       ctx.fillStyle = BIOME_COLORS[palette - 1] ?? '#555';
       ctx.fillRect(Math.floor(sx), Math.floor(sy), Math.ceil(zoom), Math.ceil(zoom));
     }
@@ -267,6 +287,8 @@ export class MapView {
         const del = document.createElement('button');
         del.className = 'btn';
         del.textContent = '✕';
+        del.title = 'Remove marker';
+        del.setAttribute('aria-label', 'Remove marker');
         del.addEventListener('click', () => {
           exploration.removeMarker(m.id);
           this.refresh();

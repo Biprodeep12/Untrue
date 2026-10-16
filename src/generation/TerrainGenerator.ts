@@ -2,6 +2,7 @@
 // main thread (climate for biome types, ground checks for structure placement).
 
 import { CHUNK_AREA, CHUNK_SIZE } from '../config';
+import { chunkKey } from '../coords';
 import { SimplexNoise } from './Noise';
 import { hash, hash3, Rng, Stream, unit } from './Random';
 import { BiomeType, Deco, Ground, groundTile, isWater, paletteOf, Tile } from './Tiles';
@@ -191,7 +192,8 @@ export class TerrainFields {
   /** Where a cell's bridge crosses its river: the stretch of river that runs
    *  closest to north–south or east–west, so the bridge can cross it square. */
   private bridgeSite(cx: number, cy: number): BridgeSite | null {
-    const key = (cx + 0x8000) * 0x10000 + (cy + 0x8000);
+    // Packed like a chunk key: a 16-bit packing aliased cells past ±2.6M tiles.
+    const key = chunkKey(cx, cy);
     const known = this.bridges.get(key);
     if (known !== undefined) return known;
     if (this.bridges.size > 4096) this.bridges.clear();

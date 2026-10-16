@@ -56,9 +56,10 @@ export class TimeSystem {
   update(dt: number): number {
     const before = Math.floor(this.total / 60);
     this.minutes += dt * MINUTES_PER_SECOND;
-    while (this.minutes >= MINUTES_PER_DAY) {
-      this.minutes -= MINUTES_PER_DAY;
-      this.day++;
+    // Whole days at once, so a long skip never loops day by day.
+    if (this.minutes >= MINUTES_PER_DAY) {
+      this.day += Math.floor(this.minutes / MINUTES_PER_DAY);
+      this.minutes %= MINUTES_PER_DAY;
     }
     return Math.floor(this.total / 60) - before;
   }
@@ -82,7 +83,8 @@ export class TimeSystem {
   }
 
   load(s: TimeSave): void {
-    this.day = s.day;
-    this.minutes = s.minutes;
+    // A broken clock from a damaged save would stay broken: keep it in range.
+    this.day = Number.isFinite(s.day) ? Math.max(1, Math.floor(s.day)) : 1;
+    this.minutes = Number.isFinite(s.minutes) ? Math.max(0, s.minutes % MINUTES_PER_DAY) : 8 * 60;
   }
 }

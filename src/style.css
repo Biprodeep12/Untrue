@@ -50,8 +50,8 @@ body {
 
 .hud-location {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
   text-align: right;
   min-width: 150px;
 }
@@ -160,6 +160,7 @@ body {
   background: #e9c98a;
   cursor: pointer;
   font-family: inherit;
+  touch-action: manipulation;
 }
 
 .slot .item-icon {
@@ -282,7 +283,7 @@ body {
 /* Low vital warnings: top centre, worst first. */
 .hud-warnings {
   position: absolute;
-  top: 100px;
+  top: calc(100px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -386,6 +387,8 @@ body {
 .btn,
 .menu-close,
 .touch-btn {
+  /* No double-tap zoom on phones. */
+  touch-action: manipulation;
   font-family: inherit;
   font-size: 14px;
   color: var(--ink);
@@ -559,7 +562,7 @@ body {
 /* Boss health: top centre. */
 .hud-boss {
   position: absolute;
-  top: 52px;
+  top: calc(52px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   display: none;
@@ -608,8 +611,8 @@ body {
 /* Quest tracker: under the location panel. */
 .hud-tracker {
   position: absolute;
-  top: 100px;
-  right: 12px;
+  top: calc(100px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -775,8 +778,8 @@ body {
 /* Compass: top left. */
 .hud-compass {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1230,8 +1233,8 @@ body {
   }
 
   .hud-vitals {
-    top: 76px;
-    left: 12px;
+    top: calc(76px + env(safe-area-inset-top));
+    left: calc(12px + env(safe-area-inset-left));
     right: auto;
     bottom: auto;
     padding: 6px;
@@ -1242,15 +1245,15 @@ body {
   }
 
   .hud-level {
-    top: 152px;
-    left: 12px;
+    top: calc(152px + env(safe-area-inset-top));
+    left: calc(12px + env(safe-area-inset-left));
     right: auto;
     bottom: auto;
   }
 
   .hud-status {
-    top: 184px;
-    left: 12px;
+    top: calc(184px + env(safe-area-inset-top));
+    left: calc(12px + env(safe-area-inset-left));
     right: auto;
     bottom: auto;
     align-items: flex-start;
@@ -1258,7 +1261,8 @@ body {
 
   .hud-notes {
     bottom: auto;
-    top: 216px;
+    top: calc(216px + env(safe-area-inset-top));
+    left: calc(12px + env(safe-area-inset-left));
     max-width: 45vw;
   }
 
@@ -1313,7 +1317,23 @@ body {
   }
 
   .hud-boss {
-    top: 120px;
+    top: calc(120px + env(safe-area-inset-top));
+  }
+
+  /* The bag's eight columns shrink to fit instead of scrolling sideways. */
+  .inv-grid {
+    grid-template-columns: repeat(8, minmax(0, 44px));
+  }
+
+  .inv-grid .slot {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .inv-grid .slot .item-icon {
+    max-width: 100%;
+    height: auto;
   }
 }
 

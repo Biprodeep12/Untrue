@@ -20,6 +20,9 @@ export class WorkerGenerator implements ChunkGenerator {
         const w = new Worker(new URL('./worldGenerator.worker.ts', import.meta.url), { type: 'module' });
         const pending = new Map<number, ChunkRequest>();
         w.onmessage = (e: MessageEvent<ChunkResult>) => {
+          // After a failure the main thread redoes every waiting request, so a
+          // late answer would arrive twice and throw off the in-flight count.
+          if (this.fallback) return;
           pending.delete(e.data.token);
           this.handler(e.data);
         };

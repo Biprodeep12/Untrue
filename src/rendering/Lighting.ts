@@ -56,7 +56,8 @@ export class Lighting {
   }
 
   resize(width: number, height: number): void {
-    this.rt.resize(width, height);
+    // A zero-sized render target is an incomplete framebuffer (e.g. a minimised window).
+    this.rt.resize(Math.max(1, width), Math.max(1, height));
   }
 
   /** `toScreen` maps world pixels to screen pixels; `scale` is the camera zoom. */
@@ -80,35 +81,45 @@ export class Lighting {
     this.dark.tint = tint;
     this.dark.alpha = darkness * MAX_ALPHA;
 
-    this.ensure(this.holes, lights.length, this.mask, 'erase');
-    this.ensure(this.warm, lights.length, this.warmLayer, 'add');
-    lights.forEach((l, i) => {
+    // Lights off screen (buildings and windows are gathered a chunk beyond it)
+    // cut nothing visible, so they get no sprite.
+    let used = 0;
+    for (let i = 0; i < lights.length; i++) {
+      const l = lights[i];
       const [sx, sy] = toScreen(l.x, l.y);
       const flicker = l.warmth > 0 ? 1 + Math.sin(this.time * 9 + i * 1.7) * 0.05 : 1;
-      const size = (l.radius * 2 * scale * flicker) / 128;
-      const hole = this.holes[i];
+      const r = l.radius * scale * flicker;
+      if (sx + r < 0 || sy + r < 0 || sx - r > width || sy - r > height) continue;
+      if (used === this.holes.length) this.add();
+      const size = (r * 2) / 128;
+      const hole = this.holes[used];
+      hole.visible = true;
       hole.position.set(sx, sy);
       hole.scale.set(size);
-      const glow = this.warm[i];
+      const glow = this.warm[used];
+      glow.visible = l.warmth > 0;
       glow.position.set(sx, sy);
       glow.scale.set(size * 0.8);
       glow.alpha = l.warmth * 0.35 * darkness;
-    });
-    for (let i = lights.length; i < this.holes.length; i++) {
+      used++;
+    }
+    for (let i = used; i < this.holes.length; i++) {
       this.holes[i].visible = false;
       this.warm[i].visible = false;
     }
     this.renderer.render({ container: this.mask, target: this.rt, clear: true });
   }
 
-  private ensure(pool: Sprite[], n: number, parent: Container, blend: 'erase' | 'add'): void {
-    while (pool.length < n) {
-      const s = new Sprite({ texture: this.glow, anchor: 0.5 });
-      s.blendMode = blend;
-      if (blend === 'add') s.tint = 0xffa040;
-      parent.addChild(s);
-      pool.push(s);
-    }
-    for (let i = 0; i < n; i++) pool[i].visible = true;
+  /** One more light: a hole in the darkness and its warm glow. */
+  private add(): void {
+    const hole = new Sprite({ texture: this.glow, anchor: 0.5 });
+    hole.blendMode = 'erase';
+    this.mask.addChild(hole);
+    this.holes.push(hole);
+    const glow = new Sprite({ texture: this.glow, anchor: 0.5 });
+    glow.blendMode = 'add';
+    glow.tint = 0xffa040;
+    this.warmLayer.addChild(glow);
+    this.warm.push(glow);
   }
 }

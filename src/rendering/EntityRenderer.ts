@@ -42,6 +42,8 @@ export class EntityRenderer {
   private readonly spareDrawn: Drawn[] = [];
   private readonly spareNumbers = new Map<string, Text[]>();
   private readonly spareSwings: Graphics[] = [];
+  /** Ids seen this frame, reused rather than allocated per frame. */
+  private readonly live = new Set<number>();
   private time = 0;
 
   constructor(
@@ -155,7 +157,8 @@ export class EntityRenderer {
   }
 
   private syncNpcs(npcs: readonly Npc[], marks: ReadonlyMap<number, string>): void {
-    const live = new Set<number>();
+    const live = this.live;
+    live.clear();
     for (const n of npcs) {
       live.add(n.id);
       let d = this.people.get(n.id);
@@ -178,7 +181,8 @@ export class EntityRenderer {
   }
 
   private syncEnemies(enemies: readonly Enemy[]): void {
-    const live = new Set<number>();
+    const live = this.live;
+    live.clear();
     for (const e of enemies) {
       live.add(e.id);
       let d = this.drawn.get(e.id);

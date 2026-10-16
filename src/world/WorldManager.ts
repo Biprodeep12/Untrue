@@ -144,13 +144,13 @@ export class WorldManager {
     return isSolid(chunk.tiles[i], chunk.decos[i]);
   }
 
-  /** Removes a decoration the player gathered. It stays gone until the
-   *  region fully unloads and regenerates, or until a plant grows back. */
   /** Seeds what gathering a tile gives; changes when its region regenerates. */
   seedAt(gx: number, gy: number): number {
     return hash(Stream.Loot, this.seed, gx, gy, this.regions.visit(tileToChunk(gx), tileToChunk(gy)));
   }
 
+  /** Removes a decoration the player gathered. It stays gone until the
+   *  region fully unloads and regenerates, or until a plant grows back. */
   harvest(gx: number, gy: number): void {
     const cx = tileToChunk(gx);
     const cy = tileToChunk(gy);
@@ -173,6 +173,8 @@ export class WorldManager {
         cut.cells.delete(i);
         grew = true;
       }
+      // Everything grew back: nothing left to remember or save.
+      if (cut.cells.size === 0) this.harvested.delete(key);
       const chunk = grew ? this.chunks.chunks.get(key) : undefined;
       if (chunk) this.chunks.refresh(chunk);
     }

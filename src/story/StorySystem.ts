@@ -325,9 +325,12 @@ export class StorySystem {
   }
 
   load(s: StorySave): void {
+    // An unknown stage would strand the story with no objective: let the game
+    // keep the save aside and start the living world afresh instead.
+    if (!STAGES.includes(s.stage)) throw new Error(`Unknown story stage ${String(s.stage)}`);
     this.stage = s.stage;
     this.flags = new Set(s.flags);
-    this.ending = s.ending;
+    this.ending = s.ending && Object.hasOwn(ENDINGS, s.ending) ? s.ending : null;
     this.memories = s.memories;
   }
 

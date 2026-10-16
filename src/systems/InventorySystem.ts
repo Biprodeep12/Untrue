@@ -36,6 +36,8 @@ export class Inventory {
 
   /** Adds as much as fits; returns how many did not. */
   add(item: ItemDef, count: number): number {
+    // Nothing to add (and a NaN count would poison every stack it touched).
+    if (!(count > 0)) return 0;
     this.version++;
     for (const s of this.slots) {
       if (count <= 0) break;
@@ -111,6 +113,19 @@ export class Inventory {
     this.slots[slot] = this.equipment[to];
     this.equipment[to] = s;
     return true;
+  }
+
+  /** Runs a change and, if it returns false, puts the bag and equipment back
+   *  exactly as they were (counts and durability), e.g. when what it gave
+   *  did not fit. */
+  tryChange(change: () => boolean): boolean {
+    const slots = this.slots.map((s) => s && { ...s });
+    const equipment = EQUIP_SLOTS.map((k) => this.equipment[k] && { ...this.equipment[k] });
+    if (change()) return true;
+    slots.forEach((s, i) => (this.slots[i] = s));
+    EQUIP_SLOTS.forEach((k, i) => (this.equipment[k] = equipment[i]));
+    this.version++;
+    return false;
   }
 
   /** Takes off an equipped item and puts it in the bag, if there is room. */
@@ -231,7 +246,7 @@ export class Inventory {
     for (const slot of EQUIP_SLOTS) {
       const s = saved[slot];
       const item = s && itemById(s.id);
-      this.equipment[slot] = item && item.equip === slot ? { item, count: s.count, durability: s.durability } : null;
+      this.equipment[slot] = item && item.equip === slot ? loadStack(item, s) : null;
     }
   }
 
@@ -258,7 +273,17 @@ export class Inventory {
     this.slots.fill(null);
     saved.forEach((s, i) => {
       const item = s && itemById(s.id);
-      if (item && i < this.slots.length) this.slots[i] = { item, count: s.count, durability: s.durability ?? item.weapon?.durability };
+      if (item && i < this.slots.length) this.slots[i] = loadStack(item, s);
     });
   }
+}
+
+/** A saved stack, checked: a count that is not a positive number drops it,
+ *  and a weapon's durability falls back to new if it is missing or broken. */
+export function loadStack(item: ItemDef, s: NonNullable<SavedSlot>): Stack | null {
+  const count = Math.floor(s.count);
+  if (!(count >= 1)) return null;
+  const max = item.weapon?.durability;
+  const durability = max === undefined ? undefined : s.durability !== undefined && s.durability > 0 ? Math.min(max, s.durability) : max;
+  return { item, count, durability };
 }

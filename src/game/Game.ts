@@ -41,7 +41,7 @@ import type { PlaceId } from '../story/StoryPlaces';
 import { BOOKS } from '../story/StoryScript';
 import { STAGE_TARGET } from '../story/StorySystem';
 import { rollChest } from '../systems/Loot';
-import { chunkKey, tileToChunk } from '../coords';
+import { chunkKey, clampTile, tileToChunk } from '../coords';
 import type { Npc } from '../entities/NPC';
 import { Interior, KEEP_FLOORS } from '../world/Interior';
 import { WorldManager } from '../world/WorldManager';
@@ -106,6 +106,8 @@ const STEP_WALK = 0.36;
 const STEP_RUN = 0.25;
 /** Seconds between tool strikes while gathering. */
 const STRIKE_INTERVAL = 0.45;
+/** Hotbar slot keys. */
+const DIGITS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8'];
 
 const PROMPTS: Record<Interaction['kind'], string> = {
   chest: 'E  Open chest',
@@ -163,6 +165,26 @@ export class Game {
   private drownNote = 0;
   private swimNote = 0;
   private markerDrawn = false;
+  /** The same for the marker indoors. */
+  private indoorMarkerDrawn = false;
+  /** Per-frame arguments, filled in place instead of allocated each frame. */
+  private readonly view = { minX: 0, minY: 0, maxX: 0, maxY: 0, playerX: 0, playerY: 0, dirX: 0, dirY: 0 };
+  private readonly nearView = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  private readonly body = { x: 0, y: 0, faceX: 0, faceY: 1, blocking: false, invulnerable: false };
+  private readonly roomLights: Light[] = [];
+  private readonly screenAt: [number, number] = [0, 0];
+  /** World pixels to screen pixels, for the lighting. The tuple is reused. */
+  private readonly toScreen = (x: number, y: number): [number, number] => {
+    const view = this.room ? this.interiorRenderer.view : this.worldLayer;
+    this.screenAt[0] = x * this.camera.zoom + view.x;
+    this.screenAt[1] = y * this.camera.zoom + view.y;
+    return this.screenAt;
+  };
+  private readonly sceneLights = (out: Light[]): void => {
+    this.renderer.lights(out);
+    this.buildings.lights(out);
+  };
+  private canvasSize = '';
   private saveFailed = false;
   private errors = 0;
   private sleepOverlay!: SleepOverlay;
@@ -212,6 +234,10 @@ export class Game {
         // Storage failed: a save may exist, so this session must not replace it.
         else this.saveLock = "Your save couldn't be loaded, so this session won't save over it. Reload to try again.";
       }
+    } else if (!playground) {
+      // A ?seed link starts over: keep a copy of the world it would autosave over.
+      const old = await this.saves.load().catch(() => null);
+      if (old) await this.saves.backup(old).catch(() => {});
     }
     if (saved && !readable(saved)) {
       await this.saves.backup(saved).catch(() => {});
@@ -222,7 +248,8 @@ export class Game {
     // Debug-only: ?spawn=x,y, ?hour=N and ?weather=kind (development builds).
     const dev = import.meta.env.DEV;
     const spawn = dev ? params.get('spawn')?.split(',').map(Number) : undefined;
-    this.spawnTarget = spawn ? { x: spawn[0] || 0, y: spawn[1] || 0 } : (saved?.player ?? { x: 0, y: 0 });
+    const start = spawn ? { x: spawn[0], y: spawn[1] } : (saved?.player ?? { x: 0, y: 0 });
+    this.spawnTarget = { x: clampTile(start.x), y: clampTile(start.y) };
     // Reloading should continue this world, not start another.
     history.replaceState(null, '', playground ? `${location.pathname}?playground=${seed}` : location.pathname);
 
@@ -301,7 +328,11 @@ export class Game {
       newWorld: () => {
         // The playground never touches the real save.
         if (this.playground) location.href = `${location.pathname}?playground=${this.world.seed}`;
-        else void this.saves.clear().finally(() => (location.href = `${location.pathname}?new`));
+        else {
+          // An autosave as the page hides would write the old world back.
+          this.saveLock = 'Starting a new world…';
+          void this.saves.clear().catch(() => {}).finally(() => (location.href = `${location.pathname}?new`));
+        }
       },
     });
     this.stick = new TouchStick(ui);
@@ -385,8 +416,10 @@ export class Game {
         this.hud.alert("Part of your save (story, quests, clock) couldn't be read and started afresh. A copy of the old save was kept.");
       }
     }
-    if (saved?.player.respawn) this.respawn = { ...saved.player.respawn };
-    for (const id of saved?.player.moonwells ?? []) this.usedMoonwells.add(id);
+    const wake = saved?.player.respawn;
+    if (wake && Number.isFinite(wake.x) && Number.isFinite(wake.y)) this.respawn = { x: clampTile(wake.x), y: clampTile(wake.y) };
+    const wells: unknown = saved?.player.moonwells;
+    if (Array.isArray(wells)) for (const id of wells) if (typeof id === 'string') this.usedMoonwells.add(id);
     if (playground) this.startPlayground(ui);
     this.living.beginStory();
     // Debug: ?hour=22 sets the clock, ?weather=storm forces the weather everywhere.
@@ -429,6 +462,8 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.save(false);
     });
+    // Safari may close a page without a visibility change.
+    window.addEventListener('pagehide', () => this.save(false));
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -444,9 +479,16 @@ export class Game {
   }
 
   private resize(): void {
-    this.pixelScale = Math.max(1, Math.floor(window.innerHeight / TARGET_HEIGHT));
-    const w = Math.ceil(window.innerWidth / this.pixelScale);
-    const h = Math.ceil(window.innerHeight / this.pixelScale);
+    // A minimised or hidden window can report no size: keep the last one.
+    if (!window.innerWidth || !window.innerHeight) return;
+    const scale = Math.max(1, Math.floor(window.innerHeight / TARGET_HEIGHT));
+    const w = Math.ceil(window.innerWidth / scale);
+    const h = Math.ceil(window.innerHeight / scale);
+    // Resize events come in bursts, and each real change remakes the lighting's texture.
+    const size = `${w}x${h}@${scale}`;
+    if (size === this.canvasSize) return;
+    this.canvasSize = size;
+    this.pixelScale = scale;
     this.app.renderer.resize(w, h);
     this.app.canvas.style.width = `${w * this.pixelScale}px`;
     this.app.canvas.style.height = `${h * this.pixelScale}px`;
@@ -501,14 +543,14 @@ export class Game {
       this.gathering.update(dt);
       this.sounds(dt);
       this.exploration.update(world);
-      this.combat.update(dt, {
-        x: player.x,
-        y: player.y,
-        faceX: player.faceX,
-        faceY: player.faceY,
-        blocking: this.blocking,
-        invulnerable: player.invulnerable,
-      });
+      const body = this.body;
+      body.x = player.x;
+      body.y = player.y;
+      body.faceX = player.faceX;
+      body.faceY = player.faceY;
+      body.blocking = this.blocking;
+      body.invulnerable = player.invulnerable;
+      this.combat.update(dt, body);
       camera.follow(player.x * TILE_SIZE, player.y * TILE_SIZE, dt);
       const biome = world.biomeAt(Math.floor(player.x), Math.floor(player.y));
       const appetite = 1 - 0.1 * this.progression.rank('survivalist');
@@ -529,16 +571,16 @@ export class Game {
     const halfH = height / 2 / camera.zoom / TILE_SIZE;
     const cx = this.room ? at.x : camera.x / TILE_SIZE;
     const cy = this.room ? at.y : camera.y / TILE_SIZE;
-    world.update({
-      minX: cx - halfW,
-      minY: cy - halfH,
-      maxX: cx + halfW,
-      maxY: cy + halfH,
-      playerX: at.x,
-      playerY: at.y,
-      dirX: this.room ? 0 : player.dirX,
-      dirY: this.room ? 0 : player.dirY,
-    });
+    const v = this.view;
+    v.minX = cx - halfW;
+    v.minY = cy - halfH;
+    v.maxX = cx + halfW;
+    v.maxY = cy + halfH;
+    v.playerX = at.x;
+    v.playerY = at.y;
+    v.dirX = this.room ? 0 : player.dirX;
+    v.dirY = this.room ? 0 : player.dirY;
+    world.update(v);
 
     const view = this.room ? this.interiorRenderer.view : this.worldLayer;
     view.scale.set(camera.zoom);
@@ -550,20 +592,16 @@ export class Game {
     }
     this.renderer.cull((cx - halfW) * TILE_SIZE, (cy - halfH) * TILE_SIZE, (cx + halfW) * TILE_SIZE, (cy + halfH) * TILE_SIZE);
     this.buildings.update(world.objects.objects.values(), world.chunks.renderRect, player.x * TILE_SIZE, player.y * TILE_SIZE);
-    this.groundItems.update(dt, world.ground.items, { x0: cx - halfW - 2, y0: cy - halfH - 2, x1: cx + halfW + 2, y1: cy + halfH + 2 });
+    const near = this.nearView;
+    near.x0 = cx - halfW - 2;
+    near.y0 = cy - halfH - 2;
+    near.x1 = cx + halfW + 2;
+    near.y1 = cy + halfH + 2;
+    this.groundItems.update(dt, world.ground.items, near);
     this.updateTarget();
     this.renderer.fadeAround(player.x * TILE_SIZE, player.y * TILE_SIZE);
     this.entityRenderer.update(dt, this.combat.enemies, this.combat.projectiles, this.living.npcs.npcs, this.living.marks());
-    const layer = this.worldLayer;
-    this.living.render(
-      dt,
-      (out) => {
-        this.renderer.lights(out);
-        this.buildings.lights(out);
-      },
-      (x, y) => [x * camera.zoom + layer.x, y * camera.zoom + layer.y],
-      camera.zoom,
-    );
+    this.living.render(dt, this.sceneLights, this.toScreen, camera.zoom);
     this.finishFrame(dt);
   }
 
@@ -681,7 +719,7 @@ export class Game {
           return;
         }
         return new Promise<void>(() => {});
-      });
+      }).catch(() => {});
       return;
     }
     if (typeof BroadcastChannel === 'undefined') return;
@@ -760,14 +798,14 @@ export class Game {
   private renderIndoors(dt: number): void {
     this.interiorRenderer.update(this.residents());
     const room = this.room!;
-    const lights: Light[] = [];
+    const lights = this.roomLights;
+    lights.length = 0;
     this.interiorRenderer.lights(lights);
     // Daylight spills in from a mine's entrance.
     if (room.cave && room.floor === 0 && !this.living.time.isNight) {
       lights.push({ x: (room.exit.x + 0.5) * TILE_SIZE, y: room.exit.y * TILE_SIZE, radius: 3.5 * TILE_SIZE, warmth: 0 });
     }
-    const view = this.interiorRenderer.view;
-    this.living.renderIndoors(dt, lights, (x, y) => [x * this.camera.zoom + view.x, y * this.camera.zoom + view.y], this.camera.zoom, room.cave);
+    this.living.renderIndoors(dt, lights, this.toScreen, this.camera.zoom, room.cave);
     this.updateIndoorPrompt();
   }
 
@@ -797,9 +835,12 @@ export class Game {
 
   private updateIndoorPrompt(): void {
     const marker = this.interiorRenderer.marker;
-    marker.clear();
+    // As outdoors: clearing makes Pixi rebuild the draw list, so only when drawn.
+    if (this.indoorMarkerDrawn) marker.clear();
+    this.indoorMarkerDrawn = false;
     const busy = this.gathering.current;
     if (busy) {
+      this.indoorMarkerDrawn = true;
       const x = busy.gx * TILE_SIZE;
       const y = busy.gy * TILE_SIZE - 6;
       marker.rect(x, y, TILE_SIZE, 3).fill({ color: 0x3b2412 });
@@ -810,6 +851,7 @@ export class Game {
     const t = this.paused ? null : this.indoorTarget();
     if (t?.kind === 'gather') {
       const a = t.action;
+      this.indoorMarkerDrawn = true;
       marker.rect(a.gx * TILE_SIZE, a.gy * TILE_SIZE, TILE_SIZE, TILE_SIZE).stroke({ width: 1, color: a.kind === 'locked' ? 0xe04a3a : 0xfff2b0, alpha: 0.8 });
       this.hud.setPrompt(a.kind === 'harvest' ? `E  ${a.harvest.action}` : a.kind === 'locked' ? a.reason : null);
       return;
@@ -886,7 +928,7 @@ export class Game {
     if (input.wheel) camera.zoomBy(input.wheel);
     if (input.act('zoomIn')) camera.zoomBy(-1);
     if (input.act('zoomOut')) camera.zoomBy(1);
-    for (let n = 1; n <= 8; n++) if (input.hit(`Digit${n}`)) this.hotbar.select(n - 1);
+    for (let n = 0; n < DIGITS.length; n++) if (input.hit(DIGITS[n])) this.hotbar.select(n);
     if (input.act('use')) this.useItem(this.hotbar.selected);
     if (input.act('drop')) this.drop(this.hotbar.selected);
     if (input.act('interact')) this.interact();
@@ -1173,7 +1215,7 @@ export class Game {
     const over = this.inventory.weight() > this.capacity;
     if (over === this.overloaded) return;
     this.overloaded = over;
-    this.hud.notify(over ? `Your bag is too heavy: drop something (${TOUCH ? 'Bag → Drop' : 'Q'}) to move freely` : 'Your load feels lighter');
+    this.hud.notify(over ? `Your bag is too heavy: drop something (${TOUCH ? 'Bag → Drop' : keyName(this.input.keys.drop[0])}) to move freely` : 'Your load feels lighter');
   }
 
   /** Drops a whole stack at the player's feet. */
@@ -1226,7 +1268,8 @@ export class Game {
       return;
     }
     this.inventory.takeOne(slot);
-    const r = unknown[Math.floor(Math.random() * unknown.length)];
+    // Seeded by the world and how many recipes are known, like the rest of the loot.
+    const r = streamRng(Stream.Loot, this.world.seed, hashString('schematic'), this.progression.recipes.size).pick(unknown);
     this.progression.recipes.add(r.output.id);
     this.audio.play('level');
     const where = r.station === 'hand' ? 'by hand' : `at ${r.station === 'anvil' ? 'an' : 'a'} ${STATION_NAMES[r.station].toLowerCase()}`;
@@ -1401,7 +1444,7 @@ export class Game {
   }
 
   private travel(x: number, y: number): void {
-    this.spawnTarget = { x, y };
+    this.spawnTarget = { x: clampTile(x), y: clampTile(y) };
     this.hud.setLoading(true);
   }
 

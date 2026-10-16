@@ -1,7 +1,7 @@
 // Weather on screen (spec 7.3): rain, snow and blowing sand as pooled
 // screen-space particles, a veil for fog and storms, and lightning flashes.
 
-import { Container, Graphics, Sprite, Texture, type Renderer } from 'pixi.js';
+import { Container, Sprite, Texture, type Renderer } from 'pixi.js';
 import { WEATHER, type WeatherKind } from '../systems/WeatherSystem';
 
 interface Style {
@@ -21,6 +21,18 @@ const STYLES: Partial<Record<WeatherKind, Style>> = {
   sandstorm: { count: 180, texture: 'sand', vx: -320, vy: 30, veil: 0xc8a060 },
 };
 const VEILS: Partial<Record<WeatherKind, number>> = { fog: 0xdde4ea, heat: 0xffe0a0 };
+
+/** A small filled rectangle as a canvas texture: unlike a generated render
+ *  texture, it is uploaded again if the WebGL context is lost and restored. */
+function rectTexture(w: number, h: number, color: string): Texture {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, w, h);
+  return Texture.from(c);
+}
 
 interface Particle {
   sprite: Sprite;
@@ -44,16 +56,12 @@ export class ParticleSystem {
   private width = 1;
   private height = 1;
 
-  constructor(renderer: Renderer) {
-    const make = (draw: (g: Graphics) => void) => {
-      const g = new Graphics();
-      draw(g);
-      return renderer.generateTexture(g);
-    };
+  /** The renderer is no longer needed; kept so callers need not change. */
+  constructor(_renderer?: Renderer) {
     this.textures = {
-      rain: make((g) => g.rect(0, 0, 1, 6).fill({ color: 0xa8c8f0, alpha: 0.75 })),
-      snow: make((g) => g.rect(0, 0, 2, 2).fill({ color: 0xffffff, alpha: 0.9 })),
-      sand: make((g) => g.rect(0, 0, 7, 1).fill({ color: 0xb8904c, alpha: 0.9 })),
+      rain: rectTexture(1, 6, 'rgba(168,200,240,0.75)'),
+      snow: rectTexture(2, 2, 'rgba(255,255,255,0.9)'),
+      sand: rectTexture(7, 1, 'rgba(184,144,76,0.9)'),
     };
     this.view.addChild(this.veil, this.layer, this.flash);
   }

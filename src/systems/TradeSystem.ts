@@ -72,22 +72,17 @@ export type TradeResult = 'ok' | 'coins' | 'full' | 'none';
 
 export function buy(inv: Inventory, offer: Offer): TradeResult {
   if (inv.count(Items.coin) < offer.price) return 'coins';
-  inv.remove(Items.coin, offer.price);
-  const left = inv.add(offer.item, offer.count);
-  if (left > 0) {
-    // No room: put everything back.
-    inv.remove(offer.item, offer.count - left);
-    inv.add(Items.coin, offer.price);
-    return 'full';
-  }
-  return 'ok';
+  // No room: put everything back.
+  const bought = inv.tryChange(() => inv.remove(Items.coin, offer.price) && inv.add(offer.item, offer.count) === 0);
+  return bought ? 'ok' : 'full';
 }
 
-/** Sells up to `count` of an item, one price each. */
+/** Sells up to `count` of an item, one price each. If the coins would not
+ *  fit in the bag, nothing is sold. */
 export function sell(inv: Inventory, item: ItemDef, count = 1): TradeResult {
   const price = SELL_PRICES.get(item);
   const n = Math.min(count, inv.count(item));
-  if (!price || n <= 0 || !inv.remove(item, n)) return 'none';
-  inv.add(Items.coin, price * n);
-  return 'ok';
+  if (!price || n <= 0) return 'none';
+  const sold = inv.tryChange(() => inv.remove(item, n) && inv.add(Items.coin, price * n) === 0);
+  return sold ? 'ok' : 'full';
 }

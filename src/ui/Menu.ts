@@ -84,6 +84,8 @@ export class Menu {
   private readonly root: HTMLElement;
   private readonly body: HTMLElement;
   private readonly tabs = new Map<string, HTMLElement>();
+  /** Stops a key binding that is waiting for its key, if one is. */
+  private stopCapture?: () => void;
 
   constructor(
     parent: HTMLElement,
@@ -97,7 +99,7 @@ export class Menu {
       <div class="panel menu">
         <div class="menu-tabs"></div>
         <div class="menu-body"></div>
-        <button class="menu-close" title="Close">✕</button>
+        <button class="menu-close" title="Close" aria-label="Close">✕</button>
       </div>`;
     const tabBar = this.root.querySelector('.menu-tabs')!;
     for (const [id, label] of [
@@ -142,6 +144,7 @@ export class Menu {
   close(): void {
     this.isOpen = false;
     this.selected = null;
+    this.stopCapture?.();
     this.root.classList.remove('open');
   }
 
@@ -149,6 +152,8 @@ export class Menu {
   render(force = false): void {
     if (!this.isOpen || (!force && this.inv.version === this.drawnVersion)) return;
     this.drawnVersion = this.inv.version;
+    // The waiting key button is about to be replaced.
+    this.stopCapture?.();
     const views = {
       inventory: () => this.inventoryView(),
       crafting: () => this.craftingView(),
@@ -477,19 +482,18 @@ export class Menu {
       b.className = 'btn key-btn';
       b.textContent = keyName(keys[action][0]);
       b.addEventListener('click', () => {
+        // One binding waits at a time; a listener left behind would swallow a
+        // later key press and rebind its action.
+        this.stopCapture?.();
         b.textContent = 'Press a key…';
         const capture = (e: KeyboardEvent) => {
           // Taken before the game sees it, so Esc does not close the menu.
           e.preventDefault();
           e.stopImmediatePropagation();
-          window.removeEventListener('keydown', capture, true);
-          if (e.code === 'Escape') {
-            b.textContent = keyName(keys[action][0]);
-            return;
-          }
+          this.stopCapture?.();
+          if (e.code === 'Escape') return;
           if (RESERVED_KEYS.has(e.code)) {
             this.actions.notify(`${keyName(e.code)} is kept for the game`);
-            b.textContent = keyName(keys[action][0]);
             return;
           }
           const custom = { ...settings.values.keys };
@@ -502,6 +506,11 @@ export class Menu {
           this.render(true);
         };
         window.addEventListener('keydown', capture, true);
+        this.stopCapture = () => {
+          window.removeEventListener('keydown', capture, true);
+          b.textContent = keyName(keys[action][0]);
+          this.stopCapture = undefined;
+        };
       });
       row.append(name, b);
       box.appendChild(row);

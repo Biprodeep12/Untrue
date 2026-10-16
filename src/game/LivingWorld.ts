@@ -82,6 +82,8 @@ export class LivingWorld {
   readonly particles: ParticleSystem;
   readonly effects = new Effects();
   private readonly marksCache = new Map<number, string>();
+  /** The night's lights, refilled each frame. */
+  private readonly lights: Light[] = [];
   private marksAt = -Infinity;
   readonly dialog: Dialog;
   /** The NPC the player is talking to. */
@@ -103,7 +105,7 @@ export class LivingWorld {
     this.weather = new WeatherSystem(new Rng(d.world.seed ^ 0x3ea7));
     this.npcs = new NpcSystem(d.world);
     this.lighting = new Lighting(d.renderer);
-    this.particles = new ParticleSystem(d.renderer);
+    this.particles = new ParticleSystem();
     this.dialog = new Dialog(d.ui, d.atlasCanvas);
     this.vision = new Vision(d.ui);
     this.story = new StorySystem(d.world, this.npcs, d.inventory, {
@@ -198,7 +200,9 @@ export class LivingWorld {
     this.npcs.update(dt, this.time.hour, player.x, player.y, this.time.total);
     this.story.update(player.x, player.y);
     this.spawnLostTravellers();
-    for (const n of this.npcs.npcs) {
+    // Backwards: an escort brought home is removed from the list.
+    for (let i = this.npcs.npcs.length - 1; i >= 0; i--) {
+      const n = this.npcs.npcs[i];
       if (!n.following) continue;
       const done = this.quests.updateEscort(n.questId, n.x, n.y);
       if (done) {
@@ -239,7 +243,8 @@ export class LivingWorld {
       this.lighting.update(dt, darkness, NO_LIGHTS, toScreen, zoom, flat);
       return;
     }
-    const lights: Light[] = [];
+    const lights = this.lights;
+    lights.length = 0;
     const { player } = this.d;
     lights.push({ x: player.x * TILE_SIZE, y: (player.y - 0.5) * TILE_SIZE, radius: this.playerLight() * TILE_SIZE, warmth: this.playerLight() > NIGHT_EYES ? 0.7 : 0 });
     addLights(lights);
@@ -402,13 +407,24 @@ export class LivingWorld {
     return { time: this.time.save(), weather: this.weather.save(), quests: this.quests.save(), story: this.story.save() };
   }
 
+  /** All or nothing: if any part of the save throws, the fresh state comes back. */
   load(s: LivingSave): void {
-    this.time.load(s.time);
-    this.weather.load(s.weather);
-    this.quests.load(s.quests);
-    if (s.story) {
-      this.story.load(s.story);
-      this.storyLoaded = true;
+    const fresh = this.save();
+    try {
+      this.time.load(s.time);
+      this.weather.load(s.weather);
+      this.quests.load(s.quests);
+      if (s.story) {
+        this.story.load(s.story);
+        this.storyLoaded = true;
+      }
+    } catch (e) {
+      this.time.load(fresh.time);
+      this.weather.load(fresh.weather);
+      this.quests.load(fresh.quests);
+      if (fresh.story) this.story.load(fresh.story);
+      this.storyLoaded = false;
+      throw e;
     }
   }
 
@@ -547,7 +563,7 @@ export class LivingWorld {
           show();
         },
         (item, count) => {
-          sell(inventory, item, count);
+          if (sell(inventory, item, count) === 'full') hud.notify('Bag full');
           show();
         },
       );
@@ -559,7 +575,8 @@ export class LivingWorld {
   private spawnLostTravellers(): void {
     const sim = this.d.world.chunks.simRect;
     if (!sim) return;
-    for (const q of this.quests.active) {
+    const active = this.quests.active;
+    for (const q of active) {
       const o = q.objective;
       if (o.kind !== 'rescue' || this.npcs.npcs.some((n) => n.questId === q.id)) continue;
       if (!inRect(sim, tileToChunk(o.x), tileToChunk(o.y))) continue;
@@ -571,9 +588,10 @@ export class LivingWorld {
       this.npcs.add(npc);
     }
     // Travellers whose quest ended, or who were left far behind, go away.
-    for (const n of [...this.npcs.npcs]) {
+    for (let i = this.npcs.npcs.length - 1; i >= 0; i--) {
+      const n = this.npcs.npcs[i];
       if (n.role !== 'lost') continue;
-      const q = this.quests.active.find((x) => x.id === n.questId);
+      const q = active.find((x) => x.id === n.questId);
       const far = !n.following && Math.hypot(n.x - this.d.player.x, n.y - this.d.player.y) > 120;
       if (!q || far) this.npcs.remove(n);
     }

@@ -125,6 +125,21 @@ export class CombatSystem {
   /** Chunks already rolled for a legendary creature this region visit. */
   private readonly legendChecked = new Set<string>();
   private legendRect = '';
+  /** What enemies ask of the world; built once, not every frame. */
+  private readonly ctx: EnemyContext = {
+    playerX: 0,
+    playerY: 0,
+    isSolid: (gx, gy) => this.world.isSolidAt(gx, gy),
+    alert: (group) => {
+      for (const e of this.enemies) if (e.group === group) e.provoke();
+    },
+    hitPlayer: (e) => this.hitPlayer(e.damage, e.species, e.x, e.y),
+    shoot: (e, dx, dy) => {
+      const r = e.species.ranged!;
+      this.projectiles.push({ x: e.x, y: e.y - BODY, vx: dx * r.speed, vy: dy * r.speed, kind: r.kind, damage: e.damage * 0.8, fromPlayer: false, ttl: (r.range + 1) / r.speed, source: e });
+    },
+    random: () => this.rng.next(),
+  };
 
   constructor(
     private readonly world: WorldManager,
@@ -162,20 +177,9 @@ export class CombatSystem {
     this.triggers();
     this.rollLegends();
 
-    const ctx: EnemyContext = {
-      playerX: body.x,
-      playerY: body.y,
-      isSolid: (gx, gy) => this.world.isSolidAt(gx, gy),
-      alert: (group) => {
-        for (const e of this.enemies) if (e.group === group) e.provoke();
-      },
-      hitPlayer: (e) => this.hitPlayer(e.damage, e.species, e.x, e.y),
-      shoot: (e, dx, dy) => {
-        const r = e.species.ranged!;
-        this.projectiles.push({ x: e.x, y: e.y - BODY, vx: dx * r.speed, vy: dy * r.speed, kind: r.kind, damage: e.damage * 0.8, fromPlayer: false, ttl: (r.range + 1) / r.speed, source: e });
-      },
-      random: () => this.rng.next(),
-    };
+    const ctx = this.ctx;
+    ctx.playerX = body.x;
+    ctx.playerY = body.y;
     for (const e of this.enemies) e.update(dt, ctx);
     this.updateProjectiles(dt);
   }
@@ -242,13 +246,19 @@ export class CombatSystem {
     const blocked = b.blocking && towards && this.vitals.spend(shield?.stamina ?? BLOCK_STAMINA);
     const amount = incomingDamage(raw, this.inv.armor(), blocked, shield?.pass ?? BLOCK_PASS);
     this.vitals.hurt(amount);
+    // The hit makes the player briefly invulnerable; this frame's body is a
+    // snapshot, so mark it here too or every enemy in reach lands this frame.
+    b.invulnerable = true;
     if (species.inflicts && !blocked) this.vitals.afflict(species.inflicts.kind, species.inflicts.seconds);
     this.events.damage(b.x, b.y - 1.2, amount, false, true);
     this.events.playerHurt(fromX, fromY);
   }
 
   private kill(e: Enemy): void {
-    this.enemies.splice(this.enemies.indexOf(e), 1);
+    const i = this.enemies.indexOf(e);
+    // Already gone: splice(-1) would remove another enemy.
+    if (i < 0) return;
+    this.enemies.splice(i, 1);
     this.grantXp(e.xp);
     if (e.species.boss) this.progression.trophies[e.species.id] = (this.progression.trophies[e.species.id] ?? 0) + 1;
     this.onKill?.(e);
@@ -341,12 +351,18 @@ export class CombatSystem {
   private despawn(): void {
     const sim = this.world.chunks.simRect;
     if (!sim) return;
+    let reset: Set<string> | null = null;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       const faded = e.species.nightOnly && !this.night;
       if (!faded && inRect(sim, tileToChunk(e.x), tileToChunk(e.y))) continue;
       this.enemies.splice(i, 1);
-      if (e.tag) this.guarded.delete(e.tag);
+      if (e.tag && this.guarded.delete(e.tag)) (reset ??= new Set()).add(e.tag);
+    }
+    // A place resets whole: guards left behind would otherwise stay with no
+    // record, and the next visit would wake a second set beside them.
+    if (reset) {
+      for (let i = this.enemies.length - 1; i >= 0; i--) if (reset.has(this.enemies[i].tag)) this.enemies.splice(i, 1);
     }
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];

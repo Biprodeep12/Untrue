@@ -28,6 +28,12 @@ export interface Stick {
   dy: number;
 }
 
+/** Whether keys go to a text field: anything but the checkboxes and sliders of Settings. */
+function typing(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement) return !['checkbox', 'radio', 'range', 'button'].includes(target.type);
+  return target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+}
+
 export class Input {
   private readonly down = new Set<string>();
   private readonly pressed = new Set<string>();
@@ -54,6 +60,10 @@ export class Input {
 
   constructor(target: Window, surface: HTMLElement) {
     target.addEventListener('keydown', (e) => {
+      // Typing in a text field is not playing.
+      if (typing(e.target)) return;
+      // Enter on a focused button presses that button, not a game key too.
+      if (e.code === 'Enter' && e.target instanceof HTMLButtonElement) return;
       // Keys the browser would act on (scroll, focus, find) belong to the game.
       if (e.code === 'F3' || e.code === 'Tab' || e.code.startsWith('Arrow') || e.code === 'Space' || this.bound(e.code)) {
         if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
@@ -66,10 +76,24 @@ export class Input {
       if (!this.down.has(e.code)) this.pressed.add(e.code);
       this.down.add(e.code);
     });
-    target.addEventListener('keyup', (e) => this.down.delete(e.code));
+    target.addEventListener('keyup', (e) => {
+      this.down.delete(e.code);
+      // On macOS, keys let go while Cmd is held send no keyup: forget them all.
+      if (e.key === 'Meta') this.down.clear();
+    });
+    // Losing focus (alt-tab, a system dialog) swallows the releases too.
     target.addEventListener('blur', () => {
       this.down.clear();
       this.mouseBlock = false;
+      this.touches.clear();
+      this.taps.clear();
+      this.pinch = 0;
+      this.stickId = null;
+      Object.assign(this.stick, { active: false, dx: 0, dy: 0 });
+    });
+    // The right button may be let go over the HUD or off the canvas.
+    target.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button === 2) this.mouseBlock = false;
     });
     target.addEventListener('wheel', (e) => (this.wheel += Math.sign(e.deltaY)), { passive: true });
 

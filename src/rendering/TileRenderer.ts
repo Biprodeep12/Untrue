@@ -57,8 +57,10 @@ export class TileRenderer implements ChunkListener {
   private readonly decoTextures: Texture[] = [];
   private readonly positions: Float32Array;
   private readonly indices: Uint32Array;
-  /** The camera's view in world pixels, padded; null until the first cull. */
-  private view: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
+  /** The camera's view in world pixels, padded; reused every frame. */
+  private readonly view = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  /** Nothing is culled until the first cull. */
+  private culled = false;
 
   constructor(
     private readonly atlas: Texture,
@@ -114,13 +116,18 @@ export class TileRenderer implements ChunkListener {
 
   /** Shows only chunks overlapping the camera's view (world pixels). */
   cull(minX: number, minY: number, maxX: number, maxY: number): void {
-    this.view = { minX: minX - CULL_PAD, minY: minY - CULL_PAD, maxX: maxX + CULL_PAD, maxY: maxY + CULL_PAD };
+    const v = this.view;
+    v.minX = minX - CULL_PAD;
+    v.minY = minY - CULL_PAD;
+    v.maxX = maxX + CULL_PAD;
+    v.maxY = maxY + CULL_PAD;
+    this.culled = true;
     for (const d of this.drawn.values()) this.setInView(d, this.overlaps(d));
   }
 
   private overlaps(d: Drawn): boolean {
+    if (!this.culled) return true;
     const v = this.view;
-    if (!v) return true;
     const x = d.cx * CHUNK_PX;
     const y = d.cy * CHUNK_PX;
     return x < v.maxX && x + CHUNK_PX > v.minX && y < v.maxY && y + CHUNK_PX > v.minY;

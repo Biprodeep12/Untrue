@@ -76,6 +76,7 @@ export class WeatherSystem {
   }
 
   load(s: WeatherSave): void {
-    for (const b of BIOME_TYPES) if (s[b]) this.spells.set(b, { ...s[b] });
+    // Unknown weather (e.g. from a damaged save) keeps the current spell.
+    for (const b of BIOME_TYPES) if (s[b] && Object.hasOwn(WEATHER, s[b].kind)) this.spells.set(b, { kind: s[b].kind, hoursLeft: Number(s[b].hoursLeft) || 1 });
   }
 }

@@ -2,7 +2,7 @@
 // them. They stay where they were dropped, and are saved with the world.
 
 import { itemById } from '../items/Items';
-import type { Inventory, Stack } from '../systems/InventorySystem';
+import { loadStack, type Inventory, type Stack } from '../systems/InventorySystem';
 
 /** Picked up within this many tiles of the player's feet. */
 const PICKUP_RANGE = 0.7;
@@ -72,7 +72,9 @@ export class GroundItems {
     this.items.length = 0;
     for (const s of saved) {
       const item = itemById(s.id);
-      if (item) this.drop({ item, count: s.count, durability: s.durability }, s.x, s.y, true);
+      if (!item || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
+      const stack = loadStack(item, s);
+      if (stack) this.drop(stack, s.x, s.y, true);
     }
   }
 }

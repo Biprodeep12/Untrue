@@ -292,7 +292,9 @@ export class QuestSystem {
     return this.quests;
   }
 
+  /** Quests whose objective cannot work (e.g. an item no longer in the game)
+   *  are dropped, since the journal and hand-in would fail on them. */
   load(quests: Quest[]): void {
-    this.quests = quests;
+    this.quests = quests.filter((q) => q?.objective && q.reward && (q.objective.kind !== 'collect' || !!itemById(q.objective.item)));
   }
 }

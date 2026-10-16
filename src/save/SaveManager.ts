@@ -186,6 +186,7 @@ export class UnreadableSave extends Error {}
 const DB_NAME = 'untrue';
 const STORE = 'saves';
 const SLOT = 'main';
+const MAX_BACKUPS = 5;
 
 export class SaveManager {
   private db: Promise<IDBDatabase> | null = null;
@@ -215,7 +216,16 @@ export class SaveManager {
 
   /** Keeps a save that could not be loaded, so a later fix can recover it. */
   async backup(data: unknown): Promise<void> {
-    await this.run('readwrite', (s) => s.put(data, `backup-${Date.now()}`));
+    await this.run('readwrite', (s) => {
+      const put = s.put(data, `backup-${Date.now()}`);
+      // Only the newest few are kept, so repeated failures cannot fill the quota.
+      // Keys sort by time: Date.now() has 13 digits for centuries yet.
+      const keys = s.getAllKeys(IDBKeyRange.bound('backup-', 'backup-￿'));
+      keys.onsuccess = () => {
+        for (const k of keys.result.slice(0, -MAX_BACKUPS)) s.delete(k);
+      };
+      return put;
+    });
   }
 
   private open(): Promise<IDBDatabase> {
@@ -223,7 +233,17 @@ export class SaveManager {
       if (typeof indexedDB === 'undefined') throw new Error('IndexedDB is not available');
       const req = indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // Let another tab upgrade or delete the database, and reopen next time
+        // instead of using a connection the browser has closed (e.g. site data cleared).
+        db.onversionchange = () => {
+          db.close();
+          this.db = null;
+        };
+        db.onclose = () => (this.db = null);
+        resolve(db);
+      };
       req.onerror = () => reject(req.error);
       req.onblocked = () => reject(new Error('Save storage is blocked by another tab'));
     });

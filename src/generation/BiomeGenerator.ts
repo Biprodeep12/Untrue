@@ -1,6 +1,7 @@
 // Grows a biome footprint outward from its trigger chunk (spec 3.2, steps 3 and 4).
 
 import { MIN_BIOME_CHUNKS } from '../config';
+import { chunkKey } from '../coords';
 import { Rng } from './Random';
 
 export interface GrowOptions {
@@ -27,11 +28,11 @@ export function growBiome(o: GrowOptions): Array<[number, number]> {
   const sin = Math.sin(angle);
 
   const claimed: Array<[number, number]> = [];
-  const seen = new Set<string>();
+  const seen = new Set<number>();
   const heap = new MinHeap();
 
   const push = (cx: number, cy: number) => {
-    const id = `${cx},${cy}`;
+    const id = chunkKey(cx, cy);
     if (seen.has(id)) return;
     seen.add(id);
     if (!o.isFree(cx, cy)) return;

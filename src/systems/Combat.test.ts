@@ -160,6 +160,14 @@ describe('combat system', () => {
     expect(combat.projectiles).toHaveLength(1);
   });
 
+  it('lands one hit per frame on the player', () => {
+    const { world, vitals, combat } = setup();
+    world.update(view(0, 0));
+    for (let k = 0; k < 3; k++) combat.projectiles.push({ x: 0, y: -0.4, vx: 0, vy: 0, kind: 'arrow', damage: 10, fromPlayer: false, ttl: 1 });
+    combat.update(0.01, body(0, 0));
+    expect(vitals.health).toBe(90);
+  });
+
   it('wakes dungeon guards once, and a cleared dungeon stays cleared', () => {
     const { world, combat } = setup();
     let dungeon;

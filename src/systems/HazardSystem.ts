@@ -40,6 +40,8 @@ export class HazardSystem {
   readonly strikes: Strike[] = [];
   readonly fires: Fire[] = [];
   private nextStrike = 8;
+  /** Tiles alight, so spreading checks a set rather than every fire. */
+  private readonly burning = new Set<string>();
 
   constructor(
     private readonly world: WorldManager,
@@ -81,6 +83,7 @@ export class HazardSystem {
       }
       if (f.timer > 0) continue;
       this.fires.splice(i, 1);
+      this.burning.delete(`${f.gx},${f.gy}`);
       if (TREES.has(this.world.tileAt(f.gx, f.gy)?.deco ?? 0)) this.world.harvest(f.gx, f.gy);
     }
   }
@@ -88,7 +91,9 @@ export class HazardSystem {
   /** Sets a tree alight, if there is one. */
   ignite(gx: number, gy: number): boolean {
     if (!TREES.has(this.world.tileAt(gx, gy)?.deco ?? 0)) return false;
-    if (this.fires.some((f) => f.gx === gx && f.gy === gy)) return false;
+    const key = `${gx},${gy}`;
+    if (this.burning.has(key)) return false;
+    this.burning.add(key);
     this.fires.push({ gx, gy, timer: BURN_SECONDS, spread: true });
     return true;
   }
