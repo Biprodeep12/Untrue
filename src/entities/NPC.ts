@@ -44,6 +44,8 @@ export class Npc {
   ghost = false;
   /** Has no house to go to, so stays out at night (story characters). */
   stayOut = false;
+  /** Lives indoors: always at home behind its door, day and night. */
+  homebody = false;
   /** In a conversation: stands still, facing the player. */
   talking = false;
   private targetX: number;
@@ -106,6 +108,10 @@ export class Npc {
       return;
     }
     if (this.role === 'lost' || this.role === 'merchant') return;
+    if (this.homebody) {
+      this.hidden = true;
+      return;
+    }
 
     const night = !this.stayOut && (ctx.hour >= BEDTIME_HOUR || ctx.hour < MORNING_HOUR);
     if (night) {

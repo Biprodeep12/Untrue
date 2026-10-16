@@ -121,6 +121,9 @@ Everything else stays gone until its region fully unloads and regenerates.
 **Villages:** each village in the simulation radius gets four people, all leaving when the village leaves the radius:
 - **Three villagers**, in one of three outfits. The first is the village's quest giver. Villagers wander within 9 tiles of the village centre at 2.2 tiles/s.
 - **A trader** who stays within 2 tiles of the well.
+- **A resident in every house**, who stays at home day and night (`Npc.homebody`) and is met inside.
+
+**Lone houses and cabins** are lived in half the time (seeded by the object): one resident, at home day and night.
 
 **Nomad camps** (desert) get two people the same way: a traveller who offers quests, and a trader by the fire.
 

@@ -108,8 +108,14 @@ describe('npcs', () => {
     const v = village!;
     world.update(view(v.x + v.w / 2, v.y + v.h / 2));
     npcs.update(0.1, 12, v.x, v.y, 0);
-    const people = npcs.npcs.filter((n) => n.village === v.id);
+    const all = npcs.npcs.filter((n) => n.village === v.id);
+    const people = all.filter((n) => !n.homebody);
     expect(people).toHaveLength(4);
+    // And someone at home behind every door.
+    const homes = all.filter((n) => n.homebody);
+    expect(homes).toHaveLength(v.layout.buildings.length);
+    expect(homes.every((n) => n.hidden && !n.questGiver)).toBe(true);
+    expect(new Set(homes.map((n) => `${n.doorX},${n.doorY}`)).size).toBe(homes.length);
     expect(people.filter((n) => n.questGiver)).toHaveLength(1);
     expect(people.filter((n) => n.role === 'trader')).toHaveLength(1);
   });

@@ -130,7 +130,7 @@ Floors are generated from the building's seed and the floor number, so each is t
 
 ## Residents
 
-Villagers who went home for the night (see [living-world.md](living-world.md)) are inside the building whose door they went through. They stand at spots around the table and can be talked to as usual: quests, hand-ins and trade all work indoors.
+Every village house has someone at home day and night, and half of lone houses and cabins are lived in (see [living-world.md](living-world.md)). Villagers who went home for the night join them inside the building whose door they went through. They stand at spots around the table and can be talked to as usual: quests, hand-ins and trade all work indoors.
 
 ## Saving
 

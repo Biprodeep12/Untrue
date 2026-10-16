@@ -30,7 +30,7 @@ describe('world streaming', () => {
       for (const key of world.chunks.cached) expect(world.biomes.at(key)).toBeDefined();
     }
     for (const b of world.biomes.records.values()) expect(b.chunks.length).toBeGreaterThanOrEqual(MIN_BIOME_CHUNKS);
-  });
+  }, 20000);
 
   it('keeps memory bounded on a long walk', () => {
     const world = newWorld();

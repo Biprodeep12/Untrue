@@ -13,6 +13,10 @@ const NAMES = [
   'Mabel', 'Nico', 'Odette', 'Pip', 'Quinn', 'Rosa', 'Silas', 'Tamsin', 'Ulric', 'Vera', 'Wren', 'Yara',
 ];
 const VILLAGER_OUTFITS = ['villager-a', 'villager-b', 'villager-c'];
+/** Lone buildings someone may live in. */
+const LONE_HOMES = new Set(['house', 'cabin']);
+/** Chance a lone house or cabin is lived in. */
+const LIVED_IN = 0.5;
 
 export function randomName(rng: Rng): string {
   return rng.pick(NAMES);
@@ -57,7 +61,7 @@ export class NpcSystem {
     for (let cy = sim.y0; cy <= sim.y1; cy++) {
       for (let cx = sim.x0; cx <= sim.x1; cx++) {
         for (const o of this.world.objects.inChunk(chunkKey(cx, cy))) {
-          if ((o.kind === 'village' || o.kind === 'nomad-camp') && !this.populated.has(o.id)) this.populate(o);
+          if ((o.kind === 'village' || o.kind === 'nomad-camp' || LONE_HOMES.has(o.kind)) && !this.populated.has(o.id)) this.populate(o);
         }
       }
     }
@@ -80,7 +84,9 @@ export class NpcSystem {
     for (const n of this.npcs) n.update(dt, ctx);
   }
 
-  /** Three villagers, one of them handing out quests, and a trader by the well. */
+  /** Three villagers, one of them handing out quests, a trader by the well,
+   *  and someone at home in every house. A lone house or cabin is lived in
+   *  half the time. */
   private populate(village: WorldObject): void {
     this.populated.add(village.id);
     const rng = new Rng(hashString(village.id));
@@ -95,15 +101,30 @@ export class NpcSystem {
       if (village.layout.decos[i] === Deco.Well) well = [gx, gy];
     }
     for (const b of village.layout.buildings) doors.push([village.x + b.x + b.door, village.y + b.y + b.h - 1]);
-    if (!paths.length) return;
     const used = new Set<string>();
+    const name = () => {
+      let n = randomName(rng);
+      for (let k = 0; used.has(n) && k < 10; k++) n = randomName(rng);
+      used.add(n);
+      return n;
+    };
+    // Someone who stays in, met inside behind their door.
+    const resident = (door: [number, number]) => {
+      const npc = new Npc('villager', name(), rng.pick(VILLAGER_OUTFITS), door[0] + 0.5, door[1] + 1.9, door[0], door[1]);
+      npc.village = village.id;
+      npc.homebody = npc.hidden = true;
+      this.npcs.push(npc);
+    };
+    if (LONE_HOMES.has(village.kind)) {
+      if (doors.length && rng.chance(LIVED_IN)) resident(doors[0]);
+      return;
+    }
+    if (!paths.length) return;
     const make = (role: NpcRole, outfit: string, home: [number, number]) => {
-      let name = randomName(rng);
-      for (let k = 0; used.has(name) && k < 10; k++) name = randomName(rng);
-      used.add(name);
+      const n = name();
       const [sx, sy] = rng.pick(paths);
       const door = doors.length ? rng.pick(doors) : home;
-      const npc = new Npc(role, name, outfit, sx + 0.5, sy + 0.9, home[0], home[1], door[0], door[1]);
+      const npc = new Npc(role, n, outfit, sx + 0.5, sy + 0.9, home[0], home[1], door[0], door[1]);
       npc.village = village.id;
       this.npcs.push(npc);
       return npc;
@@ -117,5 +138,6 @@ export class NpcSystem {
     }
     for (let k = 0; k < 3; k++) make('villager', rng.pick(VILLAGER_OUTFITS), centre).questGiver = k === 0;
     make('trader', 'trader', [well[0] + 1.5, well[1] + 2]);
+    for (const door of doors) resident(door);
   }
 }
