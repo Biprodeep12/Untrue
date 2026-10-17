@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html" class="current" aria-current="page">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html" class="current" aria-current="page">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Gameplay</p>
     <article><h1 id="audio">Audio</h1>
@@ -111,13 +111,13 @@
 </tr>
 <tr>
 <td><code>warn</code></td>
-<td>A vital gets worse (low or critical), except stamina</td>
+<td>A vital gets worse (low or critical), except stamina; a glyph puzzle resets</td>
 <td>A two-note square alarm, played twice</td>
 </tr>
 <tr>
-<td>Bell</td>
-<td>The Waking Monument crumbles</td>
-<td>Three strikes of inharmonic sine partials</td>
+<td><code>rift</code></td>
+<td>Stepping into or out of a rift</td>
+<td>A swell of band-passed noise under a falling four-note shimmer</td>
 </tr>
 </tbody></table></div>
 <h2 id="music">Music<a class="anchor" href="#music" aria-label="Link to this section">#</a></h2>
@@ -129,6 +129,7 @@
 <li><strong>Melody:</strong> a plucked note on about half the beats (fewer at night). The voice follows the land: a triangle in the forest, a soft square in the desert, a long sine in the snow.</li>
 <li><strong>Drone:</strong> from band 2 out, a low sine two octaves under the root every 8 beats.</li>
 <li><strong>Danger:</strong> a low pulse every other beat while enemies are chasing or attacking the player.</li>
+<li><strong>Outer dimensions</strong> (<code>MusicMood.dimension</code>, from the dimension&#39;s <code>mood.music</code>): their own music (<code>riftBeat</code>). Beats are slower (1.05 s); a low detuned drone every 8 beats, and sparse long sine notes from a scale of close, unresolved steps (0, 1, 3, 6, 7, 10 semitones). The danger pulse plays as in the overworld.</li>
 </ul>
 <h2 id="ambience">Ambience<a class="anchor" href="#ambience" aria-label="Link to this section">#</a></h2>
 <p>A looping filtered noise source plays the weather: low-passed rain for rain and storms (louder in storms), and band-passed wind for sandstorms and blizzards. Its volume follows how strongly the weather is felt, and fades when the game is paused. The volume is only rescheduled when it changes, and the noise stops once it has faded to silence.</p>
@@ -160,12 +161,21 @@
 <td>Mines</td>
 <td>Water dripping, and now and then a low drone</td>
 </tr>
+<tr>
+<td>Near an open rift</td>
+<td>Its hum: two close low tones beating against each other, with a crackle beside it; louder and more often the nearer the rift (<code>MusicMood.rift</code>, 0 to 1 within 12 tiles, 0 elsewhere)</td>
+</tr>
+<tr>
+<td>Inside an outer dimension</td>
+<td>Glassy chimes now and then, nothing else</td>
+</tr>
 </tbody></table></div>
+<p>Ambient sounds are skipped while 26 or more voices sound (<code>MAX_VOICES</code> less 6), so they never crowd out the sound effects.</p>
 <p>Birds, crickets and gusts are quiet indoors and in strong rain or storms.</p>
 <p><strong>Creature calls.</strong> When something hunts the player outdoors, its call sounds, at most every 18 seconds: wolves (and wolf-shaped creatures) howl, wraiths and skeletons wail, bears and golems growl (<code>Game.hunterCall</code>).</p>
 <p>See also: <a href="index.html">README.md</a> · <a href="living-world.html">living-world.md</a> · <a href="rendering.html">rendering.md</a></p>
 </article>
-    <nav class="pager"><a class="prev" href="exploration.html"><small>Previous</small>Exploration</a><a class="next" href="story.html"><small>Next</small>The World That Forgets</a></nav>
+    <nav class="pager"><a class="prev" href="exploration.html"><small>Previous</small>Exploration</a><a class="next" href="story.html"><small>Next</small>Story</a></nav>
   </main>
   <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#setup">Setup</a></li><li class="l2"><a href="#sound-effects">Sound effects</a></li><li class="l2"><a href="#music">Music</a></li><li class="l2"><a href="#ambience">Ambience</a></li></ul></nav>
 </div>

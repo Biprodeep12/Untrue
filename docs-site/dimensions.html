@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dimensions · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html" class="current" aria-current="page">Dimensions</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Story</p>
+    <article><h1 id="dimensions">Dimensions</h1>
+<p>The outer dimensions behind the rifts: finite spaces of challenges, entered from a rift in the overworld and left through a portal that closes the rift behind the player. Only one exists so far, <strong>The Hollow</strong>, but dimensions come from a registry so more can be added.</p>
+<p>Code: <code>src/dimension/</code> (the dimensions themselves, with no rendering), <code>src/game/RiftTrip.ts</code> (one trip into one), <code>src/rendering/DimensionRenderer.ts</code>, <code>src/ui/DimensionMap.ts</code>, and the dimension parts of <code>src/game/Game.ts</code>.</p>
+<h2 id="entering-and-leaving">Entering and leaving<a class="anchor" href="#entering-and-leaving" aria-label="Link to this section">#</a></h2>
+<p>Facing a rift&#39;s tear in the overworld shows <strong>E Enter the rift</strong> (<a href="objects-and-structures.html#rifts">objects-and-structures.md</a>). Pressing E:</p>
+<ol>
+<li>Seeds the space from the rift: <code>hash(worldSeed, hashString(rift.id))</code>, so the same rift always leads to the same layout, and <code>pickDimension(seed)</code> chooses which dimension (always The Hollow for now).</li>
+<li>Makes a <code>RiftTrip</code> and moves the fight there (<code>CombatSystem.enterArena</code>): the overworld&#39;s enemies and shots are stashed, untouched, until the player is back.</li>
+<li>Hides the overworld&#39;s sprites and opens the <code>DimensionRenderer</code>, then puts the player on the arrival platform, below the rift they came in by.</li>
+</ol>
+<p>There are three ways out, all back to the doorstep below the rift in the overworld:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Way out</th>
+<th>The rift</th>
+<th>The run</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Step through the portal in the vault (it wakes once the boss falls)</td>
+<td>Closed: it shows a scar while its region stands, and +150 XP</td>
+<td>Done</td>
+</tr>
+<tr>
+<td>Step back onto the arrival rift</td>
+<td>Still open</td>
+<td>Lost: entering again starts over</td>
+</tr>
+<tr>
+<td>Die</td>
+<td>Still open</td>
+<td>Lost, and so is everything carried (<a href="#dying">below</a>)</td>
+</tr>
+</tbody></table></div>
+<p>Leaving restores the overworld exactly: the trip&#39;s enemies go, the overworld&#39;s come back as they were, the overworld renders again (chunks re-culled, buildings rescanned from their cached art, ground items redrawn), and the dimension&#39;s meshes and sprites go back to their pools.</p>
+<p><strong>While inside</strong>, the overworld goes on as it does for a player indoors (<a href="buildings-and-interiors.html#entering">buildings-and-interiors.md</a>): the clock, hunger, thirst and villagers&#39; days run (<code>LivingWorld.updateIndoors</code>), the world keeps streaming around the rift outside, and world events can still fire there (an ambush waits in the stash). Nothing of the overworld&#39;s combat runs: no wild spawning, despawning by distance, guard triggers or legend rolls. There is no weather; hazards, ground items and gathering are the overworld&#39;s and stay there. Only by-hand recipes can be crafted, nothing can be dropped, and what does not fit in the bag is left outside the rift.</p>
+<h2 id="the-hollow">The Hollow<a class="anchor" href="#the-hollow" aria-label="Link to this section">#</a></h2>
+<p>A chain of stone chambers floating in a violet void, 96 × 96 tiles (<code>src/dimension/Hollow.ts</code>). Six chambers are laid end to end by a backtracking search from a random start, each joined to the last by a short walled corridor with a three-tile door into the next:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Chamber</th>
+<th>Size (tiles, walls included)</th>
+<th>Challenge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Arrival</td>
+<td>11 × 11</td>
+<td>None: the rift home, rune tiles and four crystals</td>
+</tr>
+<tr>
+<td>Glitch nest</td>
+<td>17–19 × 15–17</td>
+<td>Waves</td>
+</tr>
+<tr>
+<td>Crumbling path</td>
+<td>21–23 square</td>
+<td>Hazard path</td>
+</tr>
+<tr>
+<td>Glyph hall</td>
+<td>15–17 × 13–15</td>
+<td>Glyph puzzle</td>
+</tr>
+<tr>
+<td>Warden&#39;s arena</td>
+<td>21–23 × 19–21</td>
+<td>Boss</td>
+</tr>
+<tr>
+<td>Vault</td>
+<td>11 × 9</td>
+<td>None: the portal home and the vault&#39;s chest</td>
+</tr>
+</tbody></table></div>
+<p>The HUD&#39;s location names the chamber the player stands in (<code>RiftTrip.chamberAt</code>). Light comes from crystals, the rift, safe pads and the portal; the space&#39;s darkness is 0.55 at every hour, tinted violet. Its music and sounds are in <a href="audio.html">audio.md</a>.</p>
+<p><strong>Doors.</strong> The door into a chamber stays sealed until the chamber before it is done. The waves and the boss also seal the door behind the player while they fight, and open it again when they are won (or reset).</p>
+<h2 id="challenges">Challenges<a class="anchor" href="#challenges" aria-label="Link to this section">#</a></h2>
+<p><code>src/dimension/Challenges.ts</code>. Each challenge chamber has a state machine (idle, active, done); <code>DimensionRun</code> sequences them. Per frame the game calls <code>run.update(dt, px, py)</code> with the player&#39;s feet and acts on the events it reports (<code>takeEvents</code>); nothing in a run allocates per frame.</p>
+<p><strong>Waves (Glitch nest).</strong> Walking two tiles into the chamber seals it: &quot;The doors seal. Something crawls out of the cracks…&quot;. Three waves come out of spawn spots around the walls, away from the player: 4 Glitchlings; 3 Glitchlings and 2 Shard Wisps; 3 Glitchlings and 3 Shard Wisps. The next wave arrives 1.5 s after the last one falls; after the third the doors open.</p>
+<p><strong>Hazard path (Crumbling path).</strong> The room is void, with a ledge at each door and a winding path of floating slabs between them, with a 2 × 2 safe pad at each bend:</p>
+<ul>
+<li>Crumbling slabs crack when stepped on, fall 0.55 s later, and come back 5 s after that.</li>
+<li>Glitching slabs blink on a cycle: there for 2 s (flickering for the last 0.5), gone for 1.3 s. Each run of them has a safe step before it to wait on.</li>
+<li>Walking onto the void, a fallen slab or a glitched-out one is a fall: 15 damage, and the player is put back on the last safe pad touched (a fall also puts every slab back, so the way is open again).</li>
+<li>Reaching the far ledge finishes it: &quot;Solid ground again.&quot;</li>
+</ul>
+<p><strong>Glyph puzzle (Glyph hall).</strong> Four or five of six glyphs are carved on mural stones along a wall without a door; the same glyphs are on pressure plates scattered over the floor. The stones light up one after another in the order to press the plates (0.7 s each, then a pause of two beats), and stay lit as each is done. A wrong plate springs them all back up (&quot;Wrong order&quot;). The last right one opens the door.</p>
+<p><strong>Boss (Warden&#39;s arena).</strong> Walking three tiles into the arena seals it and wakes <strong>The Rift Warden</strong> in the centre of its rune circle. Its health drives two phases:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Below</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>66%</td>
+<td>&quot;The Warden tears the air open.&quot; 3 Glitchlings join it</td>
+</tr>
+<tr>
+<td>33%</td>
+<td>&quot;The Warden flickers with fury.&quot; 2 Shard Wisps join it, and it attacks faster (cooldown ×0.55) and moves faster (×1.35)</td>
+</tr>
+</tbody></table></div>
+<p>At most 6 summons live at once. The phases&#39; multipliers go on that one enemy (<code>Enemy.speedScale</code>, <code>cooldownScale</code>), never on its species. When it falls, its summons fade, the doors open and the portal wakes: &quot;The way home opens.&quot;</p>
+<p><strong>The creatures</strong> (stats in <a href="combat.html#enemies">combat.md</a>) are as tough as the land around the rift: their difficulty band is the rift&#39;s, so rifts far from home are harder. All three are weak to spirit damage. Glitchlings swarm fast; Shard Wisps float over the void (walls still stop them) and shoot shards. A walker knocked off an edge falls and dies; the Warden keeps its footing.</p>
+<h2 id="rewards">Rewards<a class="anchor" href="#rewards" aria-label="Link to this section">#</a></h2>
+<p>The vault&#39;s chest opens with E once the boss has fallen (it opens by itself if the player steps through the portal first). It is rolled once from the run&#39;s seed (<code>HOLLOW_REWARDS</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Count</th>
+<th>Chance</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Rift Shard</td>
+<td>3–5</td>
+<td>Always</td>
+</tr>
+<tr>
+<td>Coin</td>
+<td>20–45</td>
+<td>Always</td>
+</tr>
+<tr>
+<td>Crystal</td>
+<td>1–2</td>
+<td>60%</td>
+</tr>
+<tr>
+<td>Gemstone</td>
+<td>1</td>
+<td>30%</td>
+</tr>
+<tr>
+<td>Star Metal</td>
+<td>1</td>
+<td>25%</td>
+</tr>
+</tbody></table></div>
+<p>Rift Shards are found nowhere else. They forge a <strong>Rift Blade</strong> (an Iron Sword, 4 shards and a Crystal at an anvil: 24 spirit damage, reach 1.7), make a <strong>Rift Tonic</strong> by hand (1 shard, 2 Herbs: +45 health, +10 thirst, cures poison) or 10 arrows (1 shard, 2 Wood), and sell for 30 coins (<a href="survival.html#crafting">survival.md</a>). Closing the rift is worth 150 XP, and the Warden counts as a trophy.</p>
+<h2 id="dying">Dying<a class="anchor" href="#dying" aria-label="Link to this section">#</a></h2>
+<p>Dying inside an outer dimension, from a blow or a fall, <strong>loses every item in the bag and the hotbar</strong> (<code>Inventory.clearCarried</code>). Worn equipment (head, chest, legs, feet and the off hand) is kept. The rift throws the player back out onto its doorstep in the overworld, revived as after any collapse, with an alert: &quot;The rift took everything you carried.&quot; The rift stays open; the run is gone. Dying in the overworld is unchanged: the player wakes at their waking spot and keeps everything.</p>
+<h2 id="the-map">The map<a class="anchor" href="#the-map" aria-label="Link to this section">#</a></h2>
+<p>Maps only work inside an outer dimension: there the Map tab shows and <strong>M</strong> opens it (<a href="exploration.html#the-map">exploration.md</a>). <code>DimensionMap</code> (<code>src/ui/DimensionMap.ts</code>) shows:</p>
+<ul>
+<li>the tiles the player has seen (within 6 tiles of where they have stood), coloured by kind; the void stays dark,</li>
+<li>each chamber the player has seen into, by name, with a tick once done,</li>
+<li>the rift home (pink), the portal (pale cyan once open, dark before), and the player (white).</li>
+</ul>
+<p>It frames what has been seen so far, at a whole number of pixels per tile. Fog is one byte per tile (<code>RiftTrip.seen</code>), updated only when the player reaches a new tile, with a version number that rises only when something new is seen. The seen tiles are painted one pixel each into a small canvas only when that version changed, and the map is drawn when the tab opens (the menu pauses the game), never per frame.</p>
+<h2 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h2>
+<p>Saving inside records the doorstep outside the rift as the player&#39;s position, as indoors: a reload starts outside the rift, and the run&#39;s progress is gone. Nothing of a trip is saved. See <a href="saves.html">saves.md</a>.</p>
+<h2 id="under-the-hood">Under the hood<a class="anchor" href="#under-the-hood" aria-label="Link to this section">#</a></h2>
+<p><strong>The registry.</strong> <code>DIMENSIONS</code> in <code>src/dimension/Dimension.ts</code> lists every dimension (<code>DimensionDef</code>): its id and name, its mood (darkness, tint, music, palette), size, generator, the creatures met inside, waves, boss and phases, hazard tuning and rewards. <code>pickDimension(seed)</code> chooses one for a rift. A new dimension is a new <code>DimensionDef</code> with its own generator; the challenges, the run, the renderer and the map work on any layout.</p>
+<p><strong>The ground.</strong> A trip is a <code>Place</code> (<code>src/game/Place.ts</code>) and a combat <code>Arena</code>, so the game asks it, not &quot;are we in a dimension?&quot;, for:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Asked for</th>
+<th>The trip answers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>The player&#39;s collision (<code>isSolidAt</code>)</td>
+<td>Walls, props and sealed doors; the void is open (walking onto it is a fall)</td>
+</tr>
+<tr>
+<td>Walking enemies (<code>blocksEnemies</code>)</td>
+<td>The same, plus the void and every gap in the path</td>
+</tr>
+<tr>
+<td>Fliers (<code>blocksFlyers</code>)</td>
+<td>Walls, props and sealed doors</td>
+</tr>
+<tr>
+<td>Knockback and shots (<code>isSolid</code>, <code>blocksShots</code>)</td>
+<td>Walls, props and sealed doors; shots fly over the void</td>
+</tr>
+<tr>
+<td>Falls (<code>isHole</code>)</td>
+<td>The void, fallen slabs and glitched-out ones</td>
+</tr>
+<tr>
+<td>The player&#39;s spot in the overworld (<code>spot</code>)</td>
+<td>The rift&#39;s doorstep: saving, streaming, the HUD, the clock and overflow go by it</td>
+</tr>
+</tbody></table></div>
+<p><strong>Events.</strong> <code>RiftTrip.update</code> steps the run, reveals the map around the player, reports the boss&#39;s health share, and handles its own events: <code>spawn</code> (a new <code>Enemy</code> at the rift&#39;s band, provoked, added to combat and mapped id ↔ enemy), <code>despawn</code> (removed without a kill), <code>bossPhase</code> (the boss&#39;s multipliers). Every event then goes to <code>Game.tripEvent</code>: <code>fell</code> hurts the player and moves them to the safe spot, <code>door</code> and <code>plate</code> play sounds, <code>notice</code> and <code>wave</code> show notes, <code>reward</code> puts the items in the bag (overflow outside the rift), <code>closed</code> and <code>leave</code> take the player home. Kills come back the other way: <code>CombatSystem</code> tells its arena (<code>Arena.killed</code>), and the trip tells the run (<code>enemyKilled</code>).</p>
+<p><strong>Rendering.</strong> See <a href="rendering.html#outer-dimensions">rendering.md</a>. Nothing of a dimension runs or is drawn in the overworld, and nothing of the overworld&#39;s combat, glitches or decorations runs or is drawn in a dimension.</p>
+<p>See also: <a href="story.html">story.md</a> · <a href="combat.html">combat.md</a> · <a href="exploration.html">exploration.md</a> · <a href="saves.html">saves.md</a></p>
+</article>
+    <nav class="pager"><a class="prev" href="story.html"><small>Previous</small>Story</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#entering-and-leaving">Entering and leaving</a></li><li class="l2"><a href="#the-hollow">The Hollow</a></li><li class="l2"><a href="#challenges">Challenges</a></li><li class="l2"><a href="#rewards">Rewards</a></li><li class="l2"><a href="#dying">Dying</a></li><li class="l2"><a href="#the-map">The map</a></li><li class="l2"><a href="#saving">Saving</a></li><li class="l2"><a href="#under-the-hood">Under the hood</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

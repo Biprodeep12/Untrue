@@ -7,7 +7,7 @@ import { restore, snapshot } from '../save/SaveManager';
 import { GroundItems } from '../world/GroundItems';
 import { ObjectManager } from '../world/ObjectManager';
 import { SyncGenerator } from '../world/SyncGenerator';
-import { SEMI_KEEP_MINUTES, WorldManager } from '../world/WorldManager';
+import { WorldManager } from '../world/WorldManager';
 import { WorldObject } from '../world/WorldObject';
 import { Inventory } from './InventorySystem';
 import { MAX_RANK, Progression } from './Progression';
@@ -68,31 +68,34 @@ describe('skills', () => {
   });
 });
 
-describe('semi-persistent places', () => {
-  const place = (persistence: 'semi-persistent' | 'temporary', discovered: boolean) => {
-    const o = new WorldObject(`v-${persistence}-${discovered}`, 'village', 'Village', persistence, 0, 0, new Layout(4, 4));
+describe('places', () => {
+  const place = (id: string, kind: string, x: number, y: number, discovered = false) => {
+    const o = new WorldObject(id, kind, kind, x, y, new Layout(4, 4));
     o.discovered = discovered;
     return o;
   };
 
-  it('are kept for a while after the player leaves, if discovered', () => {
-    let now = 100;
+  it('are all forgotten once their chunks unload, discovered or not', () => {
     const objects = new ObjectManager();
-    objects.keeps = (o) => o.persistence === 'semi-persistent' && o.discovered;
-    objects.clock = () => now;
-    const kept = place('semi-persistent', true);
-    const unseen = place('semi-persistent', false);
-    const temp = place('temporary', true);
-    for (const o of [kept, unseen, temp]) objects.add(o, () => true);
-    objects.chunkLeft(kept.chunks[0]);
-    expect([...objects.objects.keys()]).toEqual([kept.id]);
-    expect(kept.idleSince).toBe(100);
-    now += SEMI_KEEP_MINUTES - 1;
-    objects.sweep(SEMI_KEEP_MINUTES);
-    expect(objects.objects.has(kept.id)).toBe(true);
-    now += 2;
-    objects.sweep(SEMI_KEEP_MINUTES);
-    expect(objects.objects.has(kept.id)).toBe(false);
+    const seen = place('seen', 'village', 0, 0, true);
+    const unseen = place('unseen', 'castle', 4, 0);
+    for (const o of [seen, unseen]) objects.add(o, () => true);
+    objects.chunkLeft(seen.chunks[0]);
+    expect(objects.objects.size).toBe(0);
+    expect(objects.inChunk(seen.chunks[0])).toHaveLength(0);
+    expect(objects.crowded('village', 2, 2, 100)).toBe(false);
+  });
+
+  it('collide across chunk edges and crowd only their own kind', () => {
+    const objects = new ObjectManager();
+    // Just west of a chunk edge at x = 32.
+    objects.add(place('a', 'village', 27, 10), () => true);
+    expect(objects.collides(32, 10, 4, 4, 2)).toBe(true);
+    expect(objects.collides(33, 10, 4, 4, 2)).toBe(false);
+    expect(objects.collides(22, 15, 4, 4, 2)).toBe(true);
+    expect(objects.collides(22, 16, 4, 4, 2)).toBe(false);
+    expect(objects.crowded('village', 200, 12, 300)).toBe(true);
+    expect(objects.crowded('castle', 200, 12, 300)).toBe(false);
   });
 });
 

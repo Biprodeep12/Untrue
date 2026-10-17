@@ -1,9 +1,7 @@
-// The world map (spec 6.4): explored chunks under fog of war, landmarks,
-// forgotten places, the story's next destination and the player's markers.
+// The map (spec 6.4): explored chunks under fog of war and the player's markers.
 
 import { CHUNK_SIZE } from '../config';
 import { keyX, keyY } from '../coords';
-import type { Memory } from '../story/StorySystem';
 import type { ExplorationSystem } from '../systems/ExplorationSystem';
 
 /** Colours by biome palette (type * 2 + variant). */
@@ -15,21 +13,9 @@ const MAX_ZOOM = 40;
 const MAP_W = 560;
 const MAP_H = 360;
 
-export interface Landmark {
-  name: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  story: boolean;
-}
-
 export interface MapSource {
   exploration: ExplorationSystem;
   player(): { x: number; y: number };
-  landmarks(): Landmark[];
-  memories(): readonly Memory[];
-  objective(): { text: string; x: number; y: number } | null;
 }
 
 export class MapView {
@@ -193,32 +179,6 @@ export class MapView {
       ctx.fillRect(Math.floor(sx), Math.floor(sy), Math.ceil(zoom), Math.ceil(zoom));
     }
 
-    // Places the world forgot, kept by the lantern.
-    ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = '#7fd8ff';
-    for (const m of this.src.memories()) {
-      const [sx, sy] = this.toScreen(m.x, m.y);
-      ctx.strokeRect(sx, sy, Math.max(3, (m.w / CHUNK_SIZE) * zoom), Math.max(3, (m.h / CHUNK_SIZE) * zoom));
-    }
-    ctx.setLineDash([]);
-
-    for (const l of this.src.landmarks()) {
-      const [sx, sy] = this.toScreen(l.x + l.w / 2, l.y + l.h / 2);
-      ctx.fillStyle = l.story ? '#ffd040' : '#f6dfa8';
-      ctx.strokeStyle = '#3b2412';
-      ctx.beginPath();
-      ctx.arc(sx, sy, l.story ? 5 : 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      if (zoom >= 8 || l.story) this.label(l.name, sx + 7, sy + 4);
-    }
-
-    const goal = this.src.objective();
-    if (goal) {
-      const [sx, sy] = this.toScreen(goal.x, goal.y);
-      this.star(sx, sy);
-    }
-
     for (const m of exploration.markers) {
       const [sx, sy] = this.toScreen(m.x, m.y);
       ctx.fillStyle = m.id === exploration.tracked ? '#ff4040' : '#c8402c';
@@ -239,21 +199,6 @@ export class MapView {
     ctx.strokeStyle = '#000';
     ctx.beginPath();
     ctx.arc(px, py, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  private star(x: number, y: number): void {
-    const { ctx } = this;
-    ctx.fillStyle = '#ffd040';
-    ctx.strokeStyle = '#3b2412';
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const r = i % 2 ? 3.5 : 8;
-      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
-      ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    }
-    ctx.closePath();
     ctx.fill();
     ctx.stroke();
   }

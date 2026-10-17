@@ -27,8 +27,8 @@ A shared two-second white-noise buffer feeds the noise-based sounds.
 | `chest` | Chest or treasure opened | Two triangle notes |
 | `ui` | Any button, slot or tab clicked | A tiny click |
 | `thunder` | A lightning strike | Long low-passed noise |
-| `warn` | A vital gets worse (low or critical), except stamina | A two-note square alarm, played twice |
-| Bell | The Waking Monument crumbles | Three strikes of inharmonic sine partials |
+| `warn` | A vital gets worse (low or critical), except stamina; a glyph puzzle resets | A two-note square alarm, played twice |
+| `rift` | Stepping into or out of a rift | A swell of band-passed noise under a falling four-note shimmer |
 
 ## Music
 
@@ -40,6 +40,7 @@ Music is generated one beat at a time, scheduled slightly ahead so timing stays 
 - **Melody:** a plucked note on about half the beats (fewer at night). The voice follows the land: a triangle in the forest, a soft square in the desert, a long sine in the snow.
 - **Drone:** from band 2 out, a low sine two octaves under the root every 8 beats.
 - **Danger:** a low pulse every other beat while enemies are chasing or attacking the player.
+- **Outer dimensions** (`MusicMood.dimension`, from the dimension's `mood.music`): their own music (`riftBeat`). Beats are slower (1.05 s); a low detuned drone every 8 beats, and sparse long sine notes from a scale of close, unresolved steps (0, 1, 3, 6, 7, 10 semitones). The danger pulse plays as in the overworld.
 
 ## Ambience
 
@@ -54,6 +55,10 @@ The land has its own sounds, rolled twice a second (`AudioSystem.ambience`):
 | Desert | A gust of band-passed wind now and then |
 | Snow | A lower gust of wind now and then |
 | Mines | Water dripping, and now and then a low drone |
+| Near an open rift | Its hum: two close low tones beating against each other, with a crackle beside it; louder and more often the nearer the rift (`MusicMood.rift`, 0 to 1 within 12 tiles, 0 elsewhere) |
+| Inside an outer dimension | Glassy chimes now and then, nothing else |
+
+Ambient sounds are skipped while 26 or more voices sound (`MAX_VOICES` less 6), so they never crowd out the sound effects.
 
 Birds, crickets and gusts are quiet indoors and in strong rain or storms.
 

@@ -70,6 +70,10 @@ export const RECIPES: readonly Recipe[] = [
   { output: Items.starArmor, count: 1, station: 'anvil', inputs: [[Items.starIngot, 4], [Items.chitin, 2]], rare: true },
   { output: Items.starGreaves, count: 1, station: 'anvil', inputs: [[Items.starIngot, 3], [Items.hide, 1]] },
   { output: Items.starBoots, count: 1, station: 'anvil', inputs: [[Items.starIngot, 2]] },
+  // Rift shards, from the vaults behind the rifts.
+  { output: Items.riftTonic, count: 1, station: 'hand', inputs: [[Items.riftShard, 1], [Items.herb, 2]] },
+  { output: Items.arrow, count: 10, station: 'hand', inputs: [[Items.riftShard, 1], [Items.wood, 2]] },
+  { output: Items.riftBlade, count: 1, station: 'anvil', inputs: [[Items.ironSword, 1], [Items.riftShard, 4], [Items.crystal, 1]] },
 ];
 
 /** Rare recipes not yet in `known` (output ids). */

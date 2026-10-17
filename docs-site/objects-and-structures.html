@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html" class="current" aria-current="page">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html" class="current" aria-current="page">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Engine</p>
     <article><h1 id="objects-and-structures">Objects and structures</h1>
@@ -61,42 +61,21 @@
 <p>Helpers (<code>tile</code>, <code>deco</code>, <code>fill</code>, <code>border</code>, <code>disc</code>, <code>clearDecos</code>, <code>blit</code>) build layouts. <code>rotated(quarters)</code> and <code>mirrored()</code> return turned and flipped copies.</p>
 <p>A layout can also carry <strong>buildings</strong>: footprints drawn as single building sprites that the player can walk into. See <a href="buildings-and-interiors.html">buildings-and-interiors.md</a>.</p>
 <h2 id="world-objects">World objects<a class="anchor" href="#world-objects" aria-label="Link to this section">#</a></h2>
-<p>A <code>WorldObject</code> (<code>src/world/WorldObject.ts</code>) is a placed layout: id, kind, name, persistence tier, top-left tile position and layout. On creation it lists every chunk its footprint touches. <code>stamp(chunk)</code> writes its part of the layout into a chunk&#39;s composed tiles; chests that are opened, or whose anchor was looted before, are drawn as <code>ChestOpen</code>.</p>
-<p><code>ObjectManager</code> (<code>src/world/ObjectManager.ts</code>) keeps live objects in a map and indexes them by chunk.</p>
-<p><strong>Multi-chunk lifetime.</strong> <code>activeChunks</code> counts how many of an object&#39;s chunks are in the cache area. It rises and falls as chunks enter and leave. When it reaches 0, the object is discarded, unless it is persistent. So a castle covering 3 × 3 chunks survives while any one of those chunks is still loaded, and only goes once all nine have unloaded.</p>
-<p>When an object the player had discovered is discarded, <code>WorldManager.onForget</code> fires. The story uses this to keep the place as a lantern memory.</p>
-<h2 id="persistence-tiers">Persistence tiers<a class="anchor" href="#persistence-tiers" aria-label="Link to this section">#</a></h2>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Tier</th>
-<th>Behaviour</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>temporary</code></td>
-<td>Discarded when its chunks unload; may regenerate differently. The default.</td>
-</tr>
-<tr>
-<td><code>semi-persistent</code></td>
-<td>Behaves as temporary until discovered. Once discovered, it is kept when its chunks unload, for 3 in-game days (<code>SEMI_KEEP_MINUTES</code>) after the player last left it, so coming back soon finds it as it was: same layout, chests still looted, mined rock still gone. After that it is forgotten like a temporary object (and the lantern remembers it). Kept objects are saved with their idle time. Used by villages, castles, mines and nomad camps.</td>
-</tr>
-<tr>
-<td><code>persistent</code></td>
-<td>Never discarded, saved with its full layout, and restored on load.</td>
-</tr>
-</tbody></table></div>
-<p>Generated objects that are persistent: the extremely rare structures and the rare events below. The story&#39;s landmarks are persistent too.</p>
+<p>A <code>WorldObject</code> (<code>src/world/WorldObject.ts</code>) is a placed layout: id, kind, name, top-left tile position and layout. On creation it lists every chunk its footprint touches. <code>stamp(chunk)</code> writes its part of the layout into a chunk&#39;s composed tiles; chests that are opened, or whose anchor was looted before, are drawn as <code>ChestOpen</code>.</p>
+<p><code>ObjectManager</code> (<code>src/world/ObjectManager.ts</code>) keeps live objects in a map and indexes them by chunk (every chunk an object covers) and by kind. Placement checks use the indexes: <code>collides</code> looks only at the chunks under the padded rectangle, and <code>crowded</code> only at live objects of the same kind.</p>
+<p><strong>Multi-chunk lifetime.</strong> <code>activeChunks</code> counts how many of an object&#39;s chunks are in the cache area. It rises and falls as chunks enter and leave. When it reaches 0, the object is discarded. So a castle covering 3 × 3 chunks survives while any one of those chunks is still loaded, and only goes once all nine have unloaded.</p>
+<p><strong>Every structure forgets.</strong> There are no persistent or kept objects: villages, castles, mines, nomad camps, the extremely rare structures and the rare events are all discarded when their chunks fully unload, like everything else, and may come back different. Nothing about them is saved. What the player did there still counts where it is keyed by the anchor rather than the object: looted chests stay looted and cleared places stay cleared (below).</p>
 <h2 id="the-roll">The roll<a class="anchor" href="#the-roll" aria-label="Link to this section">#</a></h2>
-<p>When a chunk enters the cache area, <code>WorldManager.resolveAnchor</code> calls <code>rollAnchor</code> for that chunk. Everything rolled there is &quot;anchored&quot; in it. Three independent rolls run, each with its own stream and the region&#39;s visit counter:</p>
+<p>When a chunk enters the cache area, <code>WorldManager.resolveAnchor</code> calls <code>rollAnchor</code> for that chunk. Everything rolled there is &quot;anchored&quot; in it. Four independent rolls run, each with its own stream and the region&#39;s visit counter:</p>
 <ol>
-<li><strong>Rare event.</strong> For each entry in <code>RARE_EVENTS</code>, in order, roll against <code>chance × rareBoost</code>; the first hit is placed.</li>
+<li><strong>Rare event.</strong> For each entry in <code>RARE_EVENTS</code>, in order, roll against its <code>chance</code>; the first hit is placed.</li>
 <li><strong>Structure.</strong> With probability <code>STRUCTURE_CHANCE</code> (0.22):<ul>
 <li>Candidates are structures whose <code>minDistance</code> the chunk&#39;s centre has reached and whose biome list (if any) includes the anchor chunk&#39;s biome.</li>
-<li>A tier is picked by weight <code>TIER_WEIGHTS[t] × (1 + TIER_GROWTH[t] × band)</code>, with weights 70, 22, 6, 1 and growth 0, 0.3, 1, 2 for common, uncommon, rare and extremely rare. The extremely rare weight is also multiplied by <code>rareBoost</code>.</li>
+<li>A tier is picked by weight <code>TIER_WEIGHTS[t] × (1 + TIER_GROWTH[t] × band)</code>, with weights 70, 22, 6, 1 and growth 0, 0.3, 1, 2 for common, uncommon, rare and extremely rare.</li>
 <li>A structure in that tier is picked by its <code>weight</code>.</li>
 </ul>
 </li>
+<li><strong>Rift.</strong> From <code>RIFT.minDistance</code> (96 tiles) out, a chance by difficulty band (<code>RIFT_CHANCE</code>): 1.4%, 2%, 2.8% and 3.6% per chunk from Easy to Extreme. See <a href="#rifts">Rifts</a>.</li>
 <li><strong>Lake.</strong> Chance by biome: Forest 6% (Lake), Desert 2.5% (Oasis), Snow 5% (Frozen Lake).</li>
 </ol>
 <h2 id="placement">Placement<a class="anchor" href="#placement" aria-label="Link to this section">#</a></h2>
@@ -122,7 +101,6 @@
 <th>Spacing</th>
 <th>Flat ground</th>
 <th>Rotation</th>
-<th>Persistence</th>
 <th>Size</th>
 </tr>
 </thead>
@@ -136,7 +114,6 @@
 <td>60</td>
 <td>Yes</td>
 <td>Free</td>
-<td>Temporary</td>
 <td>7–9</td>
 </tr>
 <tr>
@@ -149,7 +126,6 @@
 <td>40</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Temporary</td>
 <td>9–11 × 7–8</td>
 </tr>
 <tr>
@@ -162,7 +138,6 @@
 <td>30</td>
 <td>No</td>
 <td>Free</td>
-<td>Temporary</td>
 <td>6–8</td>
 </tr>
 <tr>
@@ -175,7 +150,6 @@
 <td>100</td>
 <td>Yes</td>
 <td>Free</td>
-<td>Temporary</td>
 <td>12–18 × 10–15</td>
 </tr>
 <tr>
@@ -188,7 +162,6 @@
 <td>150</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Temporary</td>
 <td>9–11 × 10–12</td>
 </tr>
 <tr>
@@ -201,7 +174,6 @@
 <td>100</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Temporary</td>
 <td>14–16 × 8–9</td>
 </tr>
 <tr>
@@ -214,7 +186,6 @@
 <td>80</td>
 <td>Yes</td>
 <td>Free</td>
-<td>Temporary</td>
 <td>8–10</td>
 </tr>
 <tr>
@@ -227,7 +198,6 @@
 <td>260</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Semi-persistent</td>
 <td>11</td>
 </tr>
 <tr>
@@ -240,7 +210,6 @@
 <td>150</td>
 <td>No</td>
 <td>Mirror</td>
-<td>Semi-persistent</td>
 <td>17 × 14</td>
 </tr>
 <tr>
@@ -253,7 +222,6 @@
 <td>500</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Semi-persistent</td>
 <td>46–56</td>
 </tr>
 <tr>
@@ -266,7 +234,6 @@
 <td>400</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Temporary</td>
 <td>20–28 × 22–30</td>
 </tr>
 <tr>
@@ -279,7 +246,6 @@
 <td>800</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Semi-persistent</td>
 <td>66–76</td>
 </tr>
 <tr>
@@ -292,7 +258,6 @@
 <td>300</td>
 <td>No</td>
 <td>Free</td>
-<td>Temporary</td>
 <td>12–16</td>
 </tr>
 <tr>
@@ -305,7 +270,6 @@
 <td>3,000</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Persistent</td>
 <td>84–94</td>
 </tr>
 <tr>
@@ -318,7 +282,6 @@
 <td>3,000</td>
 <td>Yes</td>
 <td>Mirror</td>
-<td>Persistent</td>
 <td>32–40</td>
 </tr>
 <tr>
@@ -331,7 +294,6 @@
 <td>3,000</td>
 <td>Yes</td>
 <td>Free</td>
-<td>Persistent</td>
 <td>37–45</td>
 </tr>
 <tr>
@@ -344,7 +306,6 @@
 <td>3,000</td>
 <td>No</td>
 <td>Free</td>
-<td>Persistent</td>
 <td>19–23</td>
 </tr>
 </tbody></table></div>
@@ -356,7 +317,6 @@
 <th>Name</th>
 <th>Chance per chunk</th>
 <th>Rotation</th>
-<th>Persistence</th>
 </tr>
 </thead>
 <tbody><tr>
@@ -364,21 +324,18 @@
 <td>Ancient Temple</td>
 <td>0.1%</td>
 <td>Mirror</td>
-<td>Persistent</td>
 </tr>
 <tr>
 <td><code>lost-city</code></td>
 <td>Lost City</td>
 <td>0.01%</td>
 <td>Mirror</td>
-<td>Persistent</td>
 </tr>
 <tr>
 <td><code>crystal-monolith</code></td>
 <td>Crystal Monolith</td>
 <td>0.001%</td>
 <td>Free</td>
-<td>Persistent</td>
 </tr>
 </tbody></table></div>
 <p><strong>Mines</strong> are cut into a ragged rocky hill (dark rock at its heart, lighter at the edges). A timber-framed entrance (a <code>mine</code> building) sits at the foot of the hill, with lamps either side. In front is a dirt yard with rails running out of the entrance to a mine cart, ore heaps, a crate, a barrel and a stone. The entrance leads into a cave; see <a href="buildings-and-interiors.html#mines">buildings-and-interiors.md</a>.</p>
@@ -388,6 +345,10 @@
 <p>Building footprints keep the ground they stand on: <code>building()</code> marks the footprint with an invisible solid decoration (<code>Deco.Footprint</code>) instead of a tile, so nothing but the sprite and its own ground ever shows around a building&#39;s outline. <code>clearDecos()</code> only clears where the layout has not placed anything, and <code>areaFree()</code> treats footprints as taken.</p>
 <p>Villages, castles and nomad camps hold an anvil, a crafting station. Camps and nomad camps have a campfire, the other station and a place to rest, beside a canvas tent (abandoned camps keep the tent but not the fire). Villages have lamp posts along their roads that light up at night.</p>
 <p><strong>Ruins</strong> are the shell of an old stone hall: outer walls that stand in runs and collapse in others (switching about every six tiles, with fallen stones spilling inward), a gap in the south wall, an inner wall with a doorway, a colonnade with some pillars fallen to rubble, overgrown patches where the floor has given way, and bushes and flowers creeping in. Chests are always found in castles, dungeons, the Sun Temple, ancient temples and lost cities, and sometimes in villages, temples, towers, ruins, cabins and abandoned camps.</p>
+<h2 id="rifts">Rifts<a class="anchor" href="#rifts" aria-label="Link to this section">#</a></h2>
+<p>Tears in the air onto an outer dimension, the heart of the <a href="story.html">story</a>. <code>rift()</code> builds a 7 × 7 layout: decorations cleared, a disc of scorched, violet-veined ground (<code>Tile.RiftGround</code>) and the tear (<code>Deco.Rift</code>, solid) in the middle. The definition is <code>RIFT</code> in <code>StructureGenerator.ts</code> (kind <code>rift</code>, flat ground, spacing 160, mirror only); it is rolled on its own rather than through the tiers, so rifts grow commoner with distance however many other structures there are. A world event can also tear one open near the player (&quot;A rift tears open nearby.&quot;, see <a href="living-world.html">living-world.md</a>).</p>
+<p>Like every structure a rift is temporary. Its object id (which includes the region&#39;s visit) seeds the dimension behind it, so the same rift always leads to the same space. Facing the tear, E enters it (<a href="dimensions.html">dimensions.md</a>).</p>
+<p><strong>Closed rifts.</strong> Closing a rift calls <code>WorldManager.closeRift</code>: the object is marked <code>closed</code>, so it stamps a faint scar (<code>Deco.RiftScar</code>, not solid) instead of the tear, and its id goes into <code>clearedAnchors</code>, so a re-roll of the same object (its chunks came back before its region regenerated) is closed too. Since the id changes with the region&#39;s visit, a regenerated region may open a new rift in the same place. <code>WorldManager.nearestRift</code> finds the nearest open rift among live objects (through <code>ObjectManager.ofKind</code>) for the story&#39;s arrow and the glitches around it.</p>
 <h2 id="lakes">Lakes<a class="anchor" href="#lakes" aria-label="Link to this section">#</a></h2>
 <p><code>lake()</code> builds a natural-looking lake rather than an ellipse:</p>
 <ol>
@@ -401,52 +362,15 @@
 </ol>
 <h2 id="chests-cleared-places-and-harvesting">Chests, cleared places and harvesting<a class="anchor" href="#chests-cleared-places-and-harvesting" aria-label="Link to this section">#</a></h2>
 <p><strong>Chests never refill.</strong> Opening a chest marks it opened on its object and adds the object&#39;s anchor key to <code>WorldManager.lootedAnchors</code>. If the region later regenerates and a new structure rolls at the same anchor, every chest in it starts open and empty. Chest loot is seeded by the object id and chest position.</p>
-<p><strong>Cleared places stay cleared.</strong> Dungeons, boss arenas, the story&#39;s Sunken Archive and legendary creatures record a key in <code>WorldManager.clearedAnchors</code> when their guards fall, and never wake again.</p>
+<p><strong>Cleared places stay cleared.</strong> Dungeons, boss arenas and legendary creatures record a key in <code>WorldManager.clearedAnchors</code> when their guards fall, and never wake again. Closed rifts are recorded by object id instead, so they stay closed only while their region stands (above).</p>
 <p><strong>Harvest log.</strong> Gathering a decoration records the cell, its decoration and the in-game minute, per chunk, tagged with the region&#39;s visit counter. Composition removes those decorations while the record&#39;s visit matches. When the region regenerates, the record no longer applies and is deleted. Bushes and flowers grow back after 1,440 in-game minutes and mushrooms after 2,160 (<code>REGROW_MINUTES</code>), checked once per in-game hour by <code>WorldManager.regrow()</code>.</p>
 <h2 id="other-placed-objects">Other placed objects<a class="anchor" href="#other-placed-objects" aria-label="Link to this section">#</a></h2>
-<p>Some objects are not rolled with the terrain:</p>
-<ul>
-<li><strong>World events</strong> (<code>src/systems/WorldEvents.ts</code>) place a meteor crater, buried treasure or a risen obelisk on open, loaded ground near the player, as temporary objects. After an ending they can also place echo monuments, memory fragments and the quiet cabin.</li>
-<li><strong>Story places</strong> (<code>src/story/StoryPlaces.ts</code>) are persistent objects placed once per world at seeded positions: the Waking Monument at the origin, then the Village of Graves, the Observatory, the Sunken Archive and the Original Anchor at increasing distances. See <a href="story.html">Story</a>.</li>
-</ul>
-<p>All of these go through <code>WorldManager.addObject</code>, so they stamp, stream and save like any other object.</p>
-<h2 id="world-rules-after-the-ending">World rules after the ending<a class="anchor" href="#world-rules-after-the-ending" aria-label="Link to this section">#</a></h2>
-<p>The story&#39;s ending sets <code>WorldManager.rules</code>:</p>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Ending</th>
-<th><code>regenChance</code></th>
-<th><code>rareBoost</code></th>
-</tr>
-</thead>
-<tbody><tr>
-<td>None yet</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr>
-<td>The Remembered World</td>
-<td>0.25</td>
-<td>1</td>
-</tr>
-<tr>
-<td>The Living World</td>
-<td>1</td>
-<td>3</td>
-</tr>
-<tr>
-<td>The Last Memory</td>
-<td>1</td>
-<td>1</td>
-</tr>
-</tbody></table></div>
-<p><code>regenChance</code> is the chance a fully unloaded region regenerates (see <a href="world-generation.html">World generation</a>). <code>rareBoost</code> multiplies rare event chances and the extremely rare tier&#39;s weight.</p>
-<p>See also: <a href="world-generation.html">World generation</a>, <a href="world-streaming.html">World streaming</a>, <a href="saves.html">Saves</a>, <a href="story.html">Story</a></p>
+<p>Some objects are not rolled with the terrain: <strong>world events</strong> (<code>src/systems/WorldEvents.ts</code>) place a meteor crater, buried treasure, a risen obelisk, a rift or a Moonwell on open, loaded ground near the player. They go through <code>WorldManager.addObject</code>, so they stamp, stream and are forgotten like any other object.</p>
+<p>See also: <a href="world-generation.html">World generation</a>, <a href="world-streaming.html">World streaming</a>, <a href="saves.html">Saves</a></p>
 </article>
     <nav class="pager"><a class="prev" href="world-generation.html"><small>Previous</small>World generation</a><a class="next" href="rendering.html"><small>Next</small>Rendering</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#layouts">Layouts</a></li><li class="l2"><a href="#world-objects">World objects</a></li><li class="l2"><a href="#persistence-tiers">Persistence tiers</a></li><li class="l2"><a href="#the-roll">The roll</a></li><li class="l2"><a href="#placement">Placement</a></li><li class="l2"><a href="#structure-catalogue">Structure catalogue</a></li><li class="l2"><a href="#lakes">Lakes</a></li><li class="l2"><a href="#chests-cleared-places-and-harvesting">Chests, cleared places and harvesting</a></li><li class="l2"><a href="#other-placed-objects">Other placed objects</a></li><li class="l2"><a href="#world-rules-after-the-ending">World rules after the ending</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#layouts">Layouts</a></li><li class="l2"><a href="#world-objects">World objects</a></li><li class="l2"><a href="#the-roll">The roll</a></li><li class="l2"><a href="#placement">Placement</a></li><li class="l2"><a href="#structure-catalogue">Structure catalogue</a></li><li class="l2"><a href="#rifts">Rifts</a></li><li class="l2"><a href="#lakes">Lakes</a></li><li class="l2"><a href="#chests-cleared-places-and-harvesting">Chests, cleared places and harvesting</a></li><li class="l2"><a href="#other-placed-objects">Other placed objects</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

@@ -116,6 +116,8 @@ export const Items = {
   torch: item({ id: 'torch', name: 'Torch', description: 'Lights the dark while carried. Burns out over the night.', rarity: ItemRarity.Common, light: 5, equip: 'offhand' }),
   lantern: item({ id: 'lantern', name: 'Lantern', description: 'A steady light that never burns out.', rarity: ItemRarity.Rare, stack: 1, light: 7, weight: 1, equip: 'offhand' }),
   spiritEssence: item({ id: 'spirit-essence', name: 'Spirit Essence', description: 'A wisp of something that walked at night.', rarity: ItemRarity.Uncommon }),
+  // Unused: the old story's lantern. Kept so the atlas still draws its icon and
+  // later icons keep their places; saves swap it for an ordinary lantern.
   wanderersLantern: item({ id: 'wanderers-lantern', name: "Wanderer's Lantern", description: 'A faint blue flame. It remembers places the world has forgotten.', rarity: ItemRarity.Legendary, stack: 1, light: 6, weight: 0, equip: 'offhand' }),
   starMetal: item({ id: 'star-metal', name: 'Star Metal', description: 'Fell from the sky. Forge it with gold into star ingots.', rarity: ItemRarity.Epic, weight: 1.5 }),
   // The tier above iron, for the far, hard lands, and blades that use rare drops.
@@ -134,6 +136,10 @@ export const Items = {
   chitinShield: item({ id: 'chitin-shield', name: 'Chitin Shield', description: 'A desert shell on a wooden frame. Blocks well and weighs little.', rarity: ItemRarity.Uncommon, stack: 1, equip: 'offhand', shield: { pass: 0.1, stamina: 5 }, weight: 2 }),
   schematic: item({ id: 'schematic', name: 'Forgotten Schematic', description: 'Plans for something the world forgot how to make. Use it to learn a rare recipe.', rarity: ItemRarity.Epic, weight: 0.1 }),
   frostDraught: item({ id: 'frost-draught', name: 'Frost Draught', description: 'Melted ice and herbs. Quenches the worst thirst.', rarity: ItemRarity.Uncommon, food: { thirst: 45, health: 10 } }),
+  // From behind the rifts (see src/dimension), and what they make.
+  riftShard: item({ id: 'rift-shard', name: 'Rift Shard', description: 'A splinter of an outer dimension. It flickers, as if it cannot decide to exist.', rarity: ItemRarity.Epic, weight: 0.2 }),
+  riftBlade: item({ id: 'rift-blade', name: 'Rift Blade', description: 'An iron blade set with rift shards. It flickers between here and elsewhere; rift creatures come apart under it.', rarity: ItemRarity.Epic, stack: 1, weapon: { kind: 'melee', damage: 24, durability: 280, reach: 1.7, cooldown: 0.4, element: 'spirit' } }),
+  riftTonic: item({ id: 'rift-tonic', name: 'Rift Tonic', description: 'A shard dissolved in herb water. Mends wounds and clears poison; it tastes of static.', rarity: ItemRarity.Rare, food: { health: 45, thirst: 10 }, cures: 'poison' }),
 } as const;
 
 export const ITEM_LIST: readonly ItemDef[] = list;

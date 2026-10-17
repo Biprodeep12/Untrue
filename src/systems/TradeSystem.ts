@@ -18,6 +18,7 @@ export const SELL_PRICES = new Map<ItemDef, number>([
   [Items.gem, 60],
   [Items.starMetal, 45],
   [Items.crystal, 35],
+  [Items.riftShard, 30],
   [Items.goldOre, 12],
   [Items.ironIngot, 8],
   [Items.spiritEssence, 8],

@@ -2,7 +2,7 @@
 
 import { CHUNK_SIZE } from '../config';
 import { chunkKey, tileToChunk } from '../coords';
-import type { Layout, Persistence } from '../generation/StructureGenerator';
+import type { Layout } from '../generation/StructureGenerator';
 import { Deco } from '../generation/Tiles';
 import type { Chunk } from './Chunk';
 
@@ -19,15 +19,13 @@ export class WorldObject {
   readonly opened = new Set<number>();
   /** Every chest starts looted, because this anchor was looted before. */
   emptyChests = false;
-  /** World minute the object last left the cache radius; semi-persistent
-   *  objects are kept for a while after that. */
-  idleSince = 0;
+  /** A rift the player closed: its tear shows as a scar while the object lives. */
+  closed = false;
 
   constructor(
     readonly id: string,
     readonly kind: string,
     readonly name: string,
-    readonly persistence: Persistence,
     readonly x: number,
     readonly y: number,
     readonly layout: Layout,
@@ -69,6 +67,7 @@ export class WorldObject {
         const t = tiles[li];
         let d = decos[li];
         if (d === Deco.Chest && (this.emptyChests || this.opened.has(li))) d = Deco.ChestOpen;
+        else if (d === Deco.Rift && this.closed) d = Deco.RiftScar;
         if (t) {
           chunk.tiles[ci] = t - 1;
           chunk.decos[ci] = d === Deco.Clear ? 0 : d;

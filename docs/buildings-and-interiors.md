@@ -19,10 +19,9 @@ A structure layout can carry buildings (`Layout.buildings`, `BuildingSpec` in `s
 | --- | --- |
 | Small House | One `house` |
 | Cabin | One `cabin` |
-| Village (and the Village of Graves) | Rows of `house`s along the streets |
+| Village | Rows of `house`s along the streets |
 | Castle | The keep (`keep`), two barracks (`stone`) and a stable (`cabin`) |
 | Giant City, Lost City | One `city` building per block, except under the central plaza. In a Lost City about 30% have fallen to rubble. |
-| Quiet Cabin | One `cabin` |
 | Mine | One `mine` entrance (5 × 3, door in the middle) |
 
 Buildings always face the camera, so layouts with buildings never rotate (`rotated()` refuses them); they can still mirror, and `mirrored()` flips each spec and its door. `blit()` copies a layout into a bigger one, buildings included.
@@ -57,7 +56,7 @@ Sprites are created for buildings that touch the render area, sorted by their fo
 
 ## Walls with height
 
-Outside of buildings, stone and wood walls (castle walls, towers, ruins, city walls, the observatory, the archive) are tiles. `TileRenderer` draws a wall with a matching wall below it as its top (capstones, or log ends) and a wall with anything else below it as its front face (`StoneWallFace`, `WoodWallFace`: bricks or planks, a lit lip and a shadow at the foot). Walls two tiles thick therefore read as raised walls. A chunk's bottom row looks at the chunk below, and the chunk above is redrawn when its lower neighbour appears.
+Outside of buildings, stone and wood walls (castle walls, towers, ruins, city walls) are tiles. `TileRenderer` draws a wall with a matching wall below it as its top (capstones, or log ends) and a wall with anything else below it as its front face (`StoneWallFace`, `WoodWallFace`: bricks or planks, a lit lip and a shadow at the foot). Walls two tiles thick therefore read as raised walls. A chunk's bottom row looks at the chunk below, and the chunk above is redrawn when its lower neighbour appears.
 
 ## Entering
 
@@ -72,6 +71,8 @@ Facing a building's door outdoors shows **E Enter**. Pressing E builds an `Inter
 - What does not fit in the bag (loot, rewards) is left on the ground outside the door.
 - Walking out over the doormat leaves, onto the doorstep outside.
 - Saving indoors records the spot outside the door, so a reload starts outside.
+
+`Interior` is a `Place` (`src/game/Place.ts`), like the overworld and a trip into an outer dimension: the game asks the current place for the player's collision, its `arena` (none indoors) and its `spot` in the overworld (the doorstep), which saving, streaming, the HUD, the clock and what does not fit in the bag all go by. An outer dimension behind a rift is entered much like a room, but with fighting, hazards and a map; see [dimensions.md](dimensions.md).
 
 ## Rooms
 
@@ -92,8 +93,8 @@ The walk from the door is always kept clear.
 
 | Thing | E does |
 | --- | --- |
-| Bed | Sleep until morning, at dusk or night (or during the story's night in the village); otherwise "too early". The spot outside the door becomes the waking spot after a collapse. |
-| Bookshelf | Read a line from one of the books (`BOOKS` in `src/story/StoryScript.ts`) |
+| Bed | Sleep until morning, at dusk or night; otherwise "too early". The spot outside the door becomes the waking spot after a collapse. |
+| Bookshelf | Read a line from one of the books (`BOOKS` in `src/world/Interior.ts`) |
 | Chest | Loot it once. Interior chests use ids from 1,000,000 up in the object's opened set, and follow the never-refill rule with the rest. |
 | Resident | Talk to them |
 
@@ -134,6 +135,6 @@ Every village house has someone at home day and night, and half of lone houses a
 
 ## Saving
 
-Building specs are saved with persistent objects (version 6); see [saves.md](saves.md).
+Buildings are not saved: like every structure, they regenerate from the seed. Looted chests inside stay looted through the object's anchor ([saves.md](saves.md)).
 
 See also: [README.md](README.md) · [objects-and-structures.md](objects-and-structures.md) · [rendering.md](rendering.md) · [living-world.md](living-world.md)

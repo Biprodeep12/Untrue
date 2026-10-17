@@ -35,7 +35,13 @@ const GROUPS = [
       ['docs/audio.md', 'audio'],
     ],
   },
-  { name: 'Story', pages: [['docs/story.md', 'story']] },
+  {
+    name: 'Story',
+    pages: [
+      ['docs/story.md', 'story'],
+      ['docs/dimensions.md', 'dimensions'],
+    ],
+  },
 ];
 
 const pages = GROUPS.flatMap((g) => g.pages.map(([file, slug]) => ({ file, slug, group: g.name })));

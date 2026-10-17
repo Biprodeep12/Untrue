@@ -6,6 +6,7 @@
 import { hash, hashString, Rng, Stream } from '../generation/Random';
 import type { BuildingSpec } from '../generation/StructureGenerator';
 import { Deco, isSolid, Tile } from '../generation/Tiles';
+import type { Place } from '../game/Place';
 import type { WorldObject } from './WorldObject';
 
 /** Chest ids inside buildings start here, so they never clash with layout indices. */
@@ -16,6 +17,17 @@ const MINED_BASE = 2_000_000;
 /** Floors of a keep, from the cellar up, with their names. */
 export const KEEP_FLOORS: Record<number, string> = { [-1]: 'Cellar', 0: 'Great Hall', 1: 'Upper Floor' };
 
+/** What the player reads when leafing through a bookshelf. */
+export const BOOKS = [
+  "A farmer's almanac, its margins full of notes on frost and rain.",
+  'A book of maps. No two pages show the same coastline.',
+  "A children's story about a fox who outwits a bear. The last page is torn out.",
+  'A ledger of trades: salt, iron and wool, in a careful hand.',
+  'Poems about the sea, by someone who had plainly never seen it.',
+  'A cookbook. The stew recipe calls for mushrooms, herbs and a handful of berries.',
+  'A diary: "Rain again. The well is full and the roads are mud."',
+];
+
 /** Stairs on a floor: the tile, and the floor they lead to. */
 export interface Stairs {
   x: number;
@@ -25,7 +37,10 @@ export interface Stairs {
 
 const CHEST_CHANCE: Record<BuildingSpec['style'], number> = { house: 0.5, cabin: 0.6, stone: 0.4, keep: 0.8, city: 0.5, mine: 0.55 };
 
-export class Interior {
+export class Interior implements Place {
+  readonly kind = 'interior';
+  /** Nothing fights indoors. */
+  readonly arena = null;
   readonly w: number;
   readonly h: number;
   readonly tiles: Uint8Array;
@@ -111,6 +126,11 @@ export class Interior {
   }
 
   /** Collision for the player inside: walls, furniture, and anything outside the room. */
+  /** The doorstep outside, as a place. */
+  get spot(): { x: number; y: number } {
+    return this.outside;
+  }
+
   isSolidAt(gx: number, gy: number): boolean {
     if (gx < 0 || gy < 0 || gx >= this.w || gy >= this.h) return true;
     if (gx === this.exit.x && gy === this.exit.y) return false;

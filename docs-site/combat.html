@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html" class="current" aria-current="page">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html" class="current" aria-current="page">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Gameplay</p>
     <article><h1 id="combat">Combat</h1>
@@ -54,7 +54,7 @@
 </tr>
 </tbody></table></div>
 <p>Attacking with the mouse turns the player toward the cursor. On touch screens, Hit turns the player toward the nearest enemy within the weapon&#39;s reach plus 1.5 tiles (animals and burrowed lurkers are skipped), or the way they face if there is none. The weapon is whatever sits in the selected hotbar slot; anything else counts as fists. J and K are the default keys; both can be changed in Settings (<a href="index.html#controls">README.md</a>).</p>
-<p>There is no fighting indoors (enemies stay outside) or while swimming (&quot;You can&#39;t fight while swimming&quot;).</p>
+<p>There is no fighting indoors (enemies stay outside) or while swimming (&quot;You can&#39;t fight while swimming&quot;). Inside an outer dimension the fight moves there: see <a href="#arenas">Arenas</a> and <a href="dimensions.html">dimensions.md</a>.</p>
 <h2 id="damage">Damage<a class="anchor" href="#damage" aria-label="Link to this section">#</a></h2>
 <h3 id="dealing-damage">Dealing damage<a class="anchor" href="#dealing-damage" aria-label="Link to this section">#</a></h3>
 <p><code>playerHitDamage(base, levelBonus, crit) = round(base × levelBonus × (crit ? 2 : 1))</code></p>
@@ -62,7 +62,7 @@
 <li><strong>Crit chance:</strong> 10% per hit (<code>CRIT_CHANCE</code>). A crit doubles the damage.</li>
 <li><strong>Level bonus:</strong> see <a href="#progression">Progression</a>.</li>
 <li><strong>Melee arc:</strong> a swing hits every enemy within <code>reach + 0.4</code> tiles and within 60° either side of the swing direction. Enemies closer than 0.3 tiles are always hit.</li>
-<li><strong>Knockback:</strong> each hit pushes the enemy 0.35 tiles along the swing, unless that spot is solid.</li>
+<li><strong>Knockback:</strong> each hit pushes the enemy 0.35 tiles along the swing, unless that spot is solid. In a dimension, a walker knocked out over the void falls and dies (a kill, with XP and drops); bosses keep their footing.</li>
 <li><strong>Burrowed enemies</strong> can&#39;t be hit.</li>
 <li><strong>Damage types:</strong> see <a href="#damage-types">below</a>. The type&#39;s factor is applied last, and a hit always does at least 1.</li>
 </ul>
@@ -143,6 +143,15 @@
 <td>260</td>
 </tr>
 <tr>
+<td>Rift Blade</td>
+<td>melee</td>
+<td>24</td>
+<td>spirit</td>
+<td>1.7</td>
+<td>0.4 s</td>
+<td>280</td>
+</tr>
+<tr>
 <td>Starforged Sword</td>
 <td>melee</td>
 <td>32</td>
@@ -170,7 +179,7 @@
 <td>260</td>
 </tr>
 </tbody></table></div>
-<p>The three elemental blades, the Starforged Sword and the Crystal Bow are rare recipes, learned from Forgotten Schematics (<a href="survival.html#rare-recipes">survival.md</a>).</p>
+<p>The three elemental blades, the Starforged Sword and the Crystal Bow are rare recipes, learned from Forgotten Schematics (<a href="survival.html#rare-recipes">survival.md</a>). The Rift Blade is forged at an anvil from an Iron Sword, 4 Rift Shards and a Crystal, shards from the vaults behind the rifts (<a href="dimensions.html#rewards">dimensions.md</a>).</p>
 <ul>
 <li><strong>Durability:</strong> each attack with a weapon costs one point. At 0 it breaks and a notice says so. A worn weapon shows a bar along the bottom of its slot (red below 25%).</li>
 <li><strong>Stats on screen:</strong> the bag&#39;s item details list a weapon&#39;s damage and type, reach or range, hits per second and durability. Selecting a hotbar slot briefly shows the item&#39;s name, and a weapon&#39;s durability, above the bar.</li>
@@ -198,7 +207,7 @@
 </tr>
 <tr>
 <td>Spirit</td>
-<td>Wraith, Skeleton, Skeleton Archer, Ghoul</td>
+<td>Wraith, Skeleton, Skeleton Archer, Ghoul, Glitchling, Shard Wisp, The Rift Warden</td>
 <td>–</td>
 </tr>
 </tbody></table></div>
@@ -369,7 +378,7 @@
 <td>10</td>
 <td>3.2</td>
 <td>9</td>
-<td>Dungeon and archive guard</td>
+<td>Dungeon guard</td>
 <td>Bone 1–2, Arrow 2–5 (40%)</td>
 <td>16</td>
 </tr>
@@ -380,7 +389,7 @@
 <td>8</td>
 <td>2.8</td>
 <td>10</td>
-<td>Dungeon and archive guard; shoots arrows (range 7)</td>
+<td>Dungeon guard; shoots arrows (range 7)</td>
 <td>Bone 1–2, Arrow 3–6 (70%)</td>
 <td>18</td>
 </tr>
@@ -449,6 +458,39 @@
 <td>Boss; also throws boulders (range 8)</td>
 <td>Golden Idol 1, Iron Ingot 3–6, Forgotten Schematic 1–2, plus a chest roll</td>
 <td>600</td>
+</tr>
+<tr>
+<td>Glitchling</td>
+<td>Dimension only</td>
+<td>26</td>
+<td>7</td>
+<td>5.2</td>
+<td>14</td>
+<td>Fast swarmer from the cracks of The Hollow; resists venom</td>
+<td>Spirit Essence 1 (30%), Crystal 1 (5%)</td>
+<td>14</td>
+</tr>
+<tr>
+<td>Shard Wisp</td>
+<td>Dimension only</td>
+<td>22</td>
+<td>9</td>
+<td>3.2</td>
+<td>14</td>
+<td>Floats over the void (not through walls); shoots shards (range 7); resists frost and venom</td>
+<td>Crystal 1 (12%), Spirit Essence 1 (30%)</td>
+<td>18</td>
+</tr>
+<tr>
+<td>The Rift Warden</td>
+<td>Dimension only</td>
+<td>700</td>
+<td>26</td>
+<td>2.8</td>
+<td>18</td>
+<td>The Hollow&#39;s boss; shoots shards (range 8); phases summon adds and quicken it</td>
+<td>Crystal 2–3, Gemstone 1, Star Metal 1–2, plus a chest roll</td>
+<td>500</td>
 </tr>
 </tbody></table></div>
 <p>Spawn weights within a biome: Wolf 4, Bear 1.5, Spider 3, Thorn Spider 1, Scorpion 4, Sand Lurker 2, Jackal 3, Emperor Scorpion 0.8, Frost Golem 3, Frost Wolf 3, Tundra Bear 1.2, Wraith 3.</p>
@@ -582,7 +624,8 @@
 <ul>
 <li>Taking a hit provokes an enemy (patrol or burrowed → aggro).</li>
 <li>A species with <code>fleeBelow</code> flees instead once its health drops below that share: wolves 20%, frost wolves 15%, jackals 25%.</li>
-<li>Every enemy except a flier collides with solid tiles, sliding along walls.</li>
+<li>Every enemy except a flier collides with solid tiles, sliding along walls. Fliers cross everything in the overworld; in a dimension they float over the void but walls stop them (<code>EnemyContext.blocksFlyers</code>).</li>
+<li><code>speedScale</code> and <code>cooldownScale</code> on an enemy multiply its species&#39; speed and attack cooldown, so a rift boss&#39;s phases quicken that one enemy without touching the shared species.</li>
 </ul>
 <h3 id="difficulty-scaling-and-elites">Difficulty scaling and elites<a class="anchor" href="#difficulty-scaling-and-elites" aria-label="Link to this section">#</a></h3>
 <p>Bands come from distance to the origin (<code>src/generation/WorldRules.ts</code>):</p>
@@ -631,6 +674,8 @@
 <li><strong>Despawn:</strong> enemies that leave the simulation area are removed. Night-only enemies are removed at dawn.</li>
 <li><strong>Wildlife:</strong> animals spawn on the same timer, separately: up to 6 by day and 3 at night, anywhere in the simulation area (the safe zone included), at least 12 tiles from the player. They never count toward the enemy cap.</li>
 </ul>
+<h2 id="arenas">Arenas<a class="anchor" href="#arenas" aria-label="Link to this section">#</a></h2>
+<p><code>CombatSystem</code> fights on an <code>Arena</code>: what walkers, fliers, knockback and shots collide with, where drops that do not fit go, and whether the overworld&#39;s own rules run (<code>wild</code>). The overworld is <code>combat.overworld</code>; a trip into a dimension (<code>RiftTrip</code>, <a href="dimensions.html">dimensions.md</a>) is another. <code>enterArena</code> stashes the overworld&#39;s enemies and drops its shots; while away, no wild spawning, despawning by the simulation area, guard triggers or legend rolls run, and an overworld ambush or invasion that fires meanwhile waits in the stash. <code>leaveArena</code> drops the dimension&#39;s enemies and brings the overworld&#39;s back exactly as they were. Enemies a dimension asks for are added with <code>add</code> and taken away without a kill with <code>remove</code>; a kill also tells the arena (<code>killed</code>), which reports it to the run.</p>
 <h2 id="guarded-places">Guarded places<a class="anchor" href="#guarded-places" aria-label="Link to this section">#</a></h2>
 <p>Walking into some places wakes their guards (<code>GUARDED_KINDS</code>):</p>
 <div class="table-wrap"><table>
@@ -647,10 +692,6 @@
 <tr>
 <td>Boss Arena</td>
 <td>1 Arena Guardian at the centre</td>
-</tr>
-<tr>
-<td>Sunken Archive (story)</td>
-<td>4 Skeletons and 2 Skeleton Archers</td>
 </tr>
 </tbody></table></div>
 <p>Killing every guard clears the place:</p>
@@ -761,19 +802,19 @@
 <td>15</td>
 </tr>
 <tr>
+<td>Closing a rift</td>
+<td>150</td>
+</tr>
+<tr>
 <td>Quests</td>
 <td>32–150, see <a href="living-world.html#quests">living-world.md</a></td>
 </tr>
-<tr>
-<td>Story milestones</td>
-<td>80 (graves, revision, astronomer), 160 (Hall of Lanterns), 400 (ending)</td>
-</tr>
 </tbody></table></div>
-<p>See also: <a href="index.html">README.md</a> · <a href="survival.html">survival.md</a> · <a href="living-world.html">living-world.md</a> · <a href="story.html">story.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a></p>
+<p>See also: <a href="index.html">README.md</a> · <a href="survival.html">survival.md</a> · <a href="living-world.html">living-world.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a></p>
 </article>
     <nav class="pager"><a class="prev" href="survival.html"><small>Previous</small>Survival</a><a class="next" href="living-world.html"><small>Next</small>Living world</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#controls">Controls</a></li><li class="l2"><a href="#damage">Damage</a></li><li class="l3"><a href="#dealing-damage">Dealing damage</a></li><li class="l3"><a href="#taking-damage">Taking damage</a></li><li class="l2"><a href="#weapons">Weapons</a></li><li class="l2"><a href="#damage-types">Damage types</a></li><li class="l2"><a href="#enemies">Enemies</a></li><li class="l2"><a href="#wildlife">Wildlife</a></li><li class="l3"><a href="#ai-states">AI states</a></li><li class="l3"><a href="#difficulty-scaling-and-elites">Difficulty scaling and elites</a></li><li class="l2"><a href="#spawning">Spawning</a></li><li class="l2"><a href="#guarded-places">Guarded places</a></li><li class="l3"><a href="#legends">Legends</a></li><li class="l2"><a href="#progression">Progression</a></li><li class="l3"><a href="#skills">Skills</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#controls">Controls</a></li><li class="l2"><a href="#damage">Damage</a></li><li class="l3"><a href="#dealing-damage">Dealing damage</a></li><li class="l3"><a href="#taking-damage">Taking damage</a></li><li class="l2"><a href="#weapons">Weapons</a></li><li class="l2"><a href="#damage-types">Damage types</a></li><li class="l2"><a href="#enemies">Enemies</a></li><li class="l2"><a href="#wildlife">Wildlife</a></li><li class="l3"><a href="#ai-states">AI states</a></li><li class="l3"><a href="#difficulty-scaling-and-elites">Difficulty scaling and elites</a></li><li class="l2"><a href="#spawning">Spawning</a></li><li class="l2"><a href="#arenas">Arenas</a></li><li class="l2"><a href="#guarded-places">Guarded places</a></li><li class="l3"><a href="#legends">Legends</a></li><li class="l2"><a href="#progression">Progression</a></li><li class="l3"><a href="#skills">Skills</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

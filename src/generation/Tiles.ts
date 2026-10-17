@@ -62,8 +62,10 @@ export const Tile = {
   CaveRoof: 54,
   /** Tilled garden soil in rows. */
   Farmland: 55,
+  /** Scorched, violet-veined ground around a rift. */
+  RiftGround: 56,
 } as const;
-export const TILE_COUNT = 56;
+export const TILE_COUNT = 57;
 
 /** Water the player can swim in. */
 export function isWater(tile: number): boolean {
@@ -103,12 +105,12 @@ export const Deco = {
   Treasure: 26,
   /** A fallen star, mined for star metal. */
   Meteorite: 27,
-  // Story pieces (The World That Forgets).
+  // Unused since the old story was removed, except the bookshelf. The ids stay
+  // so saved layouts and the atlas keep their numbers.
   Monument: 28,
   Gravestone: 29,
   Telescope: 30,
   Bookshelf: 31,
-  /** Holds a memory the lantern can read. */
   Pedestal: 32,
   LanternRack: 33,
   AnchorCore: 34,
@@ -144,10 +146,14 @@ export const Deco = {
   /** Invisible and solid: the ground under a building sprite, which keeps the
    *  terrain's own tile so nothing shows around the sprite's edges. */
   Footprint: 56,
+  /** A tear in the air onto an outer dimension; E enters it. */
+  Rift: 57,
+  /** Where a rift was closed: a faint scar on the ground. */
+  RiftScar: 58,
   /** Layout-only: remove whatever decoration the terrain placed. */
   Clear: 255,
 } as const;
-export const DECO_COUNT = 57;
+export const DECO_COUNT = 59;
 
 const SOLID_TILES = new Set<number>([
   Tile.Water,
@@ -215,6 +221,7 @@ const SOLID_DECOS = new Set<number>([
   Deco.StairsDown,
   Deco.Dummy,
   Deco.Footprint,
+  Deco.Rift,
 ]);
 
 export function isSolid(tile: number, deco: number): boolean {

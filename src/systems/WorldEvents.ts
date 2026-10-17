@@ -1,17 +1,15 @@
 // Random world events (spec 6.3): meteor crash, bandit attack, monster
-// invasion, treasure, rare merchant, an ancient structure rising, and the
-// Moonwell, which rises only at night and fades at dawn.
+// invasion, treasure, rare merchant, an ancient structure rising, a rift
+// tearing open, and the Moonwell, which rises only at night and fades at dawn.
 
 import { SAFE_RADIUS } from '../generation/EnemyGenerator';
 import type { Rng } from '../generation/Random';
-import { Layout } from '../generation/StructureGenerator';
-import { Deco, isSolid, Tile } from '../generation/Tiles';
-import { echoMonument, memoryFragment, quietCabin } from '../story/StoryPlaces';
-import type { Ending } from '../story/StoryScript';
+import { Layout, rift } from '../generation/StructureGenerator';
+import { BiomeType, Deco, isSolid, Tile } from '../generation/Tiles';
 import { WorldObject } from '../world/WorldObject';
 import type { WorldManager } from '../world/WorldManager';
 
-export type EventKind = 'meteor' | 'bandits' | 'invasion' | 'treasure' | 'merchant' | 'ancient' | 'moonwell' | 'echo' | 'fragment' | 'cabin';
+export type EventKind = 'meteor' | 'bandits' | 'invasion' | 'treasure' | 'merchant' | 'ancient' | 'moonwell' | 'rift';
 
 /** Structures that exist only at night: gone at dawn. */
 export const NIGHT_ONLY = new Set(['moonwell']);
@@ -29,9 +27,6 @@ export interface EventContext {
   village: WorldObject | null;
   merchantNearby: boolean;
   now: number;
-  /** How the story ended, if it has; unlocks the epilogue's finds. */
-  ending?: Ending | null;
-  cabinFound?: boolean;
 }
 
 export interface EventHooks {
@@ -65,9 +60,7 @@ export class WorldEvents {
       ['merchant', !ctx.night && !ctx.merchantNearby ? 1.5 : 0],
       ['ancient', wild ? 1 : 0],
       ['moonwell', ctx.night ? 1.5 : 0],
-      ['echo', ctx.ending ? 1 : 0],
-      ['fragment', ctx.ending === 'memory' ? 1.5 : 0],
-      ['cabin', ctx.ending && !ctx.cabinFound && wild ? 0.3 : 0],
+      ['rift', wild ? 0.5 : 0],
     ];
     const kind = this.rng.weighted(options, ([, w]) => w)?.[0];
     if (!kind || !this.trigger(kind, ctx)) return null;
@@ -123,17 +116,9 @@ export class WorldEvents {
         this.hooks.notify('The ground shakes… an ancient structure rises nearby!');
         return true;
       }
-      case 'echo':
-        if (!this.place(echoMonument(), ctx, 14, 24, 'Echo Monument')) return false;
-        this.hooks.notify('The lantern flickers. Something nearby remembers you.');
-        return true;
-      case 'fragment':
-        if (!this.place(memoryFragment(), ctx, 14, 24, 'Memory Fragment')) return false;
-        this.hooks.notify('A preserved memory glimmers nearby.');
-        return true;
-      case 'cabin':
-        if (!this.place(quietCabin(this.rng), ctx, 20, 30, 'Quiet Cabin')) return false;
-        this.hooks.notify('Smoke rises from a small cabin you have never seen before.');
+      case 'rift':
+        if (!this.openRift(ctx)) return false;
+        this.hooks.notify('A rift tears open nearby.');
         return true;
       case 'moonwell': {
         if (!ctx.night) return false;
@@ -146,6 +131,11 @@ export class WorldEvents {
     }
   }
 
+  /** Tears a rift open on open ground near the player (also the playground's tool). */
+  openRift(ctx: Pick<EventContext, 'x' | 'y' | 'now'>, min = 14, max = 24): WorldObject | null {
+    return this.place(rift({ rng: this.rng, palette: 0, biome: BiomeType.Forest }), ctx, min, max, 'Rift');
+  }
+
   /** Night-only structures fade with the morning. */
   private dawn(): void {
     for (const o of [...this.world.objects.objects.values()]) {
@@ -156,7 +146,7 @@ export class WorldEvents {
   }
 
   /** Puts a temporary object on open, loaded ground at a distance from the player. */
-  private place(layout: Layout, ctx: EventContext, min: number, max: number, name: string): WorldObject | null {
+  private place(layout: Layout, ctx: Pick<EventContext, 'x' | 'y' | 'now'>, min: number, max: number, name: string): WorldObject | null {
     for (let attempt = 0; attempt < 40; attempt++) {
       const a = this.rng.range(0, Math.PI * 2);
       const d = this.rng.range(min, max);
@@ -172,7 +162,10 @@ export class WorldEvents {
         }
       }
       if (!open) continue;
-      const o = new WorldObject(`event-${name}@${Math.round(ctx.now)}`, name.toLowerCase().replace(/ /g, '-'), name, 'temporary', x, y, layout);
+      // Two of a kind within a minute (the playground's rifts) need their own ids.
+      let id = `event-${name}@${Math.round(ctx.now)}`;
+      while (this.world.objects.objects.has(id)) id += "'";
+      const o = new WorldObject(id, name.toLowerCase().replace(/ /g, '-'), name, x, y, layout);
       o.anchor = o.id;
       this.world.addObject(o);
       return o;

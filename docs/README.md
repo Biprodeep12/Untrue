@@ -1,8 +1,8 @@
 # Untrue: documentation
 
-How the game works, from world generation to the story.
+How the game works, from world generation to the living world.
 
-Untrue is an endless 2D procedural survival and exploration game for the browser. The world is generated around the player in chunks and thrown away behind them, so places can come back different on a later visit. It looks and feels like Stardew Valley: top-down pixel art with a warm, cozy tone. The player is an adventurer who explores, gathers, crafts and fights, but never builds. The story, *The World That Forgets*, turns the world's regeneration into its central mystery.
+Untrue is an endless 2D procedural survival and exploration game for the browser. The world is generated around the player in chunks and thrown away behind them, so places can come back different on a later visit. It looks and feels like Stardew Valley: top-down pixel art with a warm, cozy tone. The player is an adventurer who explores, gathers, crafts and fights, but never builds. Every structure is forgotten once the player leaves it far behind. Since rifts tore open all over it, the world has been forgetting itself; stepping through one leads into an outer dimension of challenges ([story.md](story.md), [dimensions.md](dimensions.md)).
 
 ## Running it
 
@@ -24,12 +24,12 @@ Untrue is an endless 2D procedural survival and exploration game for the browser
 | Left click or J | Attack (toward the mouse, or the way you face) |
 | Right click (hold) or K (hold) | Block |
 | Space | Dodge roll (not while swimming); advances a story vision |
-| E | Talk, read, gather, open, drink, rest, enter a building, take the stairs; advances a story vision |
+| E | Talk, read, gather, open, drink, rest, enter a building or a rift, take the stairs, open a dimension's vault; advances a story vision |
 | 1 to 8 | Select a hotbar slot |
 | F | Use the selected item |
 | Q | Drop the selected hotbar stack |
 | Tab or I | Open or close the menu |
-| M | Open or close the map |
+| M | Open or close the map, where maps work: only inside an outer dimension (the overworld won't hold still) |
 | Escape | Close a dialog or the menu; otherwise pause |
 | Ctrl+S | Save now |
 | Mouse wheel, + and − | Zoom |
@@ -57,7 +57,7 @@ Tapping a hotbar slot selects it and shows the item's name (and a weapon's durab
 | `?hour=H` | Set the clock to hour `H` (development builds only). |
 | `?weather=kind` | Force a weather kind in every biome for 24 hours (development builds only): `clear`, `rain`, `storm`, `fog`, `sandstorm`, `heat`, `snow`, `blizzard`. |
 | `?vitals=N` | Start health, stamina, hunger and thirst at `N`% (development builds only), to see the low warnings. |
-| `?playground` or `?playground=SEED` | Story playground (development builds only): a fresh world, never saved, with the story places packed near the spawn and a panel (F4 or tapping its title folds it) to start any chapter, travel to any story place, trigger each ending and the epilogue finds, set night or morning, and toggle god mode. |
+| `?playground` or `?playground=SEED` | Story playground (development builds only): a fresh world, never saved, with a panel (F4 or tapping its title folds it) to travel to the spawn, set night or morning, toggle god mode and restart, and for the rifts: tear one open nearby, enter The Hollow, and skip to its combat, path, puzzle, boss or vault chamber. |
 | `?fps=30` | Cap the frame rate at 30 (it is otherwise capped at 60). |
 
 The game strips the query string after reading it, so reloading continues the same world.
@@ -93,7 +93,7 @@ Engine:
 - [Architecture](architecture.md): source layout, the frame loop, threads, how systems talk, testing.
 - [World streaming](world-streaming.md): chunks, the render, cache and simulation areas, the chunk lifecycle.
 - [World generation](world-generation.md): noise fields, tiles, decorations, biomes, regions and regeneration.
-- [Objects and structures](objects-and-structures.md): world objects, layouts, the structure catalogue, placement, persistence.
+- [Objects and structures](objects-and-structures.md): world objects, layouts, the structure catalogue, placement, and how every structure is forgotten.
 - [Saves](saves.md): what is saved, the save format and its versions.
 - [Rendering](rendering.md): the procedural atlas, meshes, sprites, lighting, weather, effects and UI.
 
@@ -102,14 +102,14 @@ Gameplay:
 - [Survival](survival.md)
 - [Combat](combat.md)
 - [Living world](living-world.md)
-- [Story](story.md)
+- [Story](story.md): the rifts, and the objective in the tracker
+- [Dimensions](dimensions.md): The Hollow behind the rifts, its challenges, the map, and dying there
 - [Buildings and interiors](buildings-and-interiors.md): building sprites, walls with height, and walking inside
-- [Exploration](exploration.md): the world map, fog of war, markers and the compass
+- [Exploration](exploration.md): the map (not in the overworld), fog of war, markers and the compass
 - [Audio](audio.md): synthesised sound effects, music and weather ambience
 
 Design:
 
 - [Design spec](../Endless%202D%20Procedural%20Survival%20Game%20Design%20Spec.md)
-- [The World That Forgets](story.md), the full story text and how the game tells it
 
 See also: [Architecture](architecture.md)

@@ -1,6 +1,6 @@
 # Exploration
 
-The world map with fog of war, map markers, the compass, and rewards for exploring (spec 6.4).
+The map with fog of war, map markers, the compass, and rewards for exploring (spec 6.4).
 
 ## Fog of war
 
@@ -12,20 +12,18 @@ Every `EXPLORE_STEP` (50) newly seen chunks grants `EXPLORE_XP` (20) experience 
 
 ## The map
 
-The menu's Map tab (`src/ui/MapView.ts`), also opened with **M**, draws on a canvas:
+Maps only work inside the outer dimensions behind the rifts. In the overworld the Map tab is hidden and **M** only says "Maps don't work here: the world won't hold still." (`Game.mapAvailable` is true only on a trip into a dimension). Fog of war, exploration XP and markers are still recorded for the overworld.
+
+**Inside a dimension** the Map tab and **M** show that space instead (`src/ui/DimensionMap.ts`): the tiles the player has seen, one colour per kind of tile, framed on what has been seen so far; each chamber seen into by name, ticked once done; the rift home (pink), the portal (pale cyan once open) and the player (white). Fog is a byte per tile (`RiftTrip.seen`): when the player reaches a new tile, every tile within 6 is marked seen, and a version number rises only if something new was seen. The seen tiles are painted one pixel each into a small canvas only when that version changed, and the map is drawn when the tab opens, never per frame (the menu pauses the game). See [dimensions.md](dimensions.md#the-map).
+
+The overworld map (`src/ui/MapView.ts`), kept for if maps ever work there, draws on a canvas:
 
 | Layer | Drawn as |
 | --- | --- |
 | Unexplored | Dark background |
 | Explored chunks | A square per chunk in its biome colour |
-| Forgotten places (lantern memories) | Dashed blue outlines |
-| Discovered places still standing | Cream dots, labelled when zoomed in |
-| Story places | Larger gold dots, always labelled |
-| The story's next destination | A gold star, even before it is explored |
 | Markers | Red pins; the tracked one is brighter |
 | The player | A white dot |
-
-Discovered places come from `WorldManager.known`, a register of every place the player has found that is still standing, loaded or not. It is saved, so the map keeps every dot across reloads. When a known place regenerates after a reload (same region visit), it comes back already discovered, with no second "Discovered" notice or XP. When it is discarded, it leaves the register and the lantern remembers it. A known place that never comes back once its whole neighbourhood is loaded (its area changed while the game was closed) is also turned into a lantern memory.
 
 Drag to pan. Zoom with the + and − buttons, the mouse wheel, or a two-finger pinch on the map (2 to 40 pixels per chunk, opening at 16). The tile coordinates under the cursor show below the map. "Centre on me" recentres on the player.
 
@@ -37,7 +35,7 @@ Clicking or tapping the map without dragging drops a marker there, named "Marker
 
 ## Compass
 
-The compass sits at the top left of the HUD. North is always up (the view never rotates). The needle points toward the story's current objective, or, if there is none, the tracked marker. Next to it are the player's tile coordinates and the destination's name.
+The compass sits at the top left of the HUD. North is always up (the view never rotates). The needle points toward the tracked marker, if there is one, or else toward the story's objective: the nearest open rift loaded ([story.md](story.md)). Next to it are the player's tile coordinates and the marker's name.
 
 ## Saving
 

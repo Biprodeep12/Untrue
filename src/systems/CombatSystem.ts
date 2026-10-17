@@ -1,5 +1,7 @@
 // Combat (spec 5): spawning and despawning inside the simulation radius,
 // dungeon guards and bosses, player attacks, projectiles, damage and drops.
+// It fights on an `Arena`: the overworld, or an outer dimension, where the
+// overworld's own spawning, guards and legends wait until the player is back.
 
 import { CHUNK_SIZE } from '../config';
 import { chunkKey, inRect, tileToChunk } from '../coords';
@@ -10,6 +12,7 @@ import { Rng, streamRng, Stream } from '../generation/Random';
 import { difficultyBand } from '../generation/WorldRules';
 import { BiomeType, isWater } from '../generation/Tiles';
 import { Items, type Element, type WeaponStats } from '../items/Items';
+import type { Stack } from './InventorySystem';
 import type { WorldManager } from '../world/WorldManager';
 import type { WorldObject } from '../world/WorldObject';
 import type { Inventory } from './InventorySystem';
@@ -42,7 +45,7 @@ const SWING_COS = Math.cos((60 * Math.PI) / 180);
 const BODY = 0.4;
 const DUNGEON_CLEAR_XP = 60;
 /** Structures whose guards wake when the player walks in. */
-const GUARDED_KINDS = new Set(['dungeon', 'boss-arena', 'story-archive']);
+const GUARDED_KINDS = new Set(['dungeon', 'boss-arena']);
 
 export interface Projectile {
   x: number;
@@ -90,6 +93,26 @@ export function incomingDamage(raw: number, armor: number, blocked: boolean, pas
   return Math.max(1, Math.round(raw * (1 - armor) * (blocked ? pass : 1)));
 }
 
+/** The ground a fight happens on. */
+export interface Arena {
+  /** The overworld: spawning, guards, legends and despawning by distance run. */
+  readonly wild: boolean;
+  /** Walls and anything else a walking enemy cannot cross. */
+  blocksEnemies(gx: number, gy: number): boolean;
+  /** What stops flyers; nothing does in the overworld. */
+  blocksFlyers(gx: number, gy: number): boolean;
+  /** Knockback stops at it. */
+  isSolid(gx: number, gy: number): boolean;
+  /** Shots break on it. */
+  blocksShots(gx: number, gy: number): boolean;
+  /** Nothing to stand on: a walker knocked onto it falls (and dies). */
+  isHole(gx: number, gy: number): boolean;
+  /** Puts drops that do not fit in the bag on the ground. */
+  drop(stack: Stack, x: number, y: number): void;
+  /** An enemy died, by the player's hand or by falling. */
+  killed?(e: Enemy): void;
+}
+
 interface Guarded {
   remaining: number;
   /** Key recorded in world.clearedAnchors once every guard falls; empty for events. */
@@ -125,11 +148,26 @@ export class CombatSystem {
   /** Chunks already rolled for a legendary creature this region visit. */
   private readonly legendChecked = new Set<string>();
   private legendRect = '';
+  /** The overworld as an arena. */
+  readonly overworld: Arena = {
+    wild: true,
+    blocksEnemies: (gx, gy) => this.world.isSolidAt(gx, gy),
+    blocksFlyers: () => false,
+    isSolid: (gx, gy) => this.world.isSolidAt(gx, gy),
+    blocksShots: (gx, gy) => this.blocksShots(gx, gy),
+    isHole: () => false,
+    drop: (stack, x, y) => this.world.ground.drop(stack, x, y),
+  };
+  /** Where fights happen now. */
+  arena: Arena = this.overworld;
+  /** The overworld's enemies and shots, kept while another arena is in use. */
+  private stashed: Enemy[] = [];
   /** What enemies ask of the world; built once, not every frame. */
   private readonly ctx: EnemyContext = {
     playerX: 0,
     playerY: 0,
-    isSolid: (gx, gy) => this.world.isSolidAt(gx, gy),
+    isSolid: (gx, gy) => this.arena.blocksEnemies(gx, gy),
+    blocksFlyers: (gx, gy) => this.arena.blocksFlyers(gx, gy),
     alert: (group) => {
       for (const e of this.enemies) if (e.group === group) e.provoke();
     },
@@ -164,18 +202,49 @@ export class CombatSystem {
     return this.world.isSolidAt(gx, gy);
   }
 
+  /** Fights on another arena: the overworld's enemies wait, untouched, until `leaveArena`. */
+  enterArena(arena: Arena): void {
+    if (this.arena !== this.overworld) this.leaveArena();
+    this.stashed = this.enemies.splice(0);
+    this.projectiles.length = 0;
+    this.arena = arena;
+  }
+
+  /** Back to the overworld: the other arena's enemies go, the overworld's come back. */
+  leaveArena(): void {
+    if (this.arena === this.overworld) return;
+    this.enemies.length = 0;
+    for (const e of this.stashed) this.enemies.push(e);
+    this.stashed = [];
+    this.projectiles.length = 0;
+    this.arena = this.overworld;
+  }
+
+  /** Adds an enemy made elsewhere (an outer dimension's spawns). */
+  add(e: Enemy): void {
+    this.enemies.push(e);
+  }
+
+  /** Takes an enemy away without a kill: no XP, no drops. */
+  remove(e: Enemy): void {
+    const i = this.enemies.indexOf(e);
+    if (i >= 0) this.enemies.splice(i, 1);
+  }
+
   update(dt: number, body: PlayerBody): void {
     this.body = body;
     this.cooldown = Math.max(0, this.cooldown - dt);
-    this.despawn();
-    this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0) {
-      this.spawnTimer = SPAWN_INTERVAL;
-      this.spawnWild();
-      this.spawnAnimals();
+    if (this.arena.wild) {
+      this.despawn();
+      this.spawnTimer -= dt;
+      if (this.spawnTimer <= 0) {
+        this.spawnTimer = SPAWN_INTERVAL;
+        this.spawnWild();
+        this.spawnAnimals();
+      }
+      this.triggers();
+      this.rollLegends();
     }
-    this.triggers();
-    this.rollLegends();
 
     const ctx = this.ctx;
     ctx.playerX = body.x;
@@ -227,12 +296,22 @@ export class CombatSystem {
     const amount = Math.max(1, Math.round(raw * elementFactor(e.species, element)));
     e.takeHit(amount);
     this.events.damage(e.x, e.y - 1, amount, crit, false);
-    // Knockback, unless something solid is in the way.
+    // Knockback, unless something solid is in the way. A walker knocked off
+    // the edge falls; bosses keep their footing.
     const nx = e.x + pushX * 0.35;
     const ny = e.y + pushY * 0.35;
-    if (!this.world.isSolidAt(Math.floor(nx), Math.floor(ny))) {
-      e.x = nx;
-      e.y = ny;
+    const arena = this.arena;
+    if (!arena.isSolid(Math.floor(nx), Math.floor(ny))) {
+      const fall = !arena.wild && !e.species.flying && arena.isHole(Math.floor(nx), Math.floor(ny - 0.15));
+      if (!fall) {
+        e.x = nx;
+        e.y = ny;
+      } else if (!e.species.boss && e.alive) {
+        e.x = nx;
+        e.y = ny;
+        e.hp = 0;
+        this.events.notify(`The ${e.name} falls into the void`);
+      }
     }
     if (!e.alive) this.kill(e);
   }
@@ -262,6 +341,7 @@ export class CombatSystem {
     this.grantXp(e.xp);
     if (e.species.boss) this.progression.trophies[e.species.id] = (this.progression.trophies[e.species.id] ?? 0) + 1;
     this.onKill?.(e);
+    this.arena.killed?.(e);
     this.events.killed?.(e);
     const drops: Array<[typeof Items.wood, number]> = [];
     // Hunters get more from animals.
@@ -275,7 +355,7 @@ export class CombatSystem {
       if (count > left) this.events.notify(`+${count - left} ${item.name}`);
       // A full bag leaves the rest where the enemy fell.
       if (left > 0) {
-        this.world.ground.drop({ item, count: left }, e.x, e.y);
+        this.arena.drop({ item, count: left }, e.x, e.y);
         this.events.notify(`Bag full: ${left} ${item.name} left on the ground`);
       }
     }
@@ -309,7 +389,7 @@ export class CombatSystem {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.ttl -= dt;
-      let done = p.ttl <= 0 || this.blocksShots(Math.floor(p.x), Math.floor(p.y + BODY));
+      let done = p.ttl <= 0 || this.arena.blocksShots(Math.floor(p.x), Math.floor(p.y + BODY));
       if (!done && p.fromPlayer) {
         const hit = this.enemies.find((e) => e.state !== 'burrowed' && Math.hypot(e.x - p.x, e.y - BODY - p.y) < 0.6);
         if (hit) {
@@ -325,9 +405,11 @@ export class CombatSystem {
     }
   }
 
-  /** Spawns a group around a point, e.g. for an ambush or an invasion. */
+  /** Spawns a group around a point in the overworld, e.g. for an ambush or an
+   *  invasion; it waits there while the player is in another arena. */
   spawnGroup(species: Species, x: number, y: number, count: number, opts: GroupOptions = {}): Enemy[] {
     const band = difficultyBand(x, y);
+    const list = this.arena === this.overworld ? this.enemies : this.stashed;
     const tag = opts.label ? `group@${this.nextGroup}` : '';
     const group = this.nextGroup++;
     const spawned: Enemy[] = [];
@@ -339,7 +421,7 @@ export class CombatSystem {
       e.group = group;
       e.tag = tag;
       if (opts.provoke) e.provoke();
-      this.enemies.push(e);
+      list.push(e);
       spawned.push(e);
     }
     if (tag && spawned.length) this.guarded.set(tag, { remaining: spawned.length, key: '', name: opts.label!, kind: opts.kind ?? 'event' });
@@ -440,8 +522,7 @@ export class CombatSystem {
         const band = difficultyBand(o.x, o.y);
         const ghouls = band >= 3 ? 2 : band >= 2 ? 1 : 0;
         this.spawnGuards(o, [[SPECIES.skeleton, this.rng.int(2, 3)], [SPECIES.skeletonArcher, this.rng.int(1, 2)], [SPECIES.ghoul, ghouls]], key);
-      } else if (o.kind === 'story-archive') this.spawnGuards(o, [[SPECIES.skeleton, 4], [SPECIES.skeletonArcher, 2]], key);
-      else this.spawnGuards(o, [[SPECIES.guardian, 1]], key);
+      } else this.spawnGuards(o, [[SPECIES.guardian, 1]], key);
     }
   }
 

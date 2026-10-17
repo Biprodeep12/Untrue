@@ -165,8 +165,6 @@ export class EntityRenderer {
       if (!d) this.people.set(n.id, (d = this.create()));
       const { sprite, mark } = d;
       sprite.visible = !n.hidden;
-      sprite.scale.set(n.scale);
-      sprite.alpha = n.ghost ? 0.5 + Math.sin(this.time * 2) * 0.08 : 1;
       sprite.texture = this.human(n.outfit, n.facing, n.moving ? Math.floor(this.time * 8) % 4 : 0);
       sprite.position.set(Math.round(n.x * TILE_SIZE), Math.round(n.y * TILE_SIZE));
       sprite.zIndex = n.y * TILE_SIZE;

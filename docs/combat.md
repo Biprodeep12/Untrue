@@ -15,7 +15,7 @@ Code: `src/systems/CombatSystem.ts`, `src/entities/Enemy.ts`, `src/entities/Spec
 
 Attacking with the mouse turns the player toward the cursor. On touch screens, Hit turns the player toward the nearest enemy within the weapon's reach plus 1.5 tiles (animals and burrowed lurkers are skipped), or the way they face if there is none. The weapon is whatever sits in the selected hotbar slot; anything else counts as fists. J and K are the default keys; both can be changed in Settings ([README.md](README.md#controls)).
 
-There is no fighting indoors (enemies stay outside) or while swimming ("You can't fight while swimming").
+There is no fighting indoors (enemies stay outside) or while swimming ("You can't fight while swimming"). Inside an outer dimension the fight moves there: see [Arenas](#arenas) and [dimensions.md](dimensions.md).
 
 ## Damage
 
@@ -26,7 +26,7 @@ There is no fighting indoors (enemies stay outside) or while swimming ("You can'
 - **Crit chance:** 10% per hit (`CRIT_CHANCE`). A crit doubles the damage.
 - **Level bonus:** see [Progression](#progression).
 - **Melee arc:** a swing hits every enemy within `reach + 0.4` tiles and within 60° either side of the swing direction. Enemies closer than 0.3 tiles are always hit.
-- **Knockback:** each hit pushes the enemy 0.35 tiles along the swing, unless that spot is solid.
+- **Knockback:** each hit pushes the enemy 0.35 tiles along the swing, unless that spot is solid. In a dimension, a walker knocked out over the void falls and dies (a kill, with XP and drops); bosses keep their footing.
 - **Burrowed enemies** can't be hit.
 - **Damage types:** see [below](#damage-types). The type's factor is applied last, and a hit always does at least 1.
 
@@ -50,11 +50,12 @@ There is no fighting indoors (enemies stay outside) or while swimming ("You can'
 | Frost Blade | melee | 22 | frost | 1.6 | 0.4 s | 260 |
 | Venom Blade | melee | 22 | venom | 1.6 | 0.4 s | 260 |
 | Spirit Blade | melee | 22 | spirit | 1.6 | 0.4 s | 260 |
+| Rift Blade | melee | 24 | spirit | 1.7 | 0.4 s | 280 |
 | Starforged Sword | melee | 32 | – | 1.7 | 0.38 s | 420 |
 | Hunting Bow | bow | 12 | – | 9 | 0.65 s | 140 |
 | Crystal Bow | bow | 20 | – | 11 | 0.55 s | 260 |
 
-The three elemental blades, the Starforged Sword and the Crystal Bow are rare recipes, learned from Forgotten Schematics ([survival.md](survival.md#rare-recipes)).
+The three elemental blades, the Starforged Sword and the Crystal Bow are rare recipes, learned from Forgotten Schematics ([survival.md](survival.md#rare-recipes)). The Rift Blade is forged at an anvil from an Iron Sword, 4 Rift Shards and a Crystal, shards from the vaults behind the rifts ([dimensions.md](dimensions.md#rewards)).
 
 - **Durability:** each attack with a weapon costs one point. At 0 it breaks and a notice says so. A worn weapon shows a bar along the bottom of its slot (red below 25%).
 - **Stats on screen:** the bag's item details list a weapon's damage and type, reach or range, hits per second and durability. Selecting a hotbar slot briefly shows the item's name, and a weapon's durability, above the bar.
@@ -68,7 +69,7 @@ A weapon can carry a damage type (`Element` in `src/items/Items.ts`): `frost`, `
 | --- | --- | --- |
 | Frost | Scorpion, Sand Lurker, Jackal, Emperor Scorpion, Dune Tyrant, Thorn Spider | Frost Golem, Ancient Golem, Frost Wolf, Tundra Bear |
 | Venom | Wolf, Bear, Frost Wolf, Tundra Bear, Jackal, Alpha Wolf, Elder Stag | Spider, Thorn Spider, Scorpion, Emperor Scorpion, Dune Tyrant, Frost Golem, Ancient Golem, Wraith, Skeleton, Skeleton Archer, Ghoul |
-| Spirit | Wraith, Skeleton, Skeleton Archer, Ghoul | – |
+| Spirit | Wraith, Skeleton, Skeleton Archer, Ghoul, Glitchling, Shard Wisp, The Rift Warden | – |
 
 The Jackal is weak to both frost and venom. Bandits, wildlife and the Arena Guardian have no weakness or resistance.
 
@@ -91,14 +92,17 @@ Stats below are at band 0. "Aggro" is the distance at which the enemy notices th
 | Tundra Bear | Snow | 120 | 22 | 3 | 5 | Slow, heavy hitter | Raw Meat 2–4, Hide 2–3 | 40 |
 | Wraith | All | 28 | 10 | 3.6 | 8 | Night only, fades at dawn; flies over water and walls | Spirit Essence 1 (80%), Coin 1–4 (50%) | 18 |
 | Bandit | Event only | 45 | 11 | 3.9 | 10 | Groups of 3–4 from the ambush event; human sprite | Coin 5–15, Arrow 2–6 (40%), Bandage 1 (30%) | 20 |
-| Skeleton | Guard only | 40 | 10 | 3.2 | 9 | Dungeon and archive guard | Bone 1–2, Arrow 2–5 (40%) | 16 |
-| Skeleton Archer | Guard only | 30 | 8 | 2.8 | 10 | Dungeon and archive guard; shoots arrows (range 7) | Bone 1–2, Arrow 3–6 (70%) | 18 |
+| Skeleton | Guard only | 40 | 10 | 3.2 | 9 | Dungeon guard | Bone 1–2, Arrow 2–5 (40%) | 16 |
+| Skeleton Archer | Guard only | 30 | 8 | 2.8 | 10 | Dungeon guard; shoots arrows (range 7) | Bone 1–2, Arrow 3–6 (70%) | 18 |
 | Ghoul | Guard only | 70 | 15 | 3.6 | 9 | Dungeon guard from band 2; hits poison you for 3 s | Bone 2–3, Spirit Essence 1 (40%) | 28 |
 | Elder Stag | Legend only | 420 | 24 | 4.6 | 8 | Legendary creature, boss | Hide 3–5, Gemstone 1, Crystal 1–2, Forgotten Schematic 1, plus a chest roll | 300 |
 | Alpha Wolf | Legend only | 380 | 22 | 4.8 | 9 | Legendary creature, boss | Hide 3–5, Gemstone 1, Star Metal 1, Forgotten Schematic 1, plus a chest roll | 280 |
 | Dune Tyrant | Legend only | 520 | 26 | 3.2 | 8 | Legendary creature, boss; hits poison you for 6 s | Chitin 4–6, Venom 2–3, Gemstone 1, Star Metal 1–2, Forgotten Schematic 1, plus a chest roll | 360 |
 | Ancient Golem | Legend only | 620 | 28 | 2.2 | 10 | Legendary creature, boss; throws boulders (range 7) | Crystal 2–3, Ice Shard 3–5, Star Metal 2, Forgotten Schematic 1, plus a chest roll | 400 |
 | Arena Guardian | Arena only | 900 | 30 | 2.6 | 14 | Boss; also throws boulders (range 8) | Golden Idol 1, Iron Ingot 3–6, Forgotten Schematic 1–2, plus a chest roll | 600 |
+| Glitchling | Dimension only | 26 | 7 | 5.2 | 14 | Fast swarmer from the cracks of The Hollow; resists venom | Spirit Essence 1 (30%), Crystal 1 (5%) | 14 |
+| Shard Wisp | Dimension only | 22 | 9 | 3.2 | 14 | Floats over the void (not through walls); shoots shards (range 7); resists frost and venom | Crystal 1 (12%), Spirit Essence 1 (30%) | 18 |
+| The Rift Warden | Dimension only | 700 | 26 | 2.8 | 18 | The Hollow's boss; shoots shards (range 8); phases summon adds and quicken it | Crystal 2–3, Gemstone 1, Star Metal 1–2, plus a chest roll | 500 |
 
 Spawn weights within a biome: Wolf 4, Bear 1.5, Spider 3, Thorn Spider 1, Scorpion 4, Sand Lurker 2, Jackal 3, Emperor Scorpion 0.8, Frost Golem 3, Frost Wolf 3, Tundra Bear 1.2, Wraith 3.
 
@@ -136,7 +140,8 @@ Drops go straight into the bag. What does not fit is left on the ground where th
 
 - Taking a hit provokes an enemy (patrol or burrowed → aggro).
 - A species with `fleeBelow` flees instead once its health drops below that share: wolves 20%, frost wolves 15%, jackals 25%.
-- Every enemy except a flier collides with solid tiles, sliding along walls.
+- Every enemy except a flier collides with solid tiles, sliding along walls. Fliers cross everything in the overworld; in a dimension they float over the void but walls stop them (`EnemyContext.blocksFlyers`).
+- `speedScale` and `cooldownScale` on an enemy multiply its species' speed and attack cooldown, so a rift boss's phases quicken that one enemy without touching the shared species.
 
 ### Difficulty scaling and elites
 
@@ -169,6 +174,10 @@ Wild enemies spawn inside the simulation radius; tries happen every 2.5 s.
 - **Despawn:** enemies that leave the simulation area are removed. Night-only enemies are removed at dawn.
 - **Wildlife:** animals spawn on the same timer, separately: up to 6 by day and 3 at night, anywhere in the simulation area (the safe zone included), at least 12 tiles from the player. They never count toward the enemy cap.
 
+## Arenas
+
+`CombatSystem` fights on an `Arena`: what walkers, fliers, knockback and shots collide with, where drops that do not fit go, and whether the overworld's own rules run (`wild`). The overworld is `combat.overworld`; a trip into a dimension (`RiftTrip`, [dimensions.md](dimensions.md)) is another. `enterArena` stashes the overworld's enemies and drops its shots; while away, no wild spawning, despawning by the simulation area, guard triggers or legend rolls run, and an overworld ambush or invasion that fires meanwhile waits in the stash. `leaveArena` drops the dimension's enemies and brings the overworld's back exactly as they were. Enemies a dimension asks for are added with `add` and taken away without a kill with `remove`; a kill also tells the arena (`killed`), which reports it to the run.
+
 ## Guarded places
 
 Walking into some places wakes their guards (`GUARDED_KINDS`):
@@ -177,7 +186,6 @@ Walking into some places wakes their guards (`GUARDED_KINDS`):
 | --- | --- |
 | Dungeon | 2–3 Skeletons and 1–2 Skeleton Archers on open floor tiles, plus 1 Ghoul at band 2 or 2 at band 3 |
 | Boss Arena | 1 Arena Guardian at the centre |
-| Sunken Archive (story) | 4 Skeletons and 2 Skeleton Archers |
 
 Killing every guard clears the place:
 - the player gets 60 XP and a "cleared!" notice
@@ -230,7 +238,7 @@ Ranks are saved with progression; older saves load with none.
 | Killing an enemy | Species XP, scaled by band and elite |
 | Clearing a guarded place or event group | 60 |
 | Discovering a structure | 15 |
+| Closing a rift | 150 |
 | Quests | 32–150, see [living-world.md](living-world.md#quests) |
-| Story milestones | 80 (graves, revision, astronomer), 160 (Hall of Lanterns), 400 (ending) |
 
-See also: [README.md](README.md) · [survival.md](survival.md) · [living-world.md](living-world.md) · [story.md](story.md) · [objects-and-structures.md](objects-and-structures.md)
+See also: [README.md](README.md) · [survival.md](survival.md) · [living-world.md](living-world.md) · [objects-and-structures.md](objects-and-structures.md)

@@ -61,14 +61,15 @@ export class Lighting {
   }
 
   /** `toScreen` maps world pixels to screen pixels; `scale` is the camera zoom. */
-  /** `flat`: the cheap night of the low-quality setting, a plain tint. */
-  update(dt: number, darkness: number, lights: readonly Light[], toScreen: (x: number, y: number) => [number, number], scale: number, flat = false): void {
+  /** `flat`: the cheap night of the low-quality setting, a plain tint.
+   *  `tint`: the darkness's colour, instead of night's or dusk's (a dimension's). */
+  update(dt: number, darkness: number, lights: readonly Light[], toScreen: (x: number, y: number) => [number, number], scale: number, flat = false, tint?: number): void {
     this.time += dt;
     const on = darkness > 0.01;
     this.view.visible = on;
     if (!on) return;
     const { width, height } = this.rt;
-    const tint = darkness > 0.6 ? NIGHT : DUSK;
+    tint ??= darkness > 0.6 ? NIGHT : DUSK;
     this.flat.visible = flat;
     this.sprite.visible = this.warmLayer.visible = !flat;
     if (flat) {

@@ -602,6 +602,17 @@ body {
   to { opacity: 0; }
 }
 
+/* Near a rift the HUD stutters now and then: panels jump and their colours slip. */
+.hud-stutter .panel {
+  animation: stutter 0.18s steps(3) both;
+}
+
+@keyframes stutter {
+  0% { transform: translate(-3px, 1px); filter: hue-rotate(60deg); }
+  50% { transform: translate(2px, -1px); filter: hue-rotate(-40deg) saturate(1.6); }
+  100% { transform: none; filter: none; }
+}
+
 /* Clock and weather sit in the location panel. */
 .hud-clock {
   font-size: 12px;
@@ -848,6 +859,20 @@ body {
 .map-side h4 {
   margin: 10px 0 4px;
 }
+
+/* The dimension map's key. */
+.dim-key {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #000;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.dim-key-rift { background: #ff6ab8; }
+.dim-key-portal { background: #9ff8f2; }
+.dim-key-you { background: #fff; }
 
 .map-marker {
   display: flex;
@@ -1153,13 +1178,6 @@ body {
 
 .pg-hint {
   opacity: 0.7;
-}
-
-.pg-status {
-  margin: 6px 0 0;
-  font: inherit;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .pg-row {

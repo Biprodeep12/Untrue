@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html" class="current" aria-current="page">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html" class="current" aria-current="page">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Gameplay</p>
     <article><h1 id="buildings-and-interiors">Buildings and interiors</h1>
@@ -65,7 +65,7 @@
 <td>One <code>cabin</code></td>
 </tr>
 <tr>
-<td>Village (and the Village of Graves)</td>
+<td>Village</td>
 <td>Rows of <code>house</code>s along the streets</td>
 </tr>
 <tr>
@@ -75,10 +75,6 @@
 <tr>
 <td>Giant City, Lost City</td>
 <td>One <code>city</code> building per block, except under the central plaza. In a Lost City about 30% have fallen to rubble.</td>
-</tr>
-<tr>
-<td>Quiet Cabin</td>
-<td>One <code>cabin</code></td>
 </tr>
 <tr>
 <td>Mine</td>
@@ -141,7 +137,7 @@
 <p>The sprite overhangs the footprint by 4 pixels on each side (plus 6 for the cast shadow) and rises 18 pixels above it for the roof and chimney.</p>
 <p>Sprites are created for buildings that touch the render area, sorted by their footprint&#39;s bottom edge so the player walks in front of and behind them, and drawn at 50% opacity while the player is behind one. At night every window, attic window, dormer and wall lamp is a warm light (radius 1.8 tiles).</p>
 <h2 id="walls-with-height">Walls with height<a class="anchor" href="#walls-with-height" aria-label="Link to this section">#</a></h2>
-<p>Outside of buildings, stone and wood walls (castle walls, towers, ruins, city walls, the observatory, the archive) are tiles. <code>TileRenderer</code> draws a wall with a matching wall below it as its top (capstones, or log ends) and a wall with anything else below it as its front face (<code>StoneWallFace</code>, <code>WoodWallFace</code>: bricks or planks, a lit lip and a shadow at the foot). Walls two tiles thick therefore read as raised walls. A chunk&#39;s bottom row looks at the chunk below, and the chunk above is redrawn when its lower neighbour appears.</p>
+<p>Outside of buildings, stone and wood walls (castle walls, towers, ruins, city walls) are tiles. <code>TileRenderer</code> draws a wall with a matching wall below it as its top (capstones, or log ends) and a wall with anything else below it as its front face (<code>StoneWallFace</code>, <code>WoodWallFace</code>: bricks or planks, a lit lip and a shadow at the foot). Walls two tiles thick therefore read as raised walls. A chunk&#39;s bottom row looks at the chunk below, and the chunk above is redrawn when its lower neighbour appears.</p>
 <h2 id="entering">Entering<a class="anchor" href="#entering" aria-label="Link to this section">#</a></h2>
 <p>Facing a building&#39;s door outdoors shows <strong>E Enter</strong>. Pressing E builds an <code>Interior</code> (<code>src/world/Interior.ts</code>) and switches the view:</p>
 <ul>
@@ -155,6 +151,7 @@
 <li>Walking out over the doormat leaves, onto the doorstep outside.</li>
 <li>Saving indoors records the spot outside the door, so a reload starts outside.</li>
 </ul>
+<p><code>Interior</code> is a <code>Place</code> (<code>src/game/Place.ts</code>), like the overworld and a trip into an outer dimension: the game asks the current place for the player&#39;s collision, its <code>arena</code> (none indoors) and its <code>spot</code> in the overworld (the doorstep), which saving, streaming, the HUD, the clock and what does not fit in the bag all go by. An outer dimension behind a rift is entered much like a room, but with fighting, hazards and a map; see <a href="dimensions.html">dimensions.md</a>.</p>
 <h2 id="rooms">Rooms<a class="anchor" href="#rooms" aria-label="Link to this section">#</a></h2>
 <p>Interiors are generated from the building&#39;s seed, so a room is the same every visit:</p>
 <div class="table-wrap"><table>
@@ -207,11 +204,11 @@
 </thead>
 <tbody><tr>
 <td>Bed</td>
-<td>Sleep until morning, at dusk or night (or during the story&#39;s night in the village); otherwise &quot;too early&quot;. The spot outside the door becomes the waking spot after a collapse.</td>
+<td>Sleep until morning, at dusk or night; otherwise &quot;too early&quot;. The spot outside the door becomes the waking spot after a collapse.</td>
 </tr>
 <tr>
 <td>Bookshelf</td>
-<td>Read a line from one of the books (<code>BOOKS</code> in <code>src/story/StoryScript.ts</code>)</td>
+<td>Read a line from one of the books (<code>BOOKS</code> in <code>src/world/Interior.ts</code>)</td>
 </tr>
 <tr>
 <td>Chest</td>
@@ -287,9 +284,9 @@
 <p>Floors are generated from the building&#39;s seed and the floor number, so each is the same every visit. Chests and mined rock on each floor have their own ids in the object&#39;s opened set (floor 0 keeps the old ids, so saves still work). Anything that cannot be walked up to from the stairs or door is removed.</p>
 <p><strong>Barracks</strong> have a row of bunks along the back wall, a weapon rack and an armour stand, a table with chairs, a barrel, a crate, a lamp, and sometimes a chest.</p>
 <h2 id="residents">Residents<a class="anchor" href="#residents" aria-label="Link to this section">#</a></h2>
-<p>Villagers who went home for the night (see <a href="living-world.html">living-world.md</a>) are inside the building whose door they went through. They stand at spots around the table and can be talked to as usual: quests, hand-ins and trade all work indoors.</p>
+<p>Every village house has someone at home day and night, and half of lone houses and cabins are lived in (see <a href="living-world.html">living-world.md</a>). Villagers who went home for the night join them inside the building whose door they went through. They stand at spots around the table and can be talked to as usual: quests, hand-ins and trade all work indoors.</p>
 <h2 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h2>
-<p>Building specs are saved with persistent objects (version 6); see <a href="saves.html">saves.md</a>.</p>
+<p>Buildings are not saved: like every structure, they regenerate from the seed. Looted chests inside stay looted through the object&#39;s anchor (<a href="saves.html">saves.md</a>).</p>
 <p>See also: <a href="index.html">README.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a> · <a href="rendering.html">rendering.md</a> · <a href="living-world.html">living-world.md</a></p>
 </article>
     <nav class="pager"><a class="prev" href="living-world.html"><small>Previous</small>Living world</a><a class="next" href="exploration.html"><small>Next</small>Exploration</a></nav>

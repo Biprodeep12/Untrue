@@ -17,12 +17,12 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html" class="current" aria-current="page">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html" class="current" aria-current="page">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Start here</p>
     <article><h1 id="untrue-documentation">Untrue: documentation</h1>
-<p>How the game works, from world generation to the story.</p>
-<p>Untrue is an endless 2D procedural survival and exploration game for the browser. The world is generated around the player in chunks and thrown away behind them, so places can come back different on a later visit. It looks and feels like Stardew Valley: top-down pixel art with a warm, cozy tone. The player is an adventurer who explores, gathers, crafts and fights, but never builds. The story, <em>The World That Forgets</em>, turns the world&#39;s regeneration into its central mystery.</p>
+<p>How the game works, from world generation to the living world.</p>
+<p>Untrue is an endless 2D procedural survival and exploration game for the browser. The world is generated around the player in chunks and thrown away behind them, so places can come back different on a later visit. It looks and feels like Stardew Valley: top-down pixel art with a warm, cozy tone. The player is an adventurer who explores, gathers, crafts and fights, but never builds. Every structure is forgotten once the player leaves it far behind. Since rifts tore open all over it, the world has been forgetting itself; stepping through one leads into an outer dimension of challenges (<a href="story.html">story.md</a>, <a href="dimensions.html">dimensions.md</a>).</p>
 <h2 id="running-it">Running it<a class="anchor" href="#running-it" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -86,7 +86,7 @@
 </tr>
 <tr>
 <td>E</td>
-<td>Talk, read, gather, open, drink, rest, enter a building, take the stairs; advances a story vision</td>
+<td>Talk, read, gather, open, drink, rest, enter a building or a rift, take the stairs, open a dimension&#39;s vault; advances a story vision</td>
 </tr>
 <tr>
 <td>1 to 8</td>
@@ -106,7 +106,7 @@
 </tr>
 <tr>
 <td>M</td>
-<td>Open or close the map</td>
+<td>Open or close the map, where maps work: only inside an outer dimension (the overworld won&#39;t hold still)</td>
 </tr>
 <tr>
 <td>Escape</td>
@@ -173,7 +173,7 @@
 </tr>
 <tr>
 <td><code>?playground</code> or <code>?playground=SEED</code></td>
-<td>Story playground (development builds only): a fresh world, never saved, with the story places packed near the spawn and a panel (F4 or tapping its title folds it) to start any chapter, travel to any story place, trigger each ending and the epilogue finds, set night or morning, and toggle god mode.</td>
+<td>Story playground (development builds only): a fresh world, never saved, with a panel (F4 or tapping its title folds it) to travel to the spawn, set night or morning, toggle god mode and restart, and for the rifts: tear one open nearby, enter The Hollow, and skip to its combat, path, puzzle, boss or vault chamber.</td>
 </tr>
 <tr>
 <td><code>?fps=30</code></td>
@@ -208,7 +208,7 @@
 <li><a href="architecture.html">Architecture</a>: source layout, the frame loop, threads, how systems talk, testing.</li>
 <li><a href="world-streaming.html">World streaming</a>: chunks, the render, cache and simulation areas, the chunk lifecycle.</li>
 <li><a href="world-generation.html">World generation</a>: noise fields, tiles, decorations, biomes, regions and regeneration.</li>
-<li><a href="objects-and-structures.html">Objects and structures</a>: world objects, layouts, the structure catalogue, placement, persistence.</li>
+<li><a href="objects-and-structures.html">Objects and structures</a>: world objects, layouts, the structure catalogue, placement, and how every structure is forgotten.</li>
 <li><a href="saves.html">Saves</a>: what is saved, the save format and its versions.</li>
 <li><a href="rendering.html">Rendering</a>: the procedural atlas, meshes, sprites, lighting, weather, effects and UI.</li>
 </ul>
@@ -217,15 +217,15 @@
 <li><a href="survival.html">Survival</a></li>
 <li><a href="combat.html">Combat</a></li>
 <li><a href="living-world.html">Living world</a></li>
-<li><a href="story.html">Story</a></li>
+<li><a href="story.html">Story</a>: the rifts, and the objective in the tracker</li>
+<li><a href="dimensions.html">Dimensions</a>: The Hollow behind the rifts, its challenges, the map, and dying there</li>
 <li><a href="buildings-and-interiors.html">Buildings and interiors</a>: building sprites, walls with height, and walking inside</li>
-<li><a href="exploration.html">Exploration</a>: the world map, fog of war, markers and the compass</li>
+<li><a href="exploration.html">Exploration</a>: the map (not in the overworld), fog of war, markers and the compass</li>
 <li><a href="audio.html">Audio</a>: synthesised sound effects, music and weather ambience</li>
 </ul>
 <p>Design:</p>
 <ul>
 <li><a href="design-spec.html">Design spec</a></li>
-<li><a href="story.html">The World That Forgets</a>, the full story text and how the game tells it</li>
 </ul>
 <p>See also: <a href="architecture.html">Architecture</a></p>
 </article>

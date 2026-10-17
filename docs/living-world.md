@@ -34,8 +34,6 @@ Facing a campfire at dusk or night, E rests until 6:00. Resting:
 - makes this spot the player's waking spot after a collapse ([survival.md](survival.md#collapse))
 - plays a 3-second sleep transition (`src/ui/SleepOverlay.ts`): the screen fades to night over 1 second, "Z z z" drifts up for 1 second while the hours pass, then the morning fades back in over 1 second. The game is paused throughout. Beds indoors use the same transition.
 
-In the story's night stage, the Village of Graves campfire can be rested at any hour ([story.md](story.md)).
-
 ## Light
 
 `src/rendering/Lighting.ts` draws a darkness layer, coloured violet at dusk and deep blue at night, at up to 80% opacity scaled by darkness. Every light cuts a soft hole in it, and warm lights add an orange glow.
@@ -49,12 +47,11 @@ By day (darkness from the clock and storms at 0.01 or less), no lights are gathe
 | Light source | Radius (tiles) | Warm glow |
 | --- | --- | --- |
 | Player, no light | 2.4 | none |
-| Player with torch / Wanderer's Lantern / Lantern | 5 / 6 / 7 | yes |
+| Player with torch / Lantern | 5 / 7 | yes |
 | Campfire | 5 | strong |
 | House window (facade tiles with a window) | 1.8 | soft |
 | Burning tree | 6 | strong |
 | Meteorite | 2.5 | some |
-| Story pieces: Pedestal, Anchor core, Monument, Book | 2.5, 7, 1.5, 2 | varies |
 
 With the "Lighting" setting off, night is still dark, but as a plain tint (85% as strong) with no lights cut into it.
 
@@ -127,7 +124,7 @@ Everything else stays gone until its region fully unloads and regenerates.
 
 **Nomad camps** (desert) get two people the same way: a traveller who offers quests, and a trader by the fire.
 
-**Schedule:** from 20:00 to 6:00, villagers and traders walk to a door and go indoors, where the player can visit them (see [buildings-and-interiors.md](buildings-and-interiors.md#residents)). In the morning they step out of their door again. Story characters have no house, so they stay out (`Npc.stayOut`).
+**Schedule:** from 20:00 to 6:00, villagers and traders walk to a door and go indoors, where the player can visit them (see [buildings-and-interiors.md](buildings-and-interiors.md#residents)). In the morning they step out of their door again.
 
 **Travelling merchant:** appears through a world event, stands still, and leaves after 180 in-game minutes.
 
@@ -190,7 +187,7 @@ Collect resources by biome:
 
 **Completion:** quests complete as soon as their objective is met and pay out at once, except collect and find quests, which are handed in through a villager's dialog. Rewards that do not fit in the bag are left on the ground.
 
-**Tracking:** the HUD tracker (top right, under the location) lists the story objective, any treasure waypoint and up to three quests. Rescue lines carry an arrow toward the traveller, then toward home. The menu's Quests tab lists everything with its progress and rewards.
+**Tracking:** the HUD tracker (top right, under the location) lists the story's objective first ([story.md](story.md)), then any treasure or Moonwell waypoint, up to three quests and the tracked map marker. Rescue lines carry an arrow toward the traveller, then toward home. The menu's Quests tab lists everything with its progress and rewards.
 
 ## Trading
 
@@ -209,6 +206,7 @@ Collect resources by biome:
 | Gemstone | 60 |
 | Star Metal | 45 |
 | Crystal | 35 |
+| Rift Shard | 30 |
 | Gold Ore | 12 |
 | Iron Ingot, Spirit Essence | 8 |
 | Venom Sac, Ice Shard | 6 |
@@ -228,12 +226,10 @@ Collect resources by biome:
 | Treasure | 2 | Always | An X is buried 18–32 tiles away, with a waypoint and a compass hint |
 | Merchant | 1.5 | Daytime, no merchant nearby | A travelling merchant sets up 6–11 tiles away |
 | Ancient | 1 | Wild | A 9×9 Risen Obelisk with a chest rises 12–20 tiles away |
-| Echo | 1 | Story ended | An Echo Monument 14–24 tiles away holds a message from a previous self |
-| Fragment | 1.5 | Ending was The Last Memory | A Memory Fragment pedestal 14–24 tiles away holds a preserved history |
-| Cabin | 0.3 | Story ended, cabin not yet found, wild | The Quiet Cabin appears 20–30 tiles away |
 | Moonwell | 1.5 | Night | A Moonwell rises 14–24 tiles away, with a waypoint |
+| Rift | 0.5 | Wild | "A rift tears open nearby.": a 7×7 rift opens 14–24 tiles away ([dimensions.md](dimensions.md)) |
 
-Event structures are temporary objects placed on open ground clear of other objects (trees and bushes under them are cleared). They come and go like any other temporary object.
+Event structures are temporary objects placed on open ground clear of other objects (trees and bushes under them are cleared). They come and go like any other object.
 
 **Night-only structures.** The Moonwell (`NIGHT_ONLY` in `src/systems/WorldEvents.ts`) exists only at night: a 9×9 ring of pale stone around a glowing spring, with mushrooms and flowers. Every Moonwell still standing fades at the first hour of daylight. Facing it, E drinks: half of max health back, +40 thirst, poison cured and 25 XP, once per Moonwell (the used ones are saved). Drinking also makes it the waking spot after a collapse.
 
@@ -247,7 +243,7 @@ The menu's Settings tab (`src/game/Settings.ts`) stores these in this browser's 
 | Weather particles (also fireflies and falling leaves) | on |
 | Hit and dust particles (bursts) | on |
 | Cap at 30 frames per second | off (the cap is otherwise 60) |
-| Screen flashes (lightning, getting hurt) | on, or off when the system asks for reduced motion |
+| Screen flashes (lightning, getting hurt, a rift's colour slips and HUD stutter) | on, or off when the system asks for reduced motion |
 | Show the controls bar | on |
 | Music volume | 0.35 |
 | Sound effects volume | 0.6 |

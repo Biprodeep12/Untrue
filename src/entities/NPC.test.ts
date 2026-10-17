@@ -12,13 +12,6 @@ describe('npcs at night', () => {
     expect(n.hidden).toBe(false);
   });
 
-  it('story characters with no house stay out', () => {
-    const n = new Npc('villager', 'Elder Maren', 'merchant', 10.5, 10.9, 10.5, 10.9);
-    n.stayOut = true;
-    for (let t = 0; t < 200; t++) n.update(0.1, ctx(23));
-    expect(n.hidden).toBe(false);
-  });
-
   it('homebodies stay in, day and night', () => {
     const n = new Npc('villager', 'Wren', 'villager-b', 10.5, 10.9, 10, 9);
     n.homebody = n.hidden = true;

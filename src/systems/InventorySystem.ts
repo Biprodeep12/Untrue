@@ -210,6 +210,18 @@ export class Inventory {
     return s;
   }
 
+  /** Empties the bag and the hotbar (what dying in an outer dimension costs);
+   *  worn equipment stays. Returns how many items were lost. */
+  clearCarried(): number {
+    let lost = 0;
+    for (let i = 0; i < this.slots.length; i++) {
+      lost += this.slots[i]?.count ?? 0;
+      this.slots[i] = null;
+    }
+    this.version++;
+    return lost;
+  }
+
   /** Puts a stack back, keeping its durability; returns how many did not fit. */
   addStack(stack: Stack): number {
     if (stack.durability === undefined || stack.item.stack > 1) return this.add(stack.item, stack.count);

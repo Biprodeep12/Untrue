@@ -38,12 +38,6 @@ export class Npc {
   questId = '';
   /** In-game minute a travelling merchant packs up. */
   leaveAt = Infinity;
-  /** Sprite size; children are smaller. */
-  scale = 1;
-  /** A memory given a voice: translucent, casting no shadow. */
-  ghost = false;
-  /** Has no house to go to, so stays out at night (story characters). */
-  stayOut = false;
   /** Lives indoors: always at home behind its door, day and night. */
   homebody = false;
   /** In a conversation: stands still, facing the player. */
@@ -113,7 +107,7 @@ export class Npc {
       return;
     }
 
-    const night = !this.stayOut && (ctx.hour >= BEDTIME_HOUR || ctx.hour < MORNING_HOUR);
+    const night = ctx.hour >= BEDTIME_HOUR || ctx.hour < MORNING_HOUR;
     if (night) {
       if (this.hidden) return;
       // Walk to the doorstep below the door, then go in.

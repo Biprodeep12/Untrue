@@ -17,6 +17,8 @@ export interface EnemyContext {
   playerX: number;
   playerY: number;
   isSolid(gx: number, gy: number): boolean;
+  /** What stops flyers, which cross everything in the overworld; walls in a dimension. */
+  blocksFlyers?(gx: number, gy: number): boolean;
   /** Puts the rest of a pack on alert. */
   alert(group: number): void;
   hitPlayer(enemy: Enemy): void;
@@ -40,6 +42,10 @@ export class Enemy {
   /** What spawned it: a dungeon or arena object id, or a legendary spot. */
   tag = '';
   group = 0;
+  /** Multipliers on its species' speed and attack cooldown (a rift boss's
+   *  phases); the species itself is shared and never changed. */
+  speedScale = 1;
+  cooldownScale = 1;
   private stateTime = 0;
   private cooldown = 0;
   private wanderX = 0;
@@ -131,7 +137,7 @@ export class Enemy {
           break;
         }
         // Ranged attackers hold their distance while reloading.
-        if (dist > 0 && !(sp.ranged && dist <= sp.ranged.range * 0.6 && !inMelee)) this.step(dx / dist, dy / dist, sp.speed * dt, ctx);
+        if (dist > 0 && !(sp.ranged && dist <= sp.ranged.range * 0.6 && !inMelee)) this.step(dx / dist, dy / dist, sp.speed * this.speedScale * dt, ctx);
         this.face(dx);
         break;
       }
@@ -141,12 +147,12 @@ export class Enemy {
           this.swung = true;
           if (dist <= sp.attackRange + 0.4) ctx.hitPlayer(this);
           else if (sp.ranged && dist <= sp.ranged.range + 1) ctx.shoot(this, dx / dist, dy / dist);
-          this.cooldown = sp.attackCooldown;
+          this.cooldown = sp.attackCooldown * this.cooldownScale;
         }
         if (this.stateTime >= WINDUP + 0.2) this.enter('chase');
         break;
       case 'flee':
-        if (dist > 0) this.step(-dx / dist, -dy / dist, sp.speed * 1.1 * dt, ctx);
+        if (dist > 0) this.step(-dx / dist, -dy / dist, sp.speed * this.speedScale * 1.1 * dt, ctx);
         this.face(-dx);
         if (this.stateTime > FLEE_SECONDS) this.enter('patrol');
         break;
@@ -194,7 +200,10 @@ export class Enemy {
   }
 
   private blocked(x: number, y: number, ctx: EnemyContext): boolean {
-    if (this.species.flying) return false;
+    if (this.species.flying) {
+      const fly = ctx.blocksFlyers;
+      return !!fly && (fly(Math.floor(x), Math.floor(y - 0.2)) || fly(Math.floor(x), Math.floor(y - 0.01)));
+    }
     return (
       ctx.isSolid(Math.floor(x - ENEMY_HALF_W), Math.floor(y - 0.2)) ||
       ctx.isSolid(Math.floor(x + ENEMY_HALF_W), Math.floor(y - 0.2)) ||

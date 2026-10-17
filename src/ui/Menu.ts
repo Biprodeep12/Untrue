@@ -1,9 +1,8 @@
 // Main menu (spec 7.2): a full-screen wood panel with tabs for inventory,
-// crafting, skills, quests, the map, the lantern, settings and about.
+// crafting, skills, quests, the map (where maps work), settings and about.
 
 import { ACTION_LABELS, bindings, DEFAULT_KEYS, keyName, RESERVED_KEYS, type Action } from '../game/Keys';
 import type { Settings } from '../game/Settings';
-import type { Memory } from '../story/StorySystem';
 import { SPECIES } from '../entities/Species';
 import { ELEMENT_NAMES, itemById, Items, RARITY_NAMES, weightOf, type EquipSlot, type ItemDef } from '../items/Items';
 import { armorCell, Dir, playerCell } from '../rendering/Atlas';
@@ -12,9 +11,10 @@ import { hasInputs, RECIPES, STATION_NAMES, type Recipe, type Station } from '..
 import { HOTBAR_SIZE, INVENTORY_SIZE, type Inventory } from '../systems/InventorySystem';
 import { aboutView } from './About';
 import { itemIcon, slotContent } from './ItemIcon';
+import { DimensionMap, type DimensionMapSource } from './DimensionMap';
 import { MapView, type MapSource } from './MapView';
 
-type Tab = 'inventory' | 'crafting' | 'skills' | 'quests' | 'map' | 'lantern' | 'settings' | 'about';
+type Tab = 'inventory' | 'crafting' | 'skills' | 'quests' | 'map' | 'settings' | 'about';
 
 export interface QuestView {
   id: string;
@@ -41,9 +41,11 @@ export interface MenuActions {
   notify(text: string): void;
   quests(): QuestView[];
   abandon(id: string): void;
-  /** Places the world forgot and the lantern kept. */
-  memories(): readonly Memory[];
   map: MapSource;
+  /** Whether maps work where the player is; the Map tab hides when they don't. */
+  mapAvailable(): boolean;
+  /** The outer dimension the player is in, for its map; null in the overworld. */
+  dimensionMap(): DimensionMapSource | null;
   settings: Settings;
 }
 
@@ -79,6 +81,7 @@ export class Menu {
   isOpen = false;
   private tab: Tab = 'inventory';
   private mapView?: MapView;
+  private dimensionMap?: DimensionMap;
   private selected: number | null = null;
   private drawnVersion = -1;
   private readonly root: HTMLElement;
@@ -108,7 +111,6 @@ export class Menu {
       ['skills', 'Skills'],
       ['quests', 'Quests'],
       ['map', 'Map'],
-      ['lantern', 'Lantern'],
       ['settings', 'Settings'],
       ['about', 'About'],
     ] as const) {
@@ -133,9 +135,12 @@ export class Menu {
   }
 
   show(tab: Tab): void {
+    const map = this.actions.mapAvailable();
+    if (tab === 'map' && !map) tab = 'inventory';
     this.isOpen = true;
     this.tab = tab;
     this.root.classList.add('open');
+    this.tabs.get('map')!.hidden = !map;
     for (const [id, el] of this.tabs) el.classList.toggle('active', id === tab);
     this.drawnVersion = -1;
     this.render();
@@ -159,8 +164,10 @@ export class Menu {
       crafting: () => this.craftingView(),
       skills: () => this.skillsView(),
       quests: () => this.questsView(),
-      lantern: () => this.lanternView(),
-      map: () => (this.mapView ??= new MapView(this.actions.map)).show(),
+      map: () => {
+        const dim = this.actions.dimensionMap();
+        return dim ? (this.dimensionMap ??= new DimensionMap()).show(dim) : (this.mapView ??= new MapView(this.actions.map)).show();
+      },
       settings: () => this.settingsView(),
       about: aboutView,
     };
@@ -388,7 +395,7 @@ export class Menu {
     return wrap;
   }
 
-  /** Legendary creatures: a goal for the far lands, during the story and after. */
+  /** Legendary creatures: a goal for the far lands. */
   private legendsView(): HTMLElement {
     const box = document.createElement('div');
     box.className = 'legends';
@@ -400,25 +407,6 @@ export class Menu {
     const found = LEGENDS.filter((sp) => trophies[sp.id]).length;
     box.innerHTML = `<h4>Legends of the land (${found}/${LEGENDS.length})</h4><p class="hint">Rare and mighty, they roam further out, each in its own land. Arenas hold a guardian.</p><ul>${rows}</ul>`;
     return box;
-  }
-
-  private lanternView(): HTMLElement {
-    const wrap = document.createElement('div');
-    const memories = this.actions.memories();
-    wrap.innerHTML = `<p class="hint">The lantern remembers places the world has forgotten. Walk where they stood and its light will show them.</p>`;
-    if (!memories.length) {
-      wrap.insertAdjacentHTML('beforeend', '<p class="hint">Nothing yet. The world has not forgotten anything you found… so far.</p>');
-      return wrap;
-    }
-    for (const m of [...memories].reverse()) {
-      const row = document.createElement('div');
-      row.className = 'quest';
-      row.innerHTML = `<b></b> <span class="giver"></span>`;
-      row.querySelector('b')!.textContent = m.name;
-      row.querySelector('.giver')!.textContent = `at ${Math.round(m.x + m.w / 2)}, ${Math.round(m.y + m.h / 2)} · forgotten on day ${m.day}`;
-      wrap.appendChild(row);
-    }
-    return wrap;
   }
 
   private settingsView(): HTMLElement {

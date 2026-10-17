@@ -291,6 +291,14 @@ export class Hud {
     this.hurt.classList.add('on');
   }
 
+  /** A rift's glitch: the panels jump for a moment. Off with screen flashes. */
+  stutter(): void {
+    if (!this.flashes || this.root.classList.contains('hud-stutter')) return;
+    this.root.classList.add('hud-stutter');
+    // Taken off again, or every note shown later would stutter as it appears.
+    setTimeout(() => this.root.classList.remove('hud-stutter'), 200);
+  }
+
   setPrompt(text: string | null): void {
     // Set every frame: only touch the page when it changes.
     if (!this.changed('prompt', text ?? '')) return;

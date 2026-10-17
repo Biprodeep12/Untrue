@@ -35,8 +35,8 @@ Design plan for 2–4 player co-op over WebRTC data channels (no websocket game 
 - **Pure:** the worker's `generateChunk(fields, req)` (`src/generation/TerrainGenerator.ts`). Its result depends only on the `ChunkRequest` built by `WorldManager.buildRequest`: `{ cx, cy, worldSeed, visit, biomes[27] }`, where `biomes` holds the type, variant and seed of the 3×3 neighbour biomes. Interiors (`new Interior(object, index)`) are pure given the object. Height, rivers, trails, bridges and climate type are also seeded.
 - **Depends on the path taken** (the test in `src/world/WorldManager.test.ts` is literally "is repeatable for the same seed **and path**"):
   - (a) `BiomeManager.ensure` grows a biome from whichever chunk loads first. `isFree` skips chunks that already have an owner, and slivers below `MIN_BIOME_CHUNKS` merge into `mostTouching`. Borders, variant and biome seed therefore depend on load order, screen size and zoom (the cache rectangle), and that data feeds into `generateChunk`.
-  - (b) `RegionTracker.leave` raises `visit` when a region fully leaves *this peer's* cache, gated by `rules.regenChance`, which changes with the story ending.
-  - (c) `WorldManager.resolveAnchor` skips placements against live objects using `objects.collides` and `objects.crowded`. `rareBoost`, `lootedAnchors` and `clearedAnchors` are player state too.
+  - (b) `RegionTracker.leave` raises `visit` when a region fully leaves *this peer's* cache.
+  - (c) `WorldManager.resolveAnchor` skips placements against live objects using `objects.collides` and `objects.crowded`. `lootedAnchors` and `clearedAnchors` are player state too.
   - (d) `Math.sin`, `Math.cos`, `Math.hypot` and `**` are not bit-identical across JS engines (V8, SpiderMonkey, JSC). This affects desert ripples, biome growth, bridge scoring, spacing and distance bands, so tiles near thresholds can differ between a Chrome host and a Firefox or Safari guest.
   - Also sequence-dependent: the RNGs in `CombatSystem.rng`, `LivingWorld.rng` and `WorldEvents`, which fire in call order.
 
@@ -115,11 +115,11 @@ Server-side limits: 6-character room codes from a 32-letter alphabet (about 30 b
 
 | State | Module today | Owner in MP | How it reaches guests |
 | --- | --- | --- | --- |
-| Seed, `worldId`, `rules` (regenChance, rareBoost) | `WorldManager` | Host | `Welcome`. Guests don't need `rules`, since they never roll. |
+| Seed, `worldId` | `WorldManager` | Host | `Welcome` |
 | Biome records | `BiomeManager` | Host | `BiomeAdd {id, type, variant, seed, chunks}` (chunk keys as i16 deltas) and `BiomeDrop` |
 | Region visit counters | `RegionTracker` | Host, using the **union of every player's cache** | `RegionVisit {region, visit}` |
 | Base terrain | Workers | Host | `ChunkData {cx, cy, token, deflated bytes}` through `NetChunkGenerator` |
-| Objects: structures, events, story places; `opened`; `discovered` | `ObjectManager`, `WorldObject` | Host | `ObjectAdd` (the `SavedObject` shape in binary, layouts included), `ObjectRemove`, `ObjectOpened {id, index}` |
+| Objects: structures and events; `opened`; `discovered` | `ObjectManager`, `WorldObject` | Host | `ObjectAdd` (id, kind, name, position, layout with buildings, anchor, `opened` and `discovered`, in binary), `ObjectRemove`, `ObjectOpened {id, index}` |
 | Harvest log and regrowth | `WorldManager.harvested`, `regrow` | Host | `Harvested {key, cell, deco, at}`, `Regrown {key, cells}` |
 | Looted and cleared anchors | `WorldManager` | Host | `Anchor {kind, key}`. Only needed for UI; guests never roll. |
 | Ground items | `GroundItems` (module-level `nextId`) | Host, which assigns ids | `GroundAdd` and `GroundRemove`. Pickup is requested by the guest and granted by the host. |
@@ -132,7 +132,7 @@ Server-side limits: 6-character room codes from a 32-letter alphabet (about 30 b
 | NPCs and their schedules | `NpcSystem`, `Npc` (module-level ids) | Host, for villages in any sim area | `NpcSpawn {id, role, name seed, village, outfit}` once, plus `snap` state |
 | Trade | `TradeSystem` (stock seeded, no state) | Guest, locally | Nothing to sync; only the guest's inventory changes |
 | Quests | `QuestSystem` in `LivingWorld` | **Per player** (part of the character) | Offers are seeded by `offerKey`, so guests generate them locally. World side effects are requests: `StartInvasion`, `RescueTargets`. Kills come back as `KillCredit`. |
-| Story | `StorySystem` | **Host only** | Guests see the world consequences (objects added and removed). Story prompts and story NPCs say "This is <host>'s story". Shared visions can come later. |
+| Story (being rewritten) | The new story system | **Host only** | Guests see the world consequences (objects added and removed). Story prompts and story NPCs say "This is <host>'s story". Shared visions can come later. |
 | Player position and animation | `Player` | Each player for themselves; host checks | `PlayerState` on `snap` at 20 Hz |
 | Inventory, equipment, vitals, progression, Moonwells, respawn, exploration and markers | `Game`, `Inventory`, `Vitals`, `Progression`, `ExplorationSystem` | Each player (co-op trust) | Not replicated. Guests send only what the host needs: weapon id, damage bonus, skill ranks in requests, and the look of their armour in `PlayerState`. |
 | Interiors | `Interior` (pure from the object) | Built locally; chest and mining state lives in `object.opened` | `ObjectOpened`. Players are grouped by "space" (see 6.5). |
@@ -309,7 +309,7 @@ Trust model: friends' co-op, so preventing cheats is out of scope. The goal is t
   - **Rest vote:** a sleep skip happens only when every player is resting; otherwise "Waiting for others (1/3)". `Slept` plays `SleepOverlay` for everyone.
   - Story gated to the host.
   - Optional chat (`src/ui/Chat.ts`, log near `.hud-notes`, input on Enter/T; Input needs a typing guard; render with `textContent`).
-- **Modify:** `NpcSystem.ts`, `QuestSystem.ts`, `WorldEvents.ts`, `LivingWorld.ts`, `StorySystem.ts`, `Dialog.ts`.
+- **Modify:** `NpcSystem.ts`, `QuestSystem.ts`, `WorldEvents.ts`, `LivingWorld.ts`, the story system, `Dialog.ts`.
 - **Tests:** a guest's slay quest progresses from `KillCredit`; a rescue escort for a guest; rest vote timeouts.
 
 ### Phase 5: polish
@@ -331,7 +331,7 @@ Trust model: friends' co-op, so preventing cheats is out of scope. The goal is t
 - **Host CPU:** up to 4 sim areas, plus chunk generation for 4 render areas on 1–3 workers. Phones may not keep up.
 - **Version skew:** Vercel deploys mid-session mean an exact build match is required. Show the reload message clearly.
 - **Cost and terms:** Vercel Hobby is non-commercial only; KV and TURN free tiers have limits.
-- **Story conflicts:** the host's ending changes `world.rules` and removes places while guests are present. Acceptable, since it is the host's world.
+- **Story conflicts:** the host's story may add or remove places while guests are present. Acceptable, since it is the host's world.
 - **Item duplication:** guests own their inventory. Accepted for co-op; document it.
 - **Phase 0 scope:** `Game.ts` (~1,500 lines) and `LivingWorld.ts` mix simulation, UI and rendering. The P0-9 and P0-11 splits are the largest and riskiest part. Do them in small steps with tests at each one.
 - **Safari:** confirm data-channel behaviour and `CompressionStream` support (Safari 16.4+) early.

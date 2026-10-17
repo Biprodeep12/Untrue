@@ -4,7 +4,7 @@
 import { BiomeType } from '../generation/Tiles';
 import { Items, type Element, type ItemDef } from '../items/Items';
 
-export type ProjectileKind = 'arrow' | 'web' | 'ice' | 'boulder';
+export type ProjectileKind = 'arrow' | 'web' | 'ice' | 'boulder' | 'shard';
 
 export interface Species {
   id: string;
@@ -216,6 +216,24 @@ export const SPECIES = {
     hp: 48, damage: 11, speed: 3.9, aggroRange: 7, attackRange: 1, attackCooldown: 1.6, xp: 20,
     drops: [[Items.silk, 2, 3, 1], [Items.venom, 1, 1, 0.6]], inflicts: { kind: 'poison', seconds: 4 },
     ranged: { kind: 'web', range: 5, speed: 7 }, resist: ['venom'], weak: ['frost'], art: 'spider', tint: 0x8ac860, size: 1.25,
+  }),
+  // Rift creatures: met only inside the outer dimensions (src/dimension) ----
+  glitchling: s({
+    id: 'glitchling', name: 'Glitchling', biomes: [], spawnWeight: 0,
+    hp: 26, damage: 7, speed: 5.2, aggroRange: 14, attackRange: 0.9, attackCooldown: 0.9, xp: 14,
+    drops: [[Items.spiritEssence, 1, 1, 0.3], [Items.crystal, 1, 1, 0.05]], weak: ['spirit'], resist: ['venom'],
+  }),
+  shardWisp: s({
+    id: 'shard-wisp', name: 'Shard Wisp', biomes: [], spawnWeight: 0,
+    hp: 22, damage: 9, speed: 3.2, aggroRange: 14, attackRange: 0.8, attackCooldown: 1.8, xp: 18,
+    drops: [[Items.crystal, 1, 1, 0.12], [Items.spiritEssence, 1, 1, 0.3]],
+    ranged: { kind: 'shard', range: 7, speed: 8 }, flying: true, weak: ['spirit'], resist: ['frost', 'venom'],
+  }),
+  riftWarden: s({
+    id: 'rift-warden', name: 'The Rift Warden', biomes: [], spawnWeight: 0,
+    hp: 700, damage: 26, speed: 2.8, aggroRange: 18, attackRange: 1.7, attackCooldown: 1.5, xp: 500,
+    drops: [[Items.crystal, 2, 3, 1], [Items.gem, 1, 1, 1], [Items.starMetal, 1, 2, 1]],
+    ranged: { kind: 'shard', range: 8, speed: 8 }, boss: true, weak: ['spirit'], resist: ['venom'],
   }),
 } as const;
 

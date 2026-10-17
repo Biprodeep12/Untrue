@@ -44,7 +44,7 @@ describe('buildings', () => {
 describe('interiors', () => {
   const house = () => {
     const layout = build('house', 11);
-    return new WorldObject('house@test', 'house', 'Small House', 'temporary', 100, 200, layout);
+    return new WorldObject('house@test', 'house', 'Small House', 100, 200, layout);
   };
 
   it('can be walked into and out of', () => {
@@ -106,7 +106,7 @@ describe('saves keep the world as it was', () => {
 describe('castles', () => {
   const keepOf = (seed: number) => {
     const layout = build('castle', seed);
-    const o = new WorldObject(`castle@${seed}`, 'castle', 'Castle', 'temporary', 0, 0, layout);
+    const o = new WorldObject(`castle@${seed}`, 'castle', 'Castle', 0, 0, layout);
     return { o, layout, index: layout.buildings.findIndex((b) => b.style === 'keep') };
   };
 
@@ -149,29 +149,26 @@ describe('castles', () => {
 });
 
 describe('discovered places', () => {
-  it('stay on the map after a reload, and are not discovered twice', () => {
+  it('are announced once while loaded, and forgotten with their chunks', () => {
     const world = new WorldManager(1234, new SyncGenerator());
     let x = 0;
     let found: WorldObject | undefined;
     for (; x < 3000 && !found; x += 32) {
       world.update(view(x, 0));
-      found = [...world.objects.objects.values()].find((o) => o.persistence === 'temporary');
+      found = [...world.objects.objects.values()].find((o) => !o.discovered);
     }
     expect(found).toBeDefined();
     const o = found!;
-    o.discovered = true;
-    world.know(o);
-    const data = snapshot(world, { x, y: 0, inventory: [], vitals: null, progression: null });
-    expect(data.known!.map((p) => p.id)).toContain(o.id);
-
-    const fresh = new WorldManager(1234, new SyncGenerator());
-    restore(fresh, data);
-    expect(fresh.known.has(o.id)).toBe(true);
     let announced = 0;
-    fresh.onDiscover = () => announced++;
-    fresh.update(view(o.x + o.w / 2, o.y + o.h / 2));
-    const again = fresh.objects.objects.get(o.id);
-    expect(again?.discovered).toBe(true);
-    expect(announced).toBe(0);
+    world.onDiscover = () => announced++;
+    const inside = view(o.x + o.w / 2, o.y + o.h / 2);
+    world.update(inside);
+    world.update(inside);
+    expect(o.discovered).toBe(true);
+    expect(announced).toBe(1);
+    // Every structure forgets: once its chunks unload, it is gone, and nothing of it is saved.
+    world.update(view(o.x + 30000, 0));
+    expect(world.objects.objects.has(o.id)).toBe(false);
+    expect(snapshot(world, { x, y: 0, inventory: [], vitals: null, progression: null })).not.toHaveProperty('objects');
   });
 });

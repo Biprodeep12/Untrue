@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html" class="current" aria-current="page">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html" class="current" aria-current="page">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Engine</p>
     <article><h1 id="world-generation">World generation</h1>
@@ -222,7 +222,7 @@
 <li>Chunks that unload while other chunks of their region are still cached regenerate identically, so nothing changes under the player&#39;s feet.</li>
 </ul>
 <p>Rivers, mountains and climate use only the seed, so landforms stay put while the biomes, plants and structures on them change.</p>
-<p>The story&#39;s endings change <code>WorldManager.rules.regenChance</code>: the visit counter only rises if <code>unit(hash(seed, region, visit, 0x4e9)) &lt; regenChance</code>. At the default of 1, every region regenerates; after the Remembered World ending it is 0.25.</p>
+<p>Every region that fully unloads regenerates: its visit counter always rises.</p>
 <h2 id="world-scale-rules">World-scale rules<a class="anchor" href="#world-scale-rules" aria-label="Link to this section">#</a></h2>
 <p><code>src/generation/WorldRules.ts</code> sets difficulty by straight-line distance from the origin, in tiles:</p>
 <div class="table-wrap"><table>

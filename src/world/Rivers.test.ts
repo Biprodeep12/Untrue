@@ -128,7 +128,7 @@ describe('the spawn', () => {
 describe('mines', () => {
   const mine = () => {
     const layout = STRUCTURES.find((d) => d.kind === 'mine')!.build({ rng: new Rng(5), palette: 0, biome: BiomeType.Forest });
-    return new WorldObject('mine@test', 'mine', 'Mine', 'temporary', 40, 80, layout);
+    return new WorldObject('mine@test', 'mine', 'Mine', 40, 80, layout);
   };
 
   it('have an entrance into a cave of ore', () => {

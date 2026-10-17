@@ -11,8 +11,6 @@ import { difficultyBand, distanceFromOrigin } from './WorldRules';
 export const Rarity = { Common: 0, Uncommon: 1, Rare: 2, ExtremelyRare: 3 } as const;
 export type Rarity = (typeof Rarity)[keyof typeof Rarity];
 
-export type Persistence = 'temporary' | 'semi-persistent' | 'persistent';
-
 export type BuildingStyle = 'house' | 'cabin' | 'stone' | 'keep' | 'city' | 'mine';
 
 /** A building drawn as one sprite over a solid footprint, with a door to enter. */
@@ -156,7 +154,6 @@ export interface StructureDef {
   flatGround: boolean;
   /** Free rotation. Buildings only mirror so their fronts face the camera. */
   rotate: boolean;
-  persistence: Persistence;
   build(ctx: BuildContext): Layout;
 }
 
@@ -739,6 +736,16 @@ function standingStones({ rng }: BuildContext, crystal: boolean): Layout {
   return l;
 }
 
+/** A rift: a tear in the air over a patch of scorched ground. Small, so it
+ *  fits nearly anywhere; the tear stands in the middle, open ground below it. */
+export function rift({ rng }: BuildContext): Layout {
+  const l = new Layout(7, 7);
+  l.clearDecos(0, 0, 7, 7);
+  l.disc(3, 3, rng.range(1.8, 2.6), Tile.RiftGround);
+  l.deco(3, 3, Deco.Rift);
+  return l;
+}
+
 /** Natural lake: overlapping lobes with a noise-warped edge, smoothed, depth
  *  from distance to the shore, and a thin, patchy beach. */
 function lake(ctx: BuildContext): Layout {
@@ -894,42 +901,42 @@ function cropped(l: Layout): Layout {
 
 const FOREST_SNOW: readonly BiomeType[] = [BiomeType.Forest, BiomeType.Snow];
 
-const def = (d: Omit<StructureDef, 'persistence'> & { persistence?: Persistence }): StructureDef => ({
-  persistence: 'temporary',
-  ...d,
-});
-
 export const STRUCTURES: readonly StructureDef[] = [
-  def({ kind: 'camp', name: 'Camp', rarity: Rarity.Common, weight: 3, minDistance: 0, spacing: 60, flatGround: true, rotate: true, build: camp }),
-  def({ kind: 'house', name: 'Small House', rarity: Rarity.Common, weight: 3, minDistance: 0, spacing: 40, flatGround: true, rotate: false, build: house }),
-  def({ kind: 'deposit', name: 'Ore Deposit', rarity: Rarity.Common, weight: 2, minDistance: 0, spacing: 30, flatGround: false, rotate: true, build: deposit }),
-  def({ kind: 'ruins', name: 'Ruins', rarity: Rarity.Uncommon, weight: 3, minDistance: 0, spacing: 100, flatGround: true, rotate: true, build: ruins }),
-  def({ kind: 'tower', name: 'Tower', rarity: Rarity.Uncommon, weight: 2, minDistance: 0, spacing: 150, flatGround: true, rotate: false, build: tower }),
-  def({ kind: 'cabin', name: 'Cabin', rarity: Rarity.Uncommon, weight: 2, biomes: FOREST_SNOW, minDistance: 0, spacing: 100, flatGround: true, rotate: false, build: cabin }),
-  def({ kind: 'abandoned-camp', name: 'Abandoned Camp', rarity: Rarity.Uncommon, weight: 2, minDistance: 0, spacing: 80, flatGround: true, rotate: true, build: abandonedCamp }),
-  def({ kind: 'nomad-camp', name: 'Nomad Camp', rarity: Rarity.Uncommon, weight: 3, biomes: [BiomeType.Desert], minDistance: 120, spacing: 260, flatGround: true, rotate: false, persistence: 'semi-persistent', build: nomadCamp }),
-  def({ kind: 'mine', name: 'Mine', rarity: Rarity.Uncommon, weight: 1, minDistance: 0, spacing: 150, flatGround: false, rotate: false, persistence: 'semi-persistent', build: mine }),
-  def({ kind: 'village', name: 'Village', rarity: Rarity.Rare, weight: 3, biomes: FOREST_SNOW, minDistance: 150, spacing: 500, flatGround: true, rotate: false, persistence: 'semi-persistent', build: village }),
-  def({ kind: 'temple', name: 'Temple', rarity: Rarity.Rare, weight: 2, minDistance: 300, spacing: 400, flatGround: true, rotate: false, build: (c) => temple(c, [20, 28], false) }),
-  def({ kind: 'castle', name: 'Castle', rarity: Rarity.Rare, weight: 2, biomes: FOREST_SNOW, minDistance: 400, spacing: 800, flatGround: true, rotate: false, persistence: 'semi-persistent', build: castle }),
-  def({ kind: 'dungeon', name: 'Dungeon', rarity: Rarity.Rare, weight: 2, minDistance: 250, spacing: 300, flatGround: false, rotate: true, build: dungeon }),
-  def({ kind: 'giant-city', name: 'Giant City', rarity: Rarity.ExtremelyRare, weight: 2, minDistance: 2500, spacing: 3000, flatGround: true, rotate: false, persistence: 'persistent', build: (c) => city(c, false) }),
-  def({ kind: 'sun-temple', name: 'Sun Temple', rarity: Rarity.ExtremelyRare, weight: 1, biomes: [BiomeType.Desert], minDistance: 2500, spacing: 3000, flatGround: true, rotate: false, persistence: 'persistent', build: (c) => temple(c, [32, 40], true) }),
-  def({ kind: 'boss-arena', name: 'Boss Arena', rarity: Rarity.ExtremelyRare, weight: 2, minDistance: 2500, spacing: 3000, flatGround: true, rotate: true, persistence: 'persistent', build: bossArena }),
-  def({ kind: 'standing-stones', name: 'Standing Stones', rarity: Rarity.ExtremelyRare, weight: 2, minDistance: 2500, spacing: 3000, flatGround: false, rotate: true, persistence: 'persistent', build: (c) => standingStones(c, false) }),
+  { kind: 'camp', name: 'Camp', rarity: Rarity.Common, weight: 3, minDistance: 0, spacing: 60, flatGround: true, rotate: true, build: camp },
+  { kind: 'house', name: 'Small House', rarity: Rarity.Common, weight: 3, minDistance: 0, spacing: 40, flatGround: true, rotate: false, build: house },
+  { kind: 'deposit', name: 'Ore Deposit', rarity: Rarity.Common, weight: 2, minDistance: 0, spacing: 30, flatGround: false, rotate: true, build: deposit },
+  { kind: 'ruins', name: 'Ruins', rarity: Rarity.Uncommon, weight: 3, minDistance: 0, spacing: 100, flatGround: true, rotate: true, build: ruins },
+  { kind: 'tower', name: 'Tower', rarity: Rarity.Uncommon, weight: 2, minDistance: 0, spacing: 150, flatGround: true, rotate: false, build: tower },
+  { kind: 'cabin', name: 'Cabin', rarity: Rarity.Uncommon, weight: 2, biomes: FOREST_SNOW, minDistance: 0, spacing: 100, flatGround: true, rotate: false, build: cabin },
+  { kind: 'abandoned-camp', name: 'Abandoned Camp', rarity: Rarity.Uncommon, weight: 2, minDistance: 0, spacing: 80, flatGround: true, rotate: true, build: abandonedCamp },
+  { kind: 'nomad-camp', name: 'Nomad Camp', rarity: Rarity.Uncommon, weight: 3, biomes: [BiomeType.Desert], minDistance: 120, spacing: 260, flatGround: true, rotate: false, build: nomadCamp },
+  { kind: 'mine', name: 'Mine', rarity: Rarity.Uncommon, weight: 1, minDistance: 0, spacing: 150, flatGround: false, rotate: false, build: mine },
+  { kind: 'village', name: 'Village', rarity: Rarity.Rare, weight: 3, biomes: FOREST_SNOW, minDistance: 150, spacing: 500, flatGround: true, rotate: false, build: village },
+  { kind: 'temple', name: 'Temple', rarity: Rarity.Rare, weight: 2, minDistance: 300, spacing: 400, flatGround: true, rotate: false, build: (c) => temple(c, [20, 28], false) },
+  { kind: 'castle', name: 'Castle', rarity: Rarity.Rare, weight: 2, biomes: FOREST_SNOW, minDistance: 400, spacing: 800, flatGround: true, rotate: false, build: castle },
+  { kind: 'dungeon', name: 'Dungeon', rarity: Rarity.Rare, weight: 2, minDistance: 250, spacing: 300, flatGround: false, rotate: true, build: dungeon },
+  { kind: 'giant-city', name: 'Giant City', rarity: Rarity.ExtremelyRare, weight: 2, minDistance: 2500, spacing: 3000, flatGround: true, rotate: false, build: (c) => city(c, false) },
+  { kind: 'sun-temple', name: 'Sun Temple', rarity: Rarity.ExtremelyRare, weight: 1, biomes: [BiomeType.Desert], minDistance: 2500, spacing: 3000, flatGround: true, rotate: false, build: (c) => temple(c, [32, 40], true) },
+  { kind: 'boss-arena', name: 'Boss Arena', rarity: Rarity.ExtremelyRare, weight: 2, minDistance: 2500, spacing: 3000, flatGround: true, rotate: true, build: bossArena },
+  { kind: 'standing-stones', name: 'Standing Stones', rarity: Rarity.ExtremelyRare, weight: 2, minDistance: 2500, spacing: 3000, flatGround: false, rotate: true, build: (c) => standingStones(c, false) },
 ];
 
 /** Very low odds rolled per anchor chunk, independent of the structure roll (spec 3.6).
  *  The legendary creature waits for the enemy system. */
 export const RARE_EVENTS: ReadonlyArray<{ chance: number; def: StructureDef }> = [
-  { chance: 0.001, def: def({ kind: 'ancient-temple', name: 'Ancient Temple', rarity: Rarity.ExtremelyRare, weight: 0, minDistance: 0, spacing: 0, flatGround: false, rotate: false, persistence: 'persistent', build: (c) => temple(c, [30, 38], true) }) },
-  { chance: 0.0001, def: def({ kind: 'lost-city', name: 'Lost City', rarity: Rarity.ExtremelyRare, weight: 0, minDistance: 0, spacing: 0, flatGround: false, rotate: false, persistence: 'persistent', build: (c) => city(c, true) }) },
-  { chance: 0.00001, def: def({ kind: 'crystal-monolith', name: 'Crystal Monolith', rarity: Rarity.ExtremelyRare, weight: 0, minDistance: 0, spacing: 0, flatGround: false, rotate: true, persistence: 'persistent', build: (c) => standingStones(c, true) }) },
+  { chance: 0.001, def: { kind: 'ancient-temple', name: 'Ancient Temple', rarity: Rarity.ExtremelyRare, weight: 0, minDistance: 0, spacing: 0, flatGround: false, rotate: false, build: (c) => temple(c, [30, 38], true) } },
+  { chance: 0.0001, def: { kind: 'lost-city', name: 'Lost City', rarity: Rarity.ExtremelyRare, weight: 0, minDistance: 0, spacing: 0, flatGround: false, rotate: false, build: (c) => city(c, true) } },
+  { chance: 0.00001, def: { kind: 'crystal-monolith', name: 'Crystal Monolith', rarity: Rarity.ExtremelyRare, weight: 0, minDistance: 0, spacing: 0, flatGround: false, rotate: true, build: (c) => standingStones(c, true) } },
 ];
 
-const LAKE: StructureDef = def({ kind: 'lake', name: 'Lake', rarity: Rarity.Common, weight: 0, minDistance: 0, spacing: 0, flatGround: true, rotate: true, build: lake });
+const LAKE: StructureDef = { kind: 'lake', name: 'Lake', rarity: Rarity.Common, weight: 0, minDistance: 0, spacing: 0, flatGround: true, rotate: true, build: lake };
 const LAKE_CHANCE: Record<BiomeType, number> = { [BiomeType.Forest]: 0.06, [BiomeType.Desert]: 0.025, [BiomeType.Snow]: 0.05 };
 const LAKE_NAMES: Record<BiomeType, string> = { [BiomeType.Forest]: 'Lake', [BiomeType.Desert]: 'Oasis', [BiomeType.Snow]: 'Frozen Lake' };
+
+/** Rifts are rolled on their own, rarely near home and more often further
+ *  out, by difficulty band. None open within `minDistance` of the origin. */
+export const RIFT: StructureDef = { kind: 'rift', name: 'Rift', rarity: Rarity.Rare, weight: 0, minDistance: 96, spacing: 160, flatGround: true, rotate: false, build: rift };
+const RIFT_CHANCE = [0.014, 0.02, 0.028, 0.036];
 
 const STRUCTURE_CHANCE = 0.22;
 const TIER_WEIGHTS = [70, 22, 6, 1];
@@ -946,8 +953,6 @@ export interface RollContext {
   biome: BiomeType;
   palette: number;
   fields: TerrainFields;
-  /** Multiplies the odds of rare events and extremely rare structures. */
-  rareBoost?: number;
 }
 
 /** Everything anchored in one chunk for this visit. Placements may overlap
@@ -960,8 +965,7 @@ export function rollAnchor(ctx: RollContext): Placement[] {
   const distance = distanceFromOrigin(centreX, centreY);
 
   const events = streamRng(Stream.RareEvent, worldSeed, cx, cy, visit);
-  const boost = ctx.rareBoost ?? 1;
-  const event = RARE_EVENTS.find((e) => events.next() < e.chance * boost);
+  const event = RARE_EVENTS.find((e) => events.next() < e.chance);
   if (event) {
     const p = place(ctx, event.def, 'event', streamRng(Stream.Layout, worldSeed, cx, cy, visit, 0));
     if (p) out.push(p);
@@ -974,12 +978,19 @@ export function rollAnchor(ctx: RollContext): Placement[] {
       (d) => d.minDistance <= distance && (!d.biomes || d.biomes.includes(ctx.biome)),
     );
     const tiers = [0, 1, 2, 3].filter((t) => candidates.some((d) => d.rarity === t));
-    const tier = rng.weighted(tiers, (t) => TIER_WEIGHTS[t] * (1 + TIER_GROWTH[t] * band) * (t === Rarity.ExtremelyRare ? boost : 1));
+    const tier = rng.weighted(tiers, (t) => TIER_WEIGHTS[t] * (1 + TIER_GROWTH[t] * band));
     const chosen = rng.weighted(candidates.filter((d) => d.rarity === tier), (d) => d.weight);
     if (chosen) {
       const p = place(ctx, chosen, 'structure', streamRng(Stream.Layout, worldSeed, cx, cy, visit, 1));
       if (p) out.push(p);
     }
+  }
+
+  // A new visit (the region regenerated) rolls a new rift with a new id.
+  const rifts = streamRng(Stream.RareEvent, worldSeed, cx, cy, visit, 0x41f7);
+  if (distance >= RIFT.minDistance && rifts.chance(RIFT_CHANCE[difficultyBand(centreX, centreY)])) {
+    const p = place(ctx, RIFT, 'rift', streamRng(Stream.Layout, worldSeed, cx, cy, visit, 3));
+    if (p) out.push(p);
   }
 
   const lakes = streamRng(Stream.Lake, worldSeed, cx, cy, visit);

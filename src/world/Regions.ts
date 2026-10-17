@@ -23,13 +23,12 @@ export class RegionTracker {
     else this.regions.set(key, { active: 1, visit: 0 });
   }
 
-  /** `renew` decides whether a region that fully unloads regenerates next time. */
-  leave(cx: number, cy: number, renew: (region: number, visit: number) => boolean = () => true): void {
-    const key = regionKey(cx, cy);
-    const r = this.regions.get(key);
+  /** A region that fully unloads regenerates next time. */
+  leave(cx: number, cy: number): void {
+    const r = this.regions.get(regionKey(cx, cy));
     if (!r) return;
     r.active--;
-    if (r.active === 0 && renew(key, r.visit)) r.visit++;
+    if (r.active === 0) r.visit++;
   }
 
   get size(): number {

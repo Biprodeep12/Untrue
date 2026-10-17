@@ -8,6 +8,7 @@
 //            outfit 0), direction * 4 + frame across
 //   items:   16 x 16 icons from ITEM_Y, indexed by item icon
 //   creatures and projectiles: shelf-packed frames from CREATURE_Y
+//   dimensions: 16 x 16 tile cells from DIM_Y, then shelf-packed props
 
 import { Rng } from '../generation/Random';
 import { Deco, DECO_COUNT, PALETTE_COUNT, Tile, TILE_COUNT } from '../generation/Tiles';
@@ -44,6 +45,8 @@ const DECO_SIZES: Partial<Record<number, [number, number]>> = {
   [Deco.StairsUp]: [16, 32],
   [Deco.StairsDown]: [16, 20],
   [Deco.Footprint]: [1, 1],
+  [Deco.Rift]: [32, 48],
+  [Deco.RiftScar]: [16, 16],
 };
 
 export interface Frame {
@@ -519,6 +522,21 @@ function paintShared(p: Painter, id: number, rng: Rng, variant: number): void {
       p.rect(0, 0, 1, 16, 0x2f2a36);
       p.speckle(rng, 6, 0x4d4656);
       break;
+    case Tile.RiftGround: {
+      // Scorched earth, cracked by faintly glowing violet veins.
+      p.rect(0, 0, 16, 16, 0x6e5f5c);
+      p.speckle(rng, 12, 0x5c4e4e);
+      p.speckle(rng, 8, 0x80716c);
+      if (variant % 2) {
+        let x = rng.int(3, 12);
+        for (let y = rng.int(0, 6), n = rng.int(5, 9); n > 0 && y < 16; y++, n--) {
+          x = Math.max(0, Math.min(15, x + rng.int(-1, 1)));
+          p.set(x, y, n % 3 ? 0x8a6ab0 : 0xb07aff);
+        }
+      }
+      if (variant === 2) p.set(rng.int(2, 13), rng.int(2, 13), 0x5af0e8, 200);
+      break;
+    }
     case Tile.Cave:
       p.rect(0, 0, 16, 16, 0x6c645b);
       p.ellipse(7.5, 9, 7, 6, 0x1c1714);
@@ -1259,6 +1277,17 @@ function paintDeco(p: Painter, id: number, rng: Rng): void {
       p.set(6, 23, 0xffd27a);
       p.outline(0x1a1420);
       break;
+    case Deco.Rift:
+      // Frame 0 of the tear; TileRenderer swaps in the others (`riftFrame`).
+      riftTear(p, 0);
+      break;
+    case Deco.RiftScar:
+      // A closed rift: a faint, cold scar on the ground.
+      p.ellipse(8, 11, 6, 2.5, 0x2a1e38, 120);
+      for (let k = -4; k <= 4; k++) p.set(8 + k, 11 + (k % 2), k % 3 ? 0x6a4a98 : 0x8a74a0, 200);
+      p.set(5, 9, 0x5af0e8, 160);
+      p.set(11, 13, 0x5af0e8, 120);
+      break;
     case Deco.ChestOpen:
       p.shadow(8, 30, 6, 1.5);
       p.rect(2, 21, 12, 9, 0x8a5a2b);
@@ -1408,6 +1437,21 @@ function paintItem(p: Painter, icon: number): void {
       p.ellipse(13, 8, 1.5, 4, 0x3a6aa8);
       p.rect(7, 4, 1, 8, 0xc8402c);
       break;
+    case Items.riftShard.icon:
+      for (let y = 0; y < 12; y++) {
+        const half = y < 5 ? y * 0.7 : (11 - y) * 0.55;
+        p.rect(Math.round(8 - half), 2 + y, Math.max(1, Math.round(half * 2)), 1, y < 5 ? 0x9ff8f2 : 0x3ac8d8);
+      }
+      p.set(7, 5, 0xffffff);
+      p.set(4, 8, 0xff6ab8, 220);
+      p.set(11, 10, 0xb07aff, 220);
+      break;
+    case Items.riftTonic.icon:
+      p.rect(7, 2, 2, 3, 0xc9c0b0);
+      p.ellipse(8, 10, 5, 4.5, 0x8a5ac8);
+      p.ellipse(8, 10.5, 2, 2, 0x5af0e8);
+      p.ellipse(6.5, 8.5, 1.5, 1.5, 0xe8d0ff);
+      break;
     case Items.frostDraught.icon:
       p.rect(7, 2, 2, 3, 0xc9c0b0);
       p.ellipse(8, 10, 5, 4.5, 0x7fc8e8);
@@ -1446,7 +1490,8 @@ function paintItem(p: Painter, icon: number): void {
     case Items.starSword.icon:
     case Items.frostBlade.icon:
     case Items.venomBlade.icon:
-    case Items.spiritBlade.icon: {
+    case Items.spiritBlade.icon:
+    case Items.riftBlade.icon: {
       const blades: Record<number, RGB> = {
         [Items.woodenSword.icon]: 0xb8864e,
         [Items.ironSword.icon]: 0xd0d0dc,
@@ -1454,6 +1499,7 @@ function paintItem(p: Painter, icon: number): void {
         [Items.frostBlade.icon]: 0x9fdcf8,
         [Items.venomBlade.icon]: 0x8ad05a,
         [Items.spiritBlade.icon]: 0xe8f4ff,
+        [Items.riftBlade.icon]: 0x9a7aff,
       };
       const blade = blades[icon];
       for (let k = 0; k < 9; k++) p.rect(5 + k, 10 - k, 2, 2, blade);
@@ -1461,6 +1507,11 @@ function paintItem(p: Painter, icon: number): void {
       p.rect(3, 10, 5, 2, 0x6b4a2b);
       p.rect(2, 12, 2, 2, 0x5a3a22);
       p.rect(4, 8, 2, 5, 0x8a6a42);
+      // Rift shards set along the blade, fringed with a glitch.
+      if (icon === Items.riftBlade.icon) {
+        for (const k of [2, 5, 8]) p.set(6 + k, 10 - k, 0x5af0e8);
+        p.set(12, 2, 0xff6ab8);
+      }
       break;
     }
     case Items.bow.icon:
@@ -1932,10 +1983,19 @@ function projectile(p: Painter, kind: number): void {
       p.ellipse(7, 7, 2.5, 2, 0xa9a196);
       p.outline(0x2a2620);
       break;
+    case 4: // rift shard
+      p.ellipse(8, 8, 5, 5, RIFT.violet, 70);
+      for (let y = 0; y < 9; y++) {
+        const half = y < 4 ? y * 0.8 : (8 - y) * 0.8;
+        p.rect(Math.round(8 - half), 4 + y, Math.max(1, Math.round(half * 2)), 1, y < 4 ? RIFT.cyanLt : RIFT.cyan);
+      }
+      p.set(7, 6, 0xffffff);
+      p.outline(RIFT.ink);
+      break;
   }
 }
 
-export const PROJECTILE_KINDS = ['arrow', 'web', 'ice', 'boulder'] as const;
+export const PROJECTILE_KINDS = ['arrow', 'web', 'ice', 'boulder', 'shard'] as const;
 
 /** Frame keys: `<species>:<frame>`, `lurker:buried`, `projectile:<kind>`. */
 const CREATURE_FRAMES: Array<[string, number, number, (p: Painter) => void]> = [
@@ -1958,6 +2018,11 @@ const CREATURE_FRAMES: Array<[string, number, number, (p: Painter) => void]> = [
     [`goat:${f}`, 24, 22, (p) => goat(p, f)],
   ]),
   ['lurker:buried', 24, 20, (p) => lurker(p, 0, true)],
+  ...[0, 1].flatMap((f): Array<[string, number, number, (p: Painter) => void]> => [
+    [`glitchling:${f}`, 20, 16, (p) => glitchling(p, f)],
+    [`shard-wisp:${f}`, 16, 24, (p) => shardWisp(p, f)],
+    [`rift-warden:${f}`, 40, 48, (p) => riftWarden(p, f)],
+  ]),
   ...PROJECTILE_KINDS.map((k, i): [string, number, number, (p: Painter) => void] => [`projectile:${k}`, 16, 16, (p) => projectile(p, i)]),
 ];
 
@@ -1970,7 +2035,482 @@ const CREATURE_INDEX = new Map(CREATURE_FRAMES.map(([key], i) => [key, i]));
  *  frame) per set and part. Parts: 0 head, 1 chest, 2 legs, 3 feet. */
 const ARMOR_Y = CREATURE_Y + CREATURES.height;
 export const ARMOR_PARTS = 4;
-export const ATLAS_H = ARMOR_Y + ARMOR_SETS * ARMOR_PARTS * 32;
+// ---------------------------------------------------------------------------
+// Rift creatures and the outer dimensions: the same warm pixel art, washed in
+// violet and cyan, with glitchy colour fringes.
+
+const RIFT = {
+  void: 0x120a24,
+  nebula: 0x2a1450,
+  star: 0x6a4aa8,
+  stone: 0x6e5c80,
+  stoneLt: 0x8c78a2,
+  stoneDk: 0x4e3e60,
+  mortar: 0x3a2c4a,
+  wall: 0x584870,
+  violet: 0xb07aff,
+  violetDk: 0x6a3aa8,
+  cyan: 0x3ac8d8,
+  cyanLt: 0x9ff8f2,
+  cyanDk: 0x2a8aa8,
+  pink: 0xff6ab8,
+  gold: 0xf2c96a,
+  ink: 0x1a1030,
+};
+
+/** Five-by-five glyphs for plates and mural stones. */
+const GLYPHS = [
+  ['.###.', '#...#', '#...#', '#...#', '.###.'], // ring
+  ['..#..', '.#.#.', '.#.#.', '#...#', '#####'], // triangle
+  ['#...#', '.#.#.', '..#..', '.#.#.', '#...#'], // cross
+  ['..#..', '.#.#.', '#...#', '.#.#.', '..#..'], // diamond
+  ['.##..', '#....', '#....', '#....', '.##..'], // moon
+  ['#.#.#', '.###.', '#####', '.###.', '#.#.#'], // star
+];
+
+function glyph(p: Painter, g: number, x0: number, y0: number, c: RGB, a = 255): void {
+  GLYPHS[g % GLYPHS.length].forEach((row, y) => {
+    for (let x = 0; x < 5; x++) if (row[x] === '#') p.set(x0 + x, y0 + y, c, a);
+  });
+}
+
+/** A soft glow around the opaque pixels of a glyph. */
+function glyphGlow(p: Painter, g: number, x0: number, y0: number, c: RGB): void {
+  GLYPHS[g % GLYPHS.length].forEach((row, y) => {
+    for (let x = 0; x < 5; x++) {
+      if (row[x] !== '#') continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) p.set(x0 + x + dx, y0 + y + dy, c, 70);
+    }
+  });
+}
+
+function glitchling(p: Painter, f: number): void {
+  const hop = f === 1 ? 1 : 0;
+  p.ellipse(10, 15, 7, 1.2, 0x000000, 60);
+  legs(p, [5, 8, 12, 15], 11, 15, 1, 0x4a2a80, f);
+  p.ellipse(9, 9 - hop, 6, 3.6, 0x7a4ab8);
+  p.ellipse(8.5, 7.5 - hop, 5, 1.6, 0x9a6ad8);
+  p.rect(5, 11 - hop, 8, 1, 0x5a2a90);
+  // Jagged spines along the back.
+  for (const x of [4, 7, 10]) p.rect(x, 4 - hop, 1, 2, 0x5a2a90);
+  p.ellipse(15.5, 8 - hop, 3.4, 3, 0x8a5ac8);
+  p.rect(16, 3 - hop, 1, 3, 0x5a2a90);
+  p.rect(18, 4 - hop, 1, 2, 0x5a2a90);
+  p.set(16, 7 - hop, RIFT.cyanLt);
+  p.set(18, 7 - hop, RIFT.cyanLt);
+  p.rect(17, 10 - hop, 2, 1, 0x2a1030);
+  p.outline(RIFT.ink);
+  // A glitch: a slice of the body slips sideways, fringed pink and cyan.
+  const row = f === 1 ? 6 : 9;
+  for (let x = 3; x < 13; x += 3) {
+    p.set(x - 1, row - hop, RIFT.pink, 200);
+    p.set(x + 1, row - hop + 1, RIFT.cyan, 200);
+  }
+}
+
+function shardWisp(p: Painter, f: number): void {
+  const bob = f === 1 ? 1 : 0;
+  p.ellipse(8, 22, 4, 1, 0x000000, 50);
+  p.ellipse(8, 10 - bob, 7, 7, RIFT.violet, 60);
+  // Trailing wisps below the shard.
+  for (let y = 15; y < 21; y++) {
+    const x = 8 + Math.round(Math.sin((y + f * 2) * 0.9) * 1.5);
+    p.rect(x - 1, y - bob, 2, 1, y % 2 ? RIFT.violet : RIFT.violetDk, 200 - (y - 15) * 25);
+  }
+  for (let y = 0; y < 13; y++) {
+    const half = y < 5 ? y * 0.8 : (12 - y) * 0.45;
+    const x0 = Math.round(8 - half);
+    const w = Math.max(1, Math.round(half * 2));
+    p.rect(x0, 3 + y - bob, w, 1, y < 5 ? RIFT.cyanLt : RIFT.cyan);
+    p.rect(x0 + w - 1, 3 + y - bob, 1, 1, RIFT.cyanDk);
+  }
+  p.set(7, 6 - bob, 0xffffff);
+  p.set(7, 7 - bob, 0xffffff);
+  p.outline(0x1a3a4a);
+  p.set(4 + f * 7, 9 - bob, RIFT.pink, 220);
+}
+
+function riftWarden(p: Painter, f: number): void {
+  const sway = f === 1 ? 1 : 0;
+  p.ellipse(20, 46, 13, 2, 0x000000, 70);
+  // The robe, widening to a ragged hem.
+  for (let y = 16; y < 45; y++) {
+    const half = 7 + (y - 16) * 0.2;
+    const hem = y > 41 ? ((y + sway) % 2 ? 1 : -1) : 0;
+    p.rect(Math.round(20 - half) + hem, y, Math.round(half * 2), 1, y < 22 ? 0x4e3474 : 0x3a2458);
+    p.rect(Math.round(20 - half) + hem, y, 3, 1, 0x5e4488);
+    p.rect(Math.round(20 + half) - 3 + hem, y, 3, 1, 0x2a1840);
+  }
+  // Arms ending in crystal claws.
+  for (const side of [-1, 1]) {
+    const x = 20 + side * 11 - (side < 0 ? 3 : 0);
+    p.rect(x, 20 + sway, 3, 14, 0x34204e);
+    p.rect(x, 34 + sway, 1, 3, RIFT.cyanLt);
+    p.rect(x + 1, 34 + sway, 1, 4, RIFT.cyan);
+    p.rect(x + 2, 34 + sway, 1, 3, RIFT.cyanLt);
+    // Shard pauldrons.
+    p.rect(20 + side * 9 - 2, 14, 4, 5, RIFT.cyan);
+    p.rect(20 + side * 9 - 2, 14, 2, 3, RIFT.cyanLt);
+    p.rect(20 + side * 10 - 1, 11, 2, 3, RIFT.cyan);
+  }
+  // The hood, an empty face and one eye.
+  p.ellipse(20, 10, 6, 6.5, 0x2a1840);
+  p.ellipse(20, 11, 3.6, 4, 0x0a0614);
+  p.rect(19, 10, 2, 2, RIFT.cyanLt);
+  p.set(18, 10, RIFT.cyan, 160);
+  p.set(21, 11, RIFT.cyan, 160);
+  // A crown of shards.
+  for (const [x, h] of [[15, 3], [20, 5], [25, 3]]) {
+    p.rect(x - 1, 4 - h, 2, h + 1, RIFT.violet);
+    p.set(x - 1, 4 - h, 0xe8d0ff);
+  }
+  // Its core, the gem it guards the rift with.
+  for (let y = 0; y < 7; y++) {
+    const half = y < 3 ? y : 6 - y;
+    p.rect(20 - half, 23 + y, half * 2 + 1, 1, y < 3 ? 0xff9ad0 : RIFT.pink);
+  }
+  p.outline(0x140a20);
+  for (let y = 23; y < 30; y++) p.set(16 - sway * 2, y, RIFT.pink, 70);
+  // Glitch slices across the robe.
+  const row = f === 1 ? 31 : 37;
+  for (let x = 12; x < 29; x += 4) {
+    p.set(x, row, RIFT.pink, 210);
+    p.set(x + 2, row + 1, RIFT.cyan, 210);
+  }
+}
+
+// Dimension tiles ---------------------------------------------------------------
+
+function dimFloor(p: Painter, v: number, rng: Rng): void {
+  p.rect(0, 0, 16, 16, RIFT.stone);
+  p.speckle(rng, 7, 0x7e6c92);
+  p.speckle(rng, 4, 0x625272);
+  p.rect(0, 0, 16, 1, 0x52425f);
+  p.rect(0, 8, 16, 1, 0x52425f);
+  p.rect(v & 1 ? 5 : 11, 0, 1, 8, 0x52425f);
+  p.rect(v & 2 ? 3 : 9, 8, 1, 8, 0x52425f);
+  p.rect(1, 1, 3, 1, 0x7e6c92);
+  if (v === 3) for (let k = 0; k < 3; k++) p.set(rng.int(2, 13), rng.int(10, 14), RIFT.cyan);
+}
+
+function dimVoid(p: Painter, v: number, rng: Rng): void {
+  p.rect(0, 0, 16, 16, RIFT.void);
+  if (v % 2) p.ellipse(rng.int(3, 12), rng.int(3, 12), rng.int(3, 6), rng.int(2, 4), RIFT.nebula, 110);
+  p.speckle(rng, 3, RIFT.star);
+  if (v >= 2) p.set(rng.int(1, 14), rng.int(1, 14), 0xbff6ff);
+}
+
+function dimWallTop(p: Painter, v: number, rng: Rng): void {
+  p.rect(0, 0, 16, 16, RIFT.stoneDk);
+  for (const [x, y, w, h] of [[0, 0, 7, 7], [7, 0, 9, 6], [0, 7, 9, 9], [9, 6, 7, 10]]) {
+    p.rect(x, y, w, h, shade(RIFT.stoneDk, 0.92 + ((x + y + v) % 3) * 0.07));
+    p.rect(x, y, w, 1, 0x6e5c80);
+    p.rect(x, y + h - 1, w, 1, RIFT.mortar);
+  }
+  p.speckle(rng, 5, 0x5a4870);
+}
+
+function dimWallFace(p: Painter, v: number, rng: Rng): void {
+  p.rect(0, 0, 16, 16, RIFT.wall);
+  for (let y = 3; y < 15; y += 4) {
+    p.rect(0, y + 3, 16, 1, RIFT.mortar);
+    const off = (y / 4) % 2 ? 4 : 0;
+    for (let x = off; x < 16; x += 8) p.rect(x, y, 1, 4, RIFT.mortar);
+  }
+  p.rect(0, 0, 16, 3, 0x7a6894);
+  p.rect(0, 3, 16, 1, RIFT.mortar);
+  p.rect(0, 14, 16, 2, 0x2a1e38);
+  // Crystal veins grow in the mortar.
+  if (v % 2) {
+    const x = rng.int(2, 12);
+    p.rect(x, 11, 1, 3, RIFT.cyan);
+    p.set(x + 1, 12, RIFT.cyanLt);
+    p.set(x - 1, 13, RIFT.cyanDk);
+  }
+}
+
+/** A floating slab over the void: its face shows below the top. */
+function slab(p: Painter, top: RGB, rng: Rng): void {
+  p.rect(1, 0, 14, 13, top);
+  p.rect(1, 0, 14, 1, shade(top, 1.2));
+  p.speckle(rng, 5, shade(top, 0.9));
+  p.rect(1, 13, 14, 2, RIFT.stoneDk);
+  p.rect(2, 15, 12, 1, RIFT.mortar);
+}
+
+function dimCrumble(p: Painter, v: number, rng: Rng): void {
+  slab(p, 0x7a6888, rng);
+  const crack = 0x3a2c4a;
+  if (v >= 1) {
+    for (const [x, y] of [[4, 2], [5, 3], [5, 4], [6, 5], [7, 5], [8, 6], [11, 3], [11, 4], [10, 5], [9, 8], [9, 9], [8, 10]]) p.set(x, y, crack);
+  }
+  if (v >= 2) {
+    for (const [x, y] of [[3, 7], [3, 8], [4, 9], [12, 7], [13, 8], [6, 11], [5, 12]]) p.set(x, y, crack);
+    // Corners already breaking away.
+    for (const [x, y] of [[1, 0], [2, 0], [1, 1], [14, 12], [13, 12], [14, 11], [1, 12], [1, 11]]) p.clear(x, y);
+  }
+}
+
+function dimGlitch(p: Painter, v: number, rng: Rng): void {
+  const base = 0x5e6a90;
+  for (let y = 0; y < 15; y++) {
+    // Whole, then slipping rows, then a few fragments.
+    if (v === 2 && y % 3 !== 0) continue;
+    if (v === 1 && y % 5 === 2) continue;
+    const shift = v === 0 ? 0 : rng.int(-2, 2);
+    const w = v === 2 ? rng.int(4, 9) : 14;
+    const x0 = v === 2 ? rng.int(1, 15 - w) : 1;
+    p.rect(x0 + shift, y, w, 1, y % 2 ? base : shade(base, 1.12), v === 2 ? 200 : 255);
+    if (y % 4 === 1) p.set(x0 + shift, y, RIFT.pink, 220);
+    if (y % 4 === 3) p.set(x0 + w - 1 + shift, y, RIFT.cyanLt, 220);
+  }
+  if (v === 0) {
+    p.rect(1, 0, 14, 1, RIFT.cyanLt, 170);
+    p.rect(1, 13, 14, 2, 0x3a3e5e);
+  }
+}
+
+function dimPlate(p: Painter, g: number, rng: Rng, down: boolean): void {
+  dimFloor(p, 0, rng);
+  if (down) {
+    p.ellipse(8, 8.5, 6, 5, 0x4e3e60);
+    p.ellipse(8, 8.5, 5, 4, RIFT.stone);
+    glyphGlow(p, g, 6, 6, RIFT.cyan);
+    glyph(p, g, 6, 6, RIFT.cyanLt);
+  } else {
+    p.ellipse(8, 9.5, 6, 5, 0x3a2c4a);
+    p.ellipse(8, 8, 6, 5, RIFT.stoneLt);
+    p.ellipse(7, 6.5, 3.5, 2, 0xa290b8);
+    glyph(p, g, 6, 5, RIFT.mortar);
+  }
+}
+
+function dimCheckpoint(p: Painter, v: number, rng: Rng): void {
+  dimFloor(p, 1, rng);
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    p.set(8 + Math.cos(a) * 5.5, 8 + Math.sin(a) * 5, v ? RIFT.cyanLt : RIFT.cyan, v ? 240 : 150);
+  }
+  p.rect(7, 7, 2, 2, v ? RIFT.cyanLt : RIFT.cyanDk);
+}
+
+function dimRune(p: Painter, v: number, rng: Rng): void {
+  dimFloor(p, 2, rng);
+  const c = RIFT.violet;
+  if (v === 0) {
+    for (let k = 3; k < 13; k++) p.set(k, 8, c, 200);
+    for (let k = 4; k < 12; k++) p.set(8, k, c, 200);
+    p.set(5, 5, c);
+    p.set(11, 11, c);
+  } else {
+    for (let k = 0; k < 6; k++) {
+      p.set(3 + k, 8 - k, c, 200);
+      p.set(8 + k, 3 + k, c, 200);
+    }
+    p.set(8, 11, c);
+  }
+}
+
+/** Dimension tile looks: key, cells (variants or frames), painter. */
+const DIM_TILES: Array<[string, number, (p: Painter, v: number, rng: Rng) => void]> = [
+  ['void', 4, dimVoid],
+  ['floor', 4, dimFloor],
+  ['wall-top', 4, dimWallTop],
+  ['wall-face', 4, dimWallFace],
+  ['crumble', 3, dimCrumble],
+  ['glitch', 3, dimGlitch],
+  ['plate-up', GLYPHS.length, (p, g, rng) => dimPlate(p, g, rng, false)],
+  ['plate-down', GLYPHS.length, (p, g, rng) => dimPlate(p, g, rng, true)],
+  ['checkpoint', 2, dimCheckpoint],
+  ['rune', 2, dimRune],
+];
+
+// Dimension props ---------------------------------------------------------------
+
+function dimPillar(p: Painter): void {
+  p.shadow(8, 30, 5, 1.5);
+  p.rect(5, 8, 6, 20, RIFT.stone);
+  p.rect(5, 8, 2, 20, RIFT.stoneLt);
+  p.rect(10, 8, 1, 20, RIFT.stoneDk);
+  p.rect(4, 5, 8, 3, RIFT.stoneLt);
+  p.rect(4, 7, 8, 1, RIFT.stoneDk);
+  p.rect(4, 27, 8, 3, RIFT.stoneDk);
+  p.rect(4, 27, 8, 1, RIFT.stoneLt);
+  p.rect(5, 16, 6, 2, RIFT.cyan);
+  p.rect(5, 16, 2, 1, RIFT.cyanLt);
+  p.outline(RIFT.ink);
+}
+
+function dimCrystal(p: Painter): void {
+  p.shadow(8, 30, 6, 1.5);
+  p.ellipse(8, 28, 6, 2.5, RIFT.stoneDk);
+  const shard = (cx: number, top: number, half: number) => {
+    for (let y = top; y < 28; y++) {
+      const w = y < top + half ? y - top + 1 : half;
+      p.rect(cx - Math.floor(w / 2), y, Math.max(1, Math.floor(w / 2)), 1, RIFT.cyanLt);
+      p.rect(cx, y, Math.max(1, Math.ceil(w / 2)), 1, y < top + 3 ? RIFT.cyan : RIFT.cyanDk);
+    }
+  };
+  shard(4, 18, 3);
+  shard(12, 15, 3);
+  shard(8, 6, 4);
+  p.set(7, 10, 0xffffff);
+  p.set(7, 11, 0xffffff);
+  p.outline(0x1a3a4a);
+}
+
+/** A sealed door: an energy curtain under a stone lintel. */
+function dimGate(p: Painter, f: number): void {
+  for (let y = 6; y < 30; y++) {
+    for (let x = 0; x < 16; x++) {
+      const streak = (x + f * 2 + Math.floor(y / 3)) % 5 === 0;
+      p.set(x, y, streak ? RIFT.cyanLt : (x + y + f) % 2 ? RIFT.violet : RIFT.cyan, streak ? 220 : 120);
+    }
+  }
+  p.rect(0, 2, 16, 4, RIFT.stoneDk);
+  p.rect(0, 2, 16, 1, RIFT.stoneLt);
+  for (let x = 2; x < 16; x += 5) p.set(x + f, 4, RIFT.cyanLt);
+  p.rect(0, 29, 16, 1, RIFT.cyanLt, 200);
+}
+
+/** The vault's chest: 0 sealed while the Warden lives, 1 ready, 2 open. */
+function dimChest(p: Painter, s: number): void {
+  p.shadow(8, 22, 6, 1.5);
+  const wood = 0x5a3a6a;
+  p.rect(2, 13, 12, 9, wood);
+  p.rect(2, 19, 12, 1, RIFT.violet);
+  if (s === 2) {
+    p.rect(3, 14, 10, 4, 0x1a1030);
+    p.rect(4, 14, 8, 2, RIFT.gold, 200);
+    p.set(6, 13, 0xffffff);
+    p.rect(2, 8, 12, 5, 0x6e4a80);
+    p.rect(2, 12, 12, 1, RIFT.violet);
+  } else {
+    p.rect(2, 13, 12, 3, 0x6e4a80);
+    p.rect(2, 16, 12, 1, RIFT.violet);
+    p.rect(7, 15, 2, 3, s ? RIFT.cyanLt : RIFT.violetDk);
+    if (s === 0) {
+      // Chains of light across the lid.
+      for (let x = 2; x < 14; x++) p.set(x, 14 + ((x >> 1) % 2), RIFT.pink, 200);
+    }
+  }
+  p.outline(RIFT.ink);
+}
+
+/** The portal home: a stone arch, dark while dormant, then swirling (frames 1–3). */
+function dimPortal(p: Painter, f: number): void {
+  p.shadow(16, 46, 13, 2);
+  // The opening.
+  if (f === 0) {
+    p.ellipse(16, 26, 8, 15, RIFT.void);
+    for (const [x, y] of [[13, 20], [18, 28], [15, 34], [19, 17]]) p.set(x, y, RIFT.star);
+  } else {
+    const rings = [RIFT.violetDk, RIFT.violet, RIFT.cyan, RIFT.cyanLt, 0xffffff];
+    for (let k = 0; k < rings.length; k++) {
+      const c = rings[(k + f) % rings.length];
+      p.ellipse(16, 26, 8 - k * 1.5, 15 - k * 2.8, c, k === rings.length - 1 ? 255 : 230);
+    }
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + f * 0.7;
+      p.set(16 + Math.cos(a) * 6, 26 + Math.sin(a) * 11, 0xffffff, 200);
+    }
+  }
+  // Pillars and the arch.
+  for (const x of [3, 25]) {
+    p.rect(x, 14, 4, 31, RIFT.stone);
+    p.rect(x, 14, 1, 31, RIFT.stoneLt);
+    p.rect(x + 3, 14, 1, 31, RIFT.stoneDk);
+    p.rect(x - 1, 43, 6, 3, RIFT.stoneDk);
+  }
+  for (let k = 0; k <= 20; k++) {
+    const a = Math.PI * (k / 20);
+    const x = 16 - Math.cos(a) * 11;
+    const y = 14 - Math.sin(a) * 10;
+    p.rect(x - 2, y - 1, 4, 4, k % 4 === 0 ? RIFT.stoneLt : RIFT.stone);
+  }
+  p.rect(14, 2, 4, 3, f ? RIFT.cyanLt : RIFT.cyanDk);
+  p.outline(RIFT.ink);
+}
+
+/** The rift the player came in by: a jagged tear of light over the floor. */
+function dimRift(p: Painter, f: number): void {
+  p.ellipse(16, 28, 10, 2.5, RIFT.violet, 90);
+  const xs: number[] = [];
+  for (let y = 2; y < 28; y++) xs.push(16 + Math.round(Math.sin(y * 0.7 + f * 1.3) * 2 + (y % 5 === 0 ? (f ? 1 : -1) : 0)));
+  xs.forEach((x, i) => {
+    const y = 2 + i;
+    const w = 1 + Math.round(Math.sin((i / xs.length) * Math.PI) * 3);
+    p.rect(x - w - 1, y, w * 2 + 3, 1, RIFT.violet, 120);
+    p.rect(x - w, y, w * 2 + 1, 1, RIFT.cyan);
+    p.rect(x - Math.floor(w / 2), y, Math.max(1, w), 1, 0xffffff);
+  });
+  for (const [x, y] of [[9, 8], [23, 14], [11, 21], [22, 5]]) p.set(x + f, y, RIFT.pink, 220);
+}
+
+/** An overworld rift, 32 x 48 standing on its tile: a tear hanging in the air
+ *  over scorched ground. Three frames, swapped on a timer, never redrawn. */
+function riftTear(p: Painter, f: number): void {
+  p.ellipse(16, 45, 11, 2.5, RIFT.violetDk, 110);
+  p.ellipse(16, 45, 6, 1.4, RIFT.cyan, 120);
+  // The tear: a jagged seam, widest in the middle, wobbling per frame.
+  for (let y = 4; y < 41; y++) {
+    const t = (y - 4) / 37;
+    const x = 16 + Math.round(Math.sin(y * 0.55 + f * 2.1) * 1.6 + (y % 6 === f * 2 ? (f % 2 ? 1 : -1) : 0));
+    const w = Math.round(Math.sin(t * Math.PI) * 4.5);
+    p.rect(x - w - 2, y, w * 2 + 5, 1, RIFT.violet, 90);
+    p.rect(x - w - 1, y, w * 2 + 3, 1, RIFT.violetDk, 220);
+    p.rect(x - w, y, w * 2 + 1, 1, y % 4 === f ? RIFT.cyanLt : RIFT.cyan);
+    if (w > 0) p.rect(x - Math.floor(w / 2), y, Math.max(1, w), 1, 0xffffff);
+  }
+  // Glitch slices: a row of the tear slips sideways, fringed pink.
+  const row = 12 + f * 9;
+  p.rect(10 + f, row, 12, 1, RIFT.pink, 200);
+  p.rect(12 - f, row + 1, 9, 1, RIFT.cyanLt, 180);
+  for (const [x, y] of [[5, 10], [26, 18], [7, 30], [25, 36], [20, 6]]) p.set(x + ((f + y) % 3) - 1, y - f * 2, f === 1 ? RIFT.pink : 0xe8d0ff, 220);
+}
+
+/** A mural stone: 0 dark, 1 lit by the hint, 2 done. */
+function dimStele(p: Painter, g: number, s: number): void {
+  p.shadow(8, 22, 5, 1.5);
+  p.rect(3, 5, 10, 16, RIFT.wall);
+  p.rect(4, 4, 8, 1, RIFT.wall);
+  p.rect(3, 5, 2, 16, 0x7a6894);
+  p.rect(12, 5, 1, 16, RIFT.mortar);
+  p.rect(2, 19, 12, 3, RIFT.stoneDk);
+  p.rect(2, 19, 12, 1, RIFT.stoneLt);
+  const c = s === 2 ? RIFT.cyanLt : s === 1 ? RIFT.violet : 0x2a1e38;
+  if (s) glyphGlow(p, g, 6, 9, s === 2 ? RIFT.cyan : RIFT.violet);
+  glyph(p, g, 6, 9, c);
+  p.outline(RIFT.ink);
+}
+
+/** Dimension props, drawn standing on their tile: key, size, painter. */
+const DIM_PROP_FRAMES: Array<[string, number, number, (p: Painter) => void]> = [
+  ['pillar', 16, 32, dimPillar],
+  ['crystal', 16, 32, dimCrystal],
+  ...[0, 1].map((f): [string, number, number, (p: Painter) => void] => [`gate:${f}`, 16, 32, (p) => dimGate(p, f)]),
+  ...[0, 1, 2].map((s): [string, number, number, (p: Painter) => void] => [`chest:${s}`, 16, 24, (p) => dimChest(p, s)]),
+  ...[0, 1, 2, 3].map((f): [string, number, number, (p: Painter) => void] => [`portal:${f}`, 32, 48, (p) => dimPortal(p, f)]),
+  ...[0, 1].map((f): [string, number, number, (p: Painter) => void] => [`rift:${f}`, 32, 32, (p) => dimRift(p, f)]),
+  // The overworld tear's other frames; frame 0 is its decoration cell.
+  ...[1, 2].map((f): [string, number, number, (p: Painter) => void] => [`tear:${f}`, 32, 48, (p) => riftTear(p, f)]),
+  ...GLYPHS.flatMap((_, g) => [0, 1, 2].map((s): [string, number, number, (p: Painter) => void] => [`glyph:${g}:${s}`, 16, 24, (p) => dimStele(p, g, s)])),
+];
+
+/** The outer dimensions' tiles (16 x 16 cells) and props, below the armour. */
+const DIM_Y = ARMOR_Y + ARMOR_SETS * ARMOR_PARTS * 32;
+const DIM_CELLS = new Map<string, number>();
+let dimCellCount = 0;
+for (const [key, n] of DIM_TILES) {
+  DIM_CELLS.set(key, dimCellCount);
+  dimCellCount += n;
+}
+const DIM_PROPS = shelfPack(
+  DIM_PROP_FRAMES.map(([, w, h]) => [w, h]),
+  DIM_Y + Math.ceil(dimCellCount / 16) * 16,
+);
+const DIM_PROP_INDEX = new Map(DIM_PROP_FRAMES.map(([key], i) => [key, i]));
+export const ATLAS_H = DIM_Y + Math.ceil(dimCellCount / 16) * 16 + DIM_PROPS.height;
 
 /** Atlas cell of an armour overlay frame. */
 export function armorCell(set: number, part: number, dir: number, frame: number): [number, number] {
@@ -2066,6 +2606,25 @@ function paintArmor(p: Painter, set: number, part: number, dir: number, frame: n
 /** Atlas frame for a creature or projectile key, e.g. `wolf:1`. */
 export function creatureFrame(key: string): Frame {
   return CREATURES.frames[CREATURE_INDEX.get(key)!];
+}
+
+/** Atlas cell of a dimension tile look, e.g. `dimCell('crumble', 2)`. */
+export function dimCell(key: string, variant: number): [number, number] {
+  const cell = DIM_CELLS.get(key)! + variant;
+  return [(cell % 16) * 16, DIM_Y + Math.floor(cell / 16) * 16];
+}
+
+/** Atlas frame of a dimension prop, e.g. `portal:2` or `glyph:3:1`. */
+export function dimFrame(key: string): Frame {
+  return DIM_PROPS.frames[DIM_PROP_INDEX.get(key)!];
+}
+
+/** Frames of the overworld rift's animation. */
+export const RIFT_FRAMES = 3;
+
+/** Atlas frame `f` of the overworld rift's animation. */
+export function riftFrame(f: number): Frame {
+  return f === 0 ? decoFrame(Deco.Rift) : dimFrame(`tear:${f}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -2194,6 +2753,18 @@ export function buildAtlas(): HTMLCanvasElement {
       }
     }
   }
+  for (const [key, n, paint] of DIM_TILES) {
+    for (let v = 0; v < n; v++) {
+      const [x, y] = dimCell(key, v);
+      p.cell(x, y, 16, 16);
+      paint(p, v, new Rng(DIM_CELLS.get(key)! * 389 + v * 53 + 11));
+    }
+  }
+  DIM_PROP_FRAMES.forEach(([, , , paint], i) => {
+    const f = DIM_PROPS.frames[i];
+    p.cell(f.x, f.y, f.w, f.h);
+    paint(p);
+  });
   ctx.putImageData(img, 0, 0);
   return canvas;
 }

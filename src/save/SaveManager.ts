@@ -1,7 +1,7 @@
-// Save system (spec 8.4). Only the seed, the player and persistent objects are
-// stored; everything else regenerates. Saves live in IndexedDB.
+// Save system (spec 8.4). Only the seed, the player and what the player changed
+// are stored; the world itself, every structure included, regenerates. Saves
+// live in IndexedDB.
 
-import { Layout, type BuildingSpec, type Persistence } from '../generation/StructureGenerator';
 import type { EquipSlot } from '../items/Items';
 import type { SavedSlot } from '../systems/InventorySystem';
 import type { LivingSave } from '../game/LivingWorld';
@@ -9,30 +9,9 @@ import type { ExplorationSave } from '../systems/ExplorationSystem';
 import type { ProgressionSave } from '../systems/Progression';
 import type { VitalValues } from '../systems/Vitals';
 import type { SavedGroundItem } from '../world/GroundItems';
-import type { KnownPlace, WorldManager } from '../world/WorldManager';
-import { WorldObject } from '../world/WorldObject';
+import type { WorldManager } from '../world/WorldManager';
 
-export const SAVE_VERSION = 7;
-
-export interface SavedObject {
-  id: string;
-  kind: string;
-  name: string;
-  persistence: Persistence;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  tiles: Uint8Array;
-  decos: Uint8Array;
-  discovered: boolean;
-  anchor: string;
-  /** Layout indices of opened chests, and interior chest ids. */
-  opened: number[];
-  buildings: BuildingSpec[];
-  /** For semi-persistent objects: the world minute they were last left. */
-  idleSince?: number;
-}
+export const SAVE_VERSION = 8;
 
 /** Everything about the player that survives a reload. */
 export interface PlayerSave {
@@ -54,8 +33,6 @@ export interface SaveData {
   seed: number;
   savedAt: number;
   player: PlayerSave;
-  /** Rare landmarks and other persistent objects, with their discovered flag. */
-  objects: SavedObject[];
   /** Anchors whose chests were looted, so they never refill. */
   lootedAnchors: string[];
   /** Dungeons, arenas and legendary spots that stay cleared. */
@@ -70,8 +47,14 @@ export interface SaveData {
   harvested: Array<{ key: number; visit: number; cells: number[] }>;
   /** Items dropped on the ground. */
   ground: SavedGroundItem[];
-  /** Discovered places, so the map keeps them; missing in older saves. */
-  known?: KnownPlace[];
+}
+
+/** What saves before version 8 also held: kept objects, the register of
+ *  known places and the old story (with its lantern memories). */
+interface OldSave extends SaveData {
+  objects?: Array<Record<string, unknown>>;
+  known?: unknown;
+  living: (LivingSave & { story?: unknown }) | null;
 }
 
 export function snapshot(
@@ -80,36 +63,11 @@ export function snapshot(
   living: LivingSave | null = null,
   exploration: ExplorationSave | null = null,
 ): SaveData {
-  const objects: SavedObject[] = [];
-  for (const o of world.objects.objects.values()) {
-    // Persistent objects, and semi-persistent ones the world is keeping.
-    if (!world.objects.keeps(o)) continue;
-    const { id, kind, name, persistence, x, y, w, h, discovered, anchor } = o;
-    const { tiles, decos } = o.layout;
-    objects.push({
-      id,
-      kind,
-      name,
-      persistence,
-      x,
-      y,
-      w,
-      h,
-      tiles: tiles.slice(),
-      decos: decos.slice(),
-      discovered,
-      anchor,
-      opened: [...o.opened],
-      buildings: o.layout.buildings,
-      idleSince: o.activeChunks > 0 ? world.now() : o.idleSince,
-    });
-  }
   return {
     version: SAVE_VERSION,
     seed: world.seed,
     savedAt: Date.now(),
     player,
-    objects,
     lootedAnchors: [...world.lootedAnchors],
     clearedAnchors: [...world.clearedAnchors],
     living,
@@ -117,39 +75,27 @@ export function snapshot(
     regions: world.regions.save(),
     harvested: world.saveHarvest(),
     ground: world.ground.save(),
-    known: [...world.known.values()],
   };
 }
 
-/** Puts saved objects back into a fresh world built from the same seed. */
+/** Puts what the player changed back into a fresh world built from the same seed. */
 export function restore(world: WorldManager, data: SaveData): void {
-  for (const s of data.objects) {
-    const layout = new Layout(s.w, s.h);
-    layout.tiles.set(s.tiles);
-    layout.decos.set(s.decos);
-    layout.buildings = s.buildings;
-    const o = new WorldObject(s.id, s.kind, s.name, s.persistence, s.x, s.y, layout);
-    o.discovered = s.discovered;
-    o.anchor = s.anchor;
-    for (const i of s.opened) o.opened.add(i);
-    o.idleSince = s.idleSince ?? 0;
-    world.addObject(o);
-  }
   for (const a of data.lootedAnchors) world.lootedAnchors.add(a);
   for (const a of data.clearedAnchors) world.clearedAnchors.add(a);
   world.regions.load(data.regions);
   world.loadHarvest(data.harvested);
   world.ground.load(data.ground);
-  for (const p of data.known ?? []) world.addKnown(p);
-  // Older saves: at least the discovered persistent places.
-  for (const s of data.objects) if (s.discovered && !world.known.has(s.id)) world.know(world.objects.objects.get(s.id)!);
 }
 
+/** The old story's lantern: an ordinary lantern takes its place, so the player
+ *  keeps a light that never burns out. */
+const swapLantern = (s: SavedSlot): SavedSlot => (s?.id === 'wanderers-lantern' ? { id: 'lantern', count: 1 } : s);
+
 /** Brings older saves up to the current format. */
-function migrate(data: SaveData): SaveData | null {
+export function migrate(data: OldSave): SaveData | null {
   if (data.version === 1) {
     data.player = { ...data.player, inventory: [], vitals: null, progression: null };
-    data.objects = data.objects.map((o) => ({ ...o, anchor: '', opened: [] }));
+    data.objects = data.objects?.map((o) => ({ ...o, anchor: '', opened: [] }));
     data.lootedAnchors = [];
     data.version = 2;
   }
@@ -167,7 +113,7 @@ function migrate(data: SaveData): SaveData | null {
     data.version = 5;
   }
   if (data.version === 5) {
-    data.objects = data.objects.map((o) => ({ ...o, buildings: [] }));
+    data.objects = data.objects?.map((o) => ({ ...o, buildings: [] }));
     data.regions = [];
     data.harvested = [];
     data.version = 6;
@@ -175,6 +121,19 @@ function migrate(data: SaveData): SaveData | null {
   if (data.version === 6) {
     data.ground = [];
     data.version = 7;
+  }
+  if (data.version === 7) {
+    // Every structure now forgets, so kept objects (story places among them)
+    // go; so do the known places, the old story and its world rules.
+    delete data.objects;
+    delete data.known;
+    if (data.living) delete data.living.story;
+    const { player } = data;
+    player.inventory = player.inventory.map(swapLantern);
+    if (player.equipment) {
+      for (const slot of Object.keys(player.equipment) as EquipSlot[]) player.equipment[slot] = swapLantern(player.equipment[slot] ?? null);
+    }
+    data.version = 8;
   }
   return data.version === SAVE_VERSION ? data : null;
 }

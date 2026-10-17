@@ -20,7 +20,7 @@ export class DebugOverlay {
     this.root.className = 'panel debug';
     this.root.innerHTML = `<pre></pre><canvas width="${MAP_SIZE}" height="${MAP_SIZE}"></canvas>
       <div class="debug-key"><i style="border-color:#fff"></i>render <i style="border-color:#ffd84a"></i>simulation
-      <i style="border-color:#ff5a4a"></i>object <i style="border-color:#4ad8ff"></i>persistent
+      <i style="border-color:#ff5a4a"></i>object
       <i style="border-color:#ff40ff"></i>enemy</div>`;
     this.text = this.root.querySelector('pre')!;
     this.ctx = this.root.querySelector('canvas')!.getContext('2d')!;
@@ -37,14 +37,12 @@ export class DebugOverlay {
     if (!this.visible) return;
     const cm = world.chunks;
     const ready = [...cm.chunks.values()].filter((c) => c.ready).length;
-    const objects = [...world.objects.objects.values()];
-    const persistent = objects.filter((o) => o.persistence === 'persistent').length;
     this.text.textContent = [
       `seed     ${world.seed}`,
       `fps      ${fps.toFixed(0)}`,
       `chunks   cached ${cm.cached.size} · ready ${ready} · drawn ${drawn} · in flight ${cm.inFlight}`,
       `biomes   ${world.biomes.records.size} records`,
-      `objects  ${objects.length} live (${persistent} persistent)`,
+      `objects  ${world.objects.objects.size} live`,
       `enemies  ${enemies.length} (${enemies.filter((e) => e.state !== 'patrol' && e.state !== 'burrowed').length} hunting you)`,
       `regions  ${world.regions.size} tracked · visit here ${world.regions.visit(Math.floor(px / CHUNK_SIZE), Math.floor(py / CHUNK_SIZE))}`,
     ].join('\n');
@@ -82,10 +80,10 @@ export class DebugOverlay {
         if (cy < cache.y1 && world.biomes.at(chunkKey(cx, cy + 1)) !== b) this.line(sx(cx), sy(cy + 1), sx(cx + 1), sy(cy + 1));
       }
     }
+    ctx.strokeStyle = '#ff5a4a';
     for (const o of world.objects.objects.values()) {
       const x = sx(o.x / CHUNK_SIZE);
       const y = sy(o.y / CHUNK_SIZE);
-      ctx.strokeStyle = o.persistence === 'persistent' ? '#4ad8ff' : '#ff5a4a';
       ctx.strokeRect(x, y, (o.w / CHUNK_SIZE) * cell, (o.h / CHUNK_SIZE) * cell);
     }
     this.rect(cm.renderRect, cache, cell, '#fff');

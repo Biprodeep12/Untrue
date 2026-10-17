@@ -1,10 +1,15 @@
 // The living world (spec 6): time, weather, hazards, NPCs, quests and world
 // events, plus the lighting and weather on screen. The game loop drives it.
+//
+// The story plugs in here: `RiftStory` (src/story) is built in the
+// constructor beside the others, and the tracker and saving pass through this
+// class; talk, rest, prompts, interactions, discoveries and `update` are the
+// other seams a story can use.
 
 import type { Container, Renderer } from 'pixi.js';
 import type { AudioSystem } from '../audio/AudioSystem';
 import { TILE_SIZE } from '../config';
-import { inRect, tileToChunk } from '../coords';
+import { chunkKey, inRect, tileToChunk } from '../coords';
 import { Npc } from '../entities/NPC';
 import { SPECIES } from '../entities/Species';
 import { pickSpecies } from '../generation/EnemyGenerator';
@@ -28,8 +33,8 @@ import { WEATHER, WeatherSystem, type WeatherEffect, type WeatherKind, type Weat
 import { WorldEvents } from '../systems/WorldEvents';
 import { Dialog } from '../ui/Dialog';
 import type { Hud } from '../ui/Hud';
+import { RiftStory, type RiftRunView, type RiftStorySave } from '../story/RiftStory';
 import { Vision } from '../ui/Vision';
-import { StorySystem, type StorySave } from '../story/StorySystem';
 import type { QuestView } from '../ui/Menu';
 import type { WorldManager } from '../world/WorldManager';
 import type { WorldObject } from '../world/WorldObject';
@@ -38,6 +43,7 @@ import type { Settings } from './Settings';
 
 const TALK_RANGE = 1.8;
 const NO_LIGHTS: readonly Light[] = [];
+const NONE: readonly never[] = [];
 /** Light around the player at night with nothing to carry, in tiles. */
 const NIGHT_EYES = 2.4;
 /** A torch burns out after this many hours of darkness. */
@@ -49,8 +55,8 @@ export interface LivingSave {
   time: TimeSave;
   weather: WeatherSave;
   quests: Quest[];
-  /** Missing in saves from before the story. */
-  story?: StorySave;
+  /** The rift story; missing in saves from before it. */
+  rift?: RiftStorySave;
 }
 
 export interface LivingDeps {
@@ -64,8 +70,6 @@ export interface LivingDeps {
   settings: Settings;
   atlasCanvas: HTMLCanvasElement;
   ui: HTMLElement;
-  /** Moves the player off anything solid. */
-  unstick(): void;
   audio: AudioSystem;
   /** Puts what does not fit in the bag on the ground by the player. */
   overflow(item: ItemDef, count: number): void;
@@ -88,17 +92,20 @@ export class LivingWorld {
   readonly dialog: Dialog;
   /** The NPC the player is talking to. */
   private listener: Npc | null = null;
+  /** Full-screen visions, for the story. */
   readonly vision: Vision;
-  readonly story: StorySystem;
+  readonly story: RiftStory;
   private readonly rng: Rng;
-  private storyLoaded = false;
   /** Weather fades in and out instead of switching. */
   private shown: WeatherKind = 'clear';
   private strength = 0;
   private waypoint: { label: string; x: number; y: number } | null = null;
   private darkHours = 0;
-  /** While the player is indoors: where they stand outside the door, in world tiles. */
+  /** While the player is indoors or in a dimension: where they stand outside
+   *  the door or the rift, in world tiles. */
   outside: { x: number; y: number } | null = null;
+  /** The trip into an outer dimension the player is on, if any. */
+  trip: RiftRunView | null = null;
 
   constructor(private readonly d: LivingDeps) {
     this.rng = new Rng(d.world.seed ^ 0x11fe);
@@ -108,16 +115,7 @@ export class LivingWorld {
     this.particles = new ParticleSystem();
     this.dialog = new Dialog(d.ui, d.atlasCanvas);
     this.vision = new Vision(d.ui);
-    this.story = new StorySystem(d.world, this.npcs, d.inventory, {
-      notify: (t) => d.hud.notify(t),
-      vision: (v, then) => this.vision.show(v, then),
-      talk: (name, text, options) => this.dialog.talk(name, text, options),
-      closeDialog: () => this.dialog.close(),
-      bell: () => d.audio.bell(),
-      grantXp: (xp) => d.combat.grantXp(xp),
-      unstick: () => d.unstick(),
-      day: () => this.time.day,
-    });
+    this.story = new RiftStory((v) => this.vision.show(v));
     this.hazards = new HazardSystem(d.world, d.vitals, this.rng, {
       flash: () => {
         this.particles.lightning();
@@ -174,12 +172,6 @@ export class LivingWorld {
 
   onDiscover(o: WorldObject): void {
     this.quests.onDiscover(o.kind);
-    this.story.whisper(o);
-  }
-
-  /** Places the story's landmarks; a world without a saved story starts the prologue. */
-  beginStory(): void {
-    this.story.begin(!this.storyLoaded);
   }
 
   /** Lets the NPC go once the conversation is over. */
@@ -198,7 +190,6 @@ export class LivingWorld {
     const kind = this.kind;
     this.hazards.update(dt, kind === 'storm', WEATHER[kind].wet, player.x, player.y, player.invulnerable);
     this.npcs.update(dt, this.time.hour, player.x, player.y, this.time.total);
-    this.story.update(player.x, player.y);
     this.spawnLostTravellers();
     // Backwards: an escort brought home is removed from the list.
     for (let i = this.npcs.npcs.length - 1; i >= 0; i--) {
@@ -226,12 +217,11 @@ export class LivingWorld {
     }
     this.particles.view.visible = settings.values.weather;
     this.particles.update(dt, this.shown, this.strength, settings.values.weather);
-    const sight = this.d.inventory.count(Items.wanderersLantern) && !this.story.lanternDark ? Items.wanderersLantern.light! : 0;
     const biome = this.d.world.biomeAt(Math.floor(this.d.player.x), Math.floor(this.d.player.y));
     const forest = biome?.type === BiomeType.Forest;
     const calm = !WEATHER[kind].wet && WEATHER[kind].veil < 0.3;
     this.effects.ambient(this.d.player.x, this.d.player.y, settings.values.weather && forest && this.time.isNight && calm, settings.values.weather && forest && biome?.variant === 1 && !this.time.isNight);
-    this.effects.update(dt, this.hazards.fires, this.hazards.strikes, this.story.memories, this.d.player.x, this.d.player.y, sight);
+    this.effects.update(dt, this.hazards.fires, this.hazards.strikes);
 
     const storm = this.shown === 'storm' ? 0.45 * this.strength : 0;
     // The far lands feel grimmer: a faint gloom that deepens with each band.
@@ -258,10 +248,8 @@ export class LivingWorld {
     this.particles.resize(width, height);
   }
 
-  /** Adds the screen-space layers above the world and effects inside it;
-   *  ground effects go just under `standing`, the layer of things that stand. */
-  attach(stage: Container, worldOverlay: Container, standing: Container): void {
-    worldOverlay.addChildAt(this.effects.floor, worldOverlay.getChildIndex(standing));
+  /** Adds the screen-space layers above the world and effects inside it. */
+  attach(stage: Container, worldOverlay: Container): void {
     worldOverlay.addChild(this.effects.view);
     stage.addChild(this.lighting.view, this.particles.view);
   }
@@ -284,7 +272,6 @@ export class LivingWorld {
     this.listener = npc;
     npc.listen(at.x, at.y);
     if (!this.outside) player.faceTowards(npc.x - player.x, npc.y - player.y);
-    if (this.story.talk(npc)) return true;
     if (npc.role === 'trader' || npc.role === 'merchant') this.openTrade(npc);
     else if (npc.role === 'lost') this.talkLost(npc);
     else this.talkVillager(npc);
@@ -301,8 +288,7 @@ export class LivingWorld {
     m.clear();
     const handIn = this.quests.readyToHandIn(this.d.inventory).length > 0;
     for (const n of this.npcs.npcs) {
-      if (this.story.hasNews(n)) m.set(n.id, '!');
-      else if (n.role === 'trader' || n.role === 'merchant') m.set(n.id, '$');
+      if (n.role === 'trader' || n.role === 'merchant') m.set(n.id, '$');
       else if (n.role === 'lost' && !n.following) m.set(n.id, '?');
       else if (n.questGiver && !this.quests.hasOffered(this.offerKey(n)) && !this.quests.full) m.set(n.id, '!');
       else if (handIn) m.set(n.id, '✓');
@@ -315,14 +301,15 @@ export class LivingWorld {
     const { inventory } = this.d;
     const player = this.pos();
     const toward = (x: number, y: number) => Math.atan2(y - player.y, x - player.x);
+    const rift = this.trip ? null : this.d.world.nearestRift(player.x, player.y);
+    const objective = this.story.objective(player, rift && { x: rift.x + rift.w / 2, y: rift.y + rift.h / 2 }, this.trip);
     const lines = this.quests.active.slice(0, 3).map((q) => {
       const o = q.objective;
       const angle = o.kind === 'rescue' ? (o.found ? toward(o.homeX, o.homeY) : toward(o.x, o.y)) : null;
       return { text: `${q.title}: ${progressText(q, inventory)}`, angle };
     });
     if (this.waypoint) lines.unshift({ text: this.waypoint.label, angle: toward(this.waypoint.x, this.waypoint.y) });
-    const goal = this.story.objective();
-    if (goal) lines.unshift({ text: `★ ${goal.text}`, angle: toward(goal.x, goal.y) });
+    lines.unshift(objective);
     return lines;
   }
 
@@ -335,11 +322,10 @@ export class LivingWorld {
     return this.quests.quests.map((q) => ({ ...q, progress: progressText(q, this.d.inventory) }));
   }
 
-  /** Sleeping by a campfire skips to morning; the story's night in the village
-   *  can be slept through at any hour. */
+  /** Sleeping by a campfire skips to morning. */
   canRest(): boolean {
     const p = this.time.phase;
-    return p === 'night' || p === 'dusk' || this.story.stage === 'night';
+    return p === 'night' || p === 'dusk';
   }
 
   /** Advances time, events and schedules while the player is indoors. */
@@ -367,13 +353,19 @@ export class LivingWorld {
     this.lighting.update(dt, dark, lights, toScreen, zoom, !settings.values.lighting);
   }
 
+  /** Lighting for an outer dimension: its own darkness and tint at any hour,
+   *  lit by its crystals and portals and the player's light. */
+  renderDimension(dt: number, lights: Light[], toScreen: (x: number, y: number) => [number, number], zoom: number, darkness: number, tint: number): void {
+    const { player, settings } = this.d;
+    this.particles.view.visible = false;
+    this.effects.update(dt, NONE, NONE);
+    lights.push({ x: player.x * TILE_SIZE, y: (player.y - 0.5) * TILE_SIZE, radius: this.playerLight() * TILE_SIZE, warmth: 0.3 });
+    this.effects.lights(lights);
+    this.lighting.update(dt, darkness, lights, toScreen, zoom, !settings.values.lighting, tint);
+  }
+
   rest(message = 'You rest by the fire until morning'): void {
     const { vitals, hud } = this.d;
-    const at = this.pos();
-    if (this.story.rest(Math.floor(at.x), Math.floor(at.y))) {
-      this.time.skipTo(6);
-      return;
-    }
     const blocked = this.restBlocked();
     if (blocked) {
       hud.notify(blocked);
@@ -404,7 +396,7 @@ export class LivingWorld {
   }
 
   save(): LivingSave {
-    return { time: this.time.save(), weather: this.weather.save(), quests: this.quests.save(), story: this.story.save() };
+    return { time: this.time.save(), weather: this.weather.save(), quests: this.quests.save(), rift: this.story.save() };
   }
 
   /** All or nothing: if any part of the save throws, the fresh state comes back. */
@@ -414,16 +406,12 @@ export class LivingWorld {
       this.time.load(s.time);
       this.weather.load(s.weather);
       this.quests.load(s.quests);
-      if (s.story) {
-        this.story.load(s.story);
-        this.storyLoaded = true;
-      }
+      this.story.load(s.rift);
     } catch (e) {
       this.time.load(fresh.time);
       this.weather.load(fresh.weather);
       this.quests.load(fresh.quests);
-      if (fresh.story) this.story.load(fresh.story);
-      this.storyLoaded = false;
+      this.story.load(fresh.rift);
       throw e;
     }
   }
@@ -435,8 +423,7 @@ export class LivingWorld {
     this.weather.onHour();
     world.regrow();
     // Torches burn down through the night, unless a lantern is already doing the work.
-    const lanternLit = inventory.count(Items.lantern) || (inventory.count(Items.wanderersLantern) && !this.story.lanternDark);
-    if (this.time.darkness > 0.5 && !lanternLit && inventory.count(Items.torch)) {
+    if (this.time.darkness > 0.5 && !inventory.count(Items.lantern) && inventory.count(Items.torch)) {
       if (++this.darkHours >= TORCH_HOURS) {
         this.darkHours = 0;
         inventory.remove(Items.torch, 1);
@@ -451,22 +438,21 @@ export class LivingWorld {
       village,
       merchantNearby: this.npcs.npcs.some((n) => n.role === 'merchant'),
       now: this.time.total,
-      ending: this.story.ending,
-      cabinFound: this.story.cabinFound,
     });
   }
 
   private playerLight(): number {
     const { inventory } = this.d;
     let light = NIGHT_EYES;
-    if (inventory.count(Items.wanderersLantern) && !this.story.lanternDark) light = Math.max(light, Items.wanderersLantern.light!);
     if (inventory.count(Items.lantern)) light = Math.max(light, Items.lantern.light!);
     else if (inventory.count(Items.torch)) light = Math.max(light, Items.torch.light!);
     return light;
   }
 
   private villageAt(x: number, y: number): WorldObject | null {
-    for (const o of this.d.world.objects.objects.values()) if (o.kind === 'village' && o.contains(Math.floor(x), Math.floor(y))) return o;
+    const gx = Math.floor(x);
+    const gy = Math.floor(y);
+    for (const o of this.d.world.objects.inChunk(chunkKey(tileToChunk(gx), tileToChunk(gy)))) if (o.kind === 'village' && o.contains(gx, gy)) return o;
     return null;
   }
 

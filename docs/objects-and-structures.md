@@ -20,34 +20,25 @@ A layout can also carry **buildings**: footprints drawn as single building sprit
 
 ## World objects
 
-A `WorldObject` (`src/world/WorldObject.ts`) is a placed layout: id, kind, name, persistence tier, top-left tile position and layout. On creation it lists every chunk its footprint touches. `stamp(chunk)` writes its part of the layout into a chunk's composed tiles; chests that are opened, or whose anchor was looted before, are drawn as `ChestOpen`.
+A `WorldObject` (`src/world/WorldObject.ts`) is a placed layout: id, kind, name, top-left tile position and layout. On creation it lists every chunk its footprint touches. `stamp(chunk)` writes its part of the layout into a chunk's composed tiles; chests that are opened, or whose anchor was looted before, are drawn as `ChestOpen`.
 
-`ObjectManager` (`src/world/ObjectManager.ts`) keeps live objects in a map and indexes them by chunk.
+`ObjectManager` (`src/world/ObjectManager.ts`) keeps live objects in a map and indexes them by chunk (every chunk an object covers) and by kind. Placement checks use the indexes: `collides` looks only at the chunks under the padded rectangle, and `crowded` only at live objects of the same kind.
 
-**Multi-chunk lifetime.** `activeChunks` counts how many of an object's chunks are in the cache area. It rises and falls as chunks enter and leave. When it reaches 0, the object is discarded, unless it is persistent. So a castle covering 3 × 3 chunks survives while any one of those chunks is still loaded, and only goes once all nine have unloaded.
+**Multi-chunk lifetime.** `activeChunks` counts how many of an object's chunks are in the cache area. It rises and falls as chunks enter and leave. When it reaches 0, the object is discarded. So a castle covering 3 × 3 chunks survives while any one of those chunks is still loaded, and only goes once all nine have unloaded.
 
-When an object the player had discovered is discarded, `WorldManager.onForget` fires. The story uses this to keep the place as a lantern memory.
-
-## Persistence tiers
-
-| Tier | Behaviour |
-| --- | --- |
-| `temporary` | Discarded when its chunks unload; may regenerate differently. The default. |
-| `semi-persistent` | Behaves as temporary until discovered. Once discovered, it is kept when its chunks unload, for 3 in-game days (`SEMI_KEEP_MINUTES`) after the player last left it, so coming back soon finds it as it was: same layout, chests still looted, mined rock still gone. After that it is forgotten like a temporary object (and the lantern remembers it). Kept objects are saved with their idle time. Used by villages, castles, mines and nomad camps. |
-| `persistent` | Never discarded, saved with its full layout, and restored on load. |
-
-Generated objects that are persistent: the extremely rare structures and the rare events below. The story's landmarks are persistent too.
+**Every structure forgets.** There are no persistent or kept objects: villages, castles, mines, nomad camps, the extremely rare structures and the rare events are all discarded when their chunks fully unload, like everything else, and may come back different. Nothing about them is saved. What the player did there still counts where it is keyed by the anchor rather than the object: looted chests stay looted and cleared places stay cleared (below).
 
 ## The roll
 
-When a chunk enters the cache area, `WorldManager.resolveAnchor` calls `rollAnchor` for that chunk. Everything rolled there is "anchored" in it. Three independent rolls run, each with its own stream and the region's visit counter:
+When a chunk enters the cache area, `WorldManager.resolveAnchor` calls `rollAnchor` for that chunk. Everything rolled there is "anchored" in it. Four independent rolls run, each with its own stream and the region's visit counter:
 
-1. **Rare event.** For each entry in `RARE_EVENTS`, in order, roll against `chance × rareBoost`; the first hit is placed.
+1. **Rare event.** For each entry in `RARE_EVENTS`, in order, roll against its `chance`; the first hit is placed.
 2. **Structure.** With probability `STRUCTURE_CHANCE` (0.22):
    - Candidates are structures whose `minDistance` the chunk's centre has reached and whose biome list (if any) includes the anchor chunk's biome.
-   - A tier is picked by weight `TIER_WEIGHTS[t] × (1 + TIER_GROWTH[t] × band)`, with weights 70, 22, 6, 1 and growth 0, 0.3, 1, 2 for common, uncommon, rare and extremely rare. The extremely rare weight is also multiplied by `rareBoost`.
+   - A tier is picked by weight `TIER_WEIGHTS[t] × (1 + TIER_GROWTH[t] × band)`, with weights 70, 22, 6, 1 and growth 0, 0.3, 1, 2 for common, uncommon, rare and extremely rare.
    - A structure in that tier is picked by its `weight`.
-3. **Lake.** Chance by biome: Forest 6% (Lake), Desert 2.5% (Oasis), Snow 5% (Frozen Lake).
+3. **Rift.** From `RIFT.minDistance` (96 tiles) out, a chance by difficulty band (`RIFT_CHANCE`): 1.4%, 2%, 2.8% and 3.6% per chunk from Easy to Extreme. See [Rifts](#rifts).
+4. **Lake.** Chance by biome: Forest 6% (Lake), Desert 2.5% (Oasis), Snow 5% (Frozen Lake).
 
 ## Placement
 
@@ -65,33 +56,33 @@ Ids have the form `kind@cx,cy#visit/slot`. The anchor key `cx,cy/slot` stays the
 
 From `STRUCTURES`. Rotation "free" means any quarter turn; "mirror" means flipped only, so building fronts keep facing the camera. Sizes are in tiles.
 
-| Kind | Name | Rarity | Weight | Biomes | Min distance | Spacing | Flat ground | Rotation | Persistence | Size |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `camp` | Camp | Common | 3 | All | 0 | 60 | Yes | Free | Temporary | 7–9 |
-| `house` | Small House | Common | 3 | All | 0 | 40 | Yes | Mirror | Temporary | 9–11 × 7–8 |
-| `deposit` | Ore Deposit | Common | 2 | All | 0 | 30 | No | Free | Temporary | 6–8 |
-| `ruins` | Ruins | Uncommon | 3 | All | 0 | 100 | Yes | Free | Temporary | 12–18 × 10–15 |
-| `tower` | Tower | Uncommon | 2 | All | 0 | 150 | Yes | Mirror | Temporary | 9–11 × 10–12 |
-| `cabin` | Cabin | Uncommon | 2 | Forest, Snow | 0 | 100 | Yes | Mirror | Temporary | 14–16 × 8–9 |
-| `abandoned-camp` | Abandoned Camp | Uncommon | 2 | All | 0 | 80 | Yes | Free | Temporary | 8–10 |
-| `nomad-camp` | Nomad Camp | Uncommon | 3 | Desert | 120 | 260 | Yes | Mirror | Semi-persistent | 11 |
-| `mine` | Mine | Uncommon | 1 | All | 0 | 150 | No | Mirror | Semi-persistent | 17 × 14 |
-| `village` | Village | Rare | 3 | Forest, Snow | 150 | 500 | Yes | Mirror | Semi-persistent | 46–56 |
-| `temple` | Temple | Rare | 2 | All | 300 | 400 | Yes | Mirror | Temporary | 20–28 × 22–30 |
-| `castle` | Castle | Rare | 2 | Forest, Snow | 400 | 800 | Yes | Mirror | Semi-persistent | 66–76 |
-| `dungeon` | Dungeon | Rare | 2 | All | 250 | 300 | No | Free | Temporary | 12–16 |
-| `giant-city` | Giant City | Extremely rare | 2 | All | 2,500 | 3,000 | Yes | Mirror | Persistent | 84–94 |
-| `sun-temple` | Sun Temple | Extremely rare | 1 | Desert | 2,500 | 3,000 | Yes | Mirror | Persistent | 32–40 |
-| `boss-arena` | Boss Arena | Extremely rare | 2 | All | 2,500 | 3,000 | Yes | Free | Persistent | 37–45 |
-| `standing-stones` | Standing Stones | Extremely rare | 2 | All | 2,500 | 3,000 | No | Free | Persistent | 19–23 |
+| Kind | Name | Rarity | Weight | Biomes | Min distance | Spacing | Flat ground | Rotation | Size |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `camp` | Camp | Common | 3 | All | 0 | 60 | Yes | Free | 7–9 |
+| `house` | Small House | Common | 3 | All | 0 | 40 | Yes | Mirror | 9–11 × 7–8 |
+| `deposit` | Ore Deposit | Common | 2 | All | 0 | 30 | No | Free | 6–8 |
+| `ruins` | Ruins | Uncommon | 3 | All | 0 | 100 | Yes | Free | 12–18 × 10–15 |
+| `tower` | Tower | Uncommon | 2 | All | 0 | 150 | Yes | Mirror | 9–11 × 10–12 |
+| `cabin` | Cabin | Uncommon | 2 | Forest, Snow | 0 | 100 | Yes | Mirror | 14–16 × 8–9 |
+| `abandoned-camp` | Abandoned Camp | Uncommon | 2 | All | 0 | 80 | Yes | Free | 8–10 |
+| `nomad-camp` | Nomad Camp | Uncommon | 3 | Desert | 120 | 260 | Yes | Mirror | 11 |
+| `mine` | Mine | Uncommon | 1 | All | 0 | 150 | No | Mirror | 17 × 14 |
+| `village` | Village | Rare | 3 | Forest, Snow | 150 | 500 | Yes | Mirror | 46–56 |
+| `temple` | Temple | Rare | 2 | All | 300 | 400 | Yes | Mirror | 20–28 × 22–30 |
+| `castle` | Castle | Rare | 2 | Forest, Snow | 400 | 800 | Yes | Mirror | 66–76 |
+| `dungeon` | Dungeon | Rare | 2 | All | 250 | 300 | No | Free | 12–16 |
+| `giant-city` | Giant City | Extremely rare | 2 | All | 2,500 | 3,000 | Yes | Mirror | 84–94 |
+| `sun-temple` | Sun Temple | Extremely rare | 1 | Desert | 2,500 | 3,000 | Yes | Mirror | 32–40 |
+| `boss-arena` | Boss Arena | Extremely rare | 2 | All | 2,500 | 3,000 | Yes | Free | 37–45 |
+| `standing-stones` | Standing Stones | Extremely rare | 2 | All | 2,500 | 3,000 | No | Free | 19–23 |
 
 Rare events (`RARE_EVENTS`), rolled per anchor chunk before the structure roll:
 
-| Kind | Name | Chance per chunk | Rotation | Persistence |
-| --- | --- | --- | --- | --- |
-| `ancient-temple` | Ancient Temple | 0.1% | Mirror | Persistent |
-| `lost-city` | Lost City | 0.01% | Mirror | Persistent |
-| `crystal-monolith` | Crystal Monolith | 0.001% | Free | Persistent |
+| Kind | Name | Chance per chunk | Rotation |
+| --- | --- | --- | --- |
+| `ancient-temple` | Ancient Temple | 0.1% | Mirror |
+| `lost-city` | Lost City | 0.01% | Mirror |
+| `crystal-monolith` | Crystal Monolith | 0.001% | Free |
 
 **Mines** are cut into a ragged rocky hill (dark rock at its heart, lighter at the edges). A timber-framed entrance (a `mine` building) sits at the foot of the hill, with lamps either side. In front is a dirt yard with rails running out of the entrance to a mine cart, ore heaps, a crate, a barrel and a stone. The entrance leads into a cave; see [buildings-and-interiors.md](buildings-and-interiors.md#mines).
 
@@ -106,6 +97,14 @@ Building footprints keep the ground they stand on: `building()` marks the footpr
 Villages, castles and nomad camps hold an anvil, a crafting station. Camps and nomad camps have a campfire, the other station and a place to rest, beside a canvas tent (abandoned camps keep the tent but not the fire). Villages have lamp posts along their roads that light up at night.
 
 **Ruins** are the shell of an old stone hall: outer walls that stand in runs and collapse in others (switching about every six tiles, with fallen stones spilling inward), a gap in the south wall, an inner wall with a doorway, a colonnade with some pillars fallen to rubble, overgrown patches where the floor has given way, and bushes and flowers creeping in. Chests are always found in castles, dungeons, the Sun Temple, ancient temples and lost cities, and sometimes in villages, temples, towers, ruins, cabins and abandoned camps.
+
+## Rifts
+
+Tears in the air onto an outer dimension, the heart of the [story](story.md). `rift()` builds a 7 × 7 layout: decorations cleared, a disc of scorched, violet-veined ground (`Tile.RiftGround`) and the tear (`Deco.Rift`, solid) in the middle. The definition is `RIFT` in `StructureGenerator.ts` (kind `rift`, flat ground, spacing 160, mirror only); it is rolled on its own rather than through the tiers, so rifts grow commoner with distance however many other structures there are. A world event can also tear one open near the player ("A rift tears open nearby.", see [living-world.md](living-world.md)).
+
+Like every structure a rift is temporary. Its object id (which includes the region's visit) seeds the dimension behind it, so the same rift always leads to the same space. Facing the tear, E enters it ([dimensions.md](dimensions.md)).
+
+**Closed rifts.** Closing a rift calls `WorldManager.closeRift`: the object is marked `closed`, so it stamps a faint scar (`Deco.RiftScar`, not solid) instead of the tear, and its id goes into `clearedAnchors`, so a re-roll of the same object (its chunks came back before its region regenerated) is closed too. Since the id changes with the region's visit, a regenerated region may open a new rift in the same place. `WorldManager.nearestRift` finds the nearest open rift among live objects (through `ObjectManager.ofKind`) for the story's arrow and the glitches around it.
 
 ## Lakes
 
@@ -123,30 +122,12 @@ Villages, castles and nomad camps hold an anvil, a crafting station. Camps and n
 
 **Chests never refill.** Opening a chest marks it opened on its object and adds the object's anchor key to `WorldManager.lootedAnchors`. If the region later regenerates and a new structure rolls at the same anchor, every chest in it starts open and empty. Chest loot is seeded by the object id and chest position.
 
-**Cleared places stay cleared.** Dungeons, boss arenas, the story's Sunken Archive and legendary creatures record a key in `WorldManager.clearedAnchors` when their guards fall, and never wake again.
+**Cleared places stay cleared.** Dungeons, boss arenas and legendary creatures record a key in `WorldManager.clearedAnchors` when their guards fall, and never wake again. Closed rifts are recorded by object id instead, so they stay closed only while their region stands (above).
 
 **Harvest log.** Gathering a decoration records the cell, its decoration and the in-game minute, per chunk, tagged with the region's visit counter. Composition removes those decorations while the record's visit matches. When the region regenerates, the record no longer applies and is deleted. Bushes and flowers grow back after 1,440 in-game minutes and mushrooms after 2,160 (`REGROW_MINUTES`), checked once per in-game hour by `WorldManager.regrow()`.
 
 ## Other placed objects
 
-Some objects are not rolled with the terrain:
+Some objects are not rolled with the terrain: **world events** (`src/systems/WorldEvents.ts`) place a meteor crater, buried treasure, a risen obelisk, a rift or a Moonwell on open, loaded ground near the player. They go through `WorldManager.addObject`, so they stamp, stream and are forgotten like any other object.
 
-- **World events** (`src/systems/WorldEvents.ts`) place a meteor crater, buried treasure or a risen obelisk on open, loaded ground near the player, as temporary objects. After an ending they can also place echo monuments, memory fragments and the quiet cabin.
-- **Story places** (`src/story/StoryPlaces.ts`) are persistent objects placed once per world at seeded positions: the Waking Monument at the origin, then the Village of Graves, the Observatory, the Sunken Archive and the Original Anchor at increasing distances. See [Story](story.md).
-
-All of these go through `WorldManager.addObject`, so they stamp, stream and save like any other object.
-
-## World rules after the ending
-
-The story's ending sets `WorldManager.rules`:
-
-| Ending | `regenChance` | `rareBoost` |
-| --- | --- | --- |
-| None yet | 1 | 1 |
-| The Remembered World | 0.25 | 1 |
-| The Living World | 1 | 3 |
-| The Last Memory | 1 | 1 |
-
-`regenChance` is the chance a fully unloaded region regenerates (see [World generation](world-generation.md)). `rareBoost` multiplies rare event chances and the extremely rare tier's weight.
-
-See also: [World generation](world-generation.md), [World streaming](world-streaming.md), [Saves](saves.md), [Story](story.md)
+See also: [World generation](world-generation.md), [World streaming](world-streaming.md), [Saves](saves.md)

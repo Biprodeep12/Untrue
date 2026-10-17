@@ -12,7 +12,9 @@ How the source is organised, what runs each frame, and how the parts talk to eac
 | `src/style.css` | All HTML UI styling. |
 | **`src/game/`** | The game shell. |
 | `Game.ts` | Boots PixiJS, owns the frame loop, wires every system together, spawning and saving. |
-| `LivingWorld.ts` | Owns time, weather, hazards, NPCs, quests, events, the story, lighting and weather rendering. |
+| `LivingWorld.ts` | Owns time, weather, hazards, NPCs, quests, events, visions, lighting and weather rendering, and the story (`RiftStory`), which plugs in here. |
+| `Place.ts` | `Place`: where the player is (the overworld, an `Interior`, or a `RiftTrip`): the player's collision, the combat `Arena`, and the player's spot in the overworld. |
+| `RiftTrip.ts` | One trip into an outer dimension: the run, the enemies it asked for, the map's fog, and the dimension as a `Place` and combat `Arena`. |
 | `Player.ts` | Movement, collision, dodge roll, knockback and invulnerability. |
 | `Camera.ts` | Smooth follow and zoom (0.25 to 2). |
 | `Input.ts` | Keyboard, mouse, wheel, the touch stick (left half), pinch zoom and tap-to-interact. Game code asks for actions (`act`, `holding`), not keys. |
@@ -23,9 +25,9 @@ How the source is organised, what runs each frame, and how the parts talk to eac
 | `ChunkManager.ts` | Visible, render, cache and simulation areas; generation queue; chunk lifecycle. |
 | `Chunk.ts` | Chunk buffers and the chunk pool. |
 | `GroundItems.ts` | Items lying on the ground, picked up by walking over them, saved with the world. |
-| `Interior.ts` | Building interiors, mine caves and the keep's floors, generated from the building's seed. |
+| `Interior.ts` | Building interiors, mine caves and the keep's floors, generated from the building's seed; the bookshelves' books. |
 | `BiomeManager.ts` | Biome records and chunk ownership. |
-| `ObjectManager.ts` | Live world objects indexed by chunk. |
+| `ObjectManager.ts` | Live world objects indexed by chunk and by kind. |
 | `WorldObject.ts` | One object spanning one or more chunks, and how it stamps onto a chunk. |
 | `Regions.ts` | Per-region visit counters that drive regeneration. |
 | `SyncGenerator.ts` | Main-thread chunk generator for tests. |
@@ -39,12 +41,13 @@ How the source is organised, what runs each frame, and how the parts talk to eac
 | `Tiles.ts` | Tile, decoration and biome ids; solidity. |
 | `WorldRules.ts` | Difficulty bands by distance. |
 | **`src/workers/`** | `worldGenerator.worker.ts` (runs `generateChunk`) and `WorkerGenerator.ts` (the worker pool). |
+| **`src/dimension/`** | The outer dimensions behind the rifts, with no rendering: `DimTile.ts` (their tiles), `Dimension.ts` (what a dimension is, and the registry), `Hollow.ts` (The Hollow and its generator), `Challenges.ts` (the challenge state machines and `DimensionRun`). See [dimensions.md](dimensions.md). |
+| **`src/story/`** | `RiftStory.ts`: the main story, its visions, objective and save. See [story.md](story.md). |
 | **`src/entities/`** | `Enemy.ts` (enemy AI), `Species.ts` (enemy roster, damage-type weaknesses and resistances, variants), `NPC.ts` (NPC schedules and following). |
 | **`src/items/`** | `Items.ts`: the item catalogue. |
 | **`src/systems/`** | Gameplay systems: inventory, crafting, gathering, loot, vitals, progression, combat, NPCs, quests, trade, time, weather, hazards, world events, exploration. |
-| **`src/story/`** | `StorySystem.ts`, `StoryPlaces.ts` (story landmarks), `StoryScript.ts` (all story text). |
-| **`src/rendering/`** | `Atlas.ts`, `TileRenderer.ts`, `EntityRenderer.ts`, `Buildings.ts`, `InteriorRenderer.ts`, `GroundItemRenderer.ts`, `Lighting.ts`, `ParticleSystem.ts`, `Effects.ts`. |
-| **`src/ui/`** | HTML UI: `Hud`, `Hotbar`, `Menu` (tabs: Inventory, Crafting, Skills, Quests, Map, Lantern, Settings, About), `MapView`, `PauseMenu`, `Dialog`, `Vision`, `SleepOverlay`, `DebugOverlay`, `TouchStick`, `ItemIcon`, `Hints` (first-time tips), `Fullscreen` (the Fullscreen API), `About` (privacy, credits, licenses), `Playground` (the story playground panel). |
+| **`src/rendering/`** | `Atlas.ts`, `TileRenderer.ts`, `EntityRenderer.ts`, `Buildings.ts`, `InteriorRenderer.ts`, `DimensionRenderer.ts`, `GroundItemRenderer.ts`, `Lighting.ts`, `ParticleSystem.ts`, `Effects.ts`, `RiftGlitch.ts` (the world's glitches near a rift). |
+| **`src/ui/`** | HTML UI: `Hud`, `Hotbar`, `Menu` (tabs: Inventory, Crafting, Skills, Quests, Map (only inside an outer dimension), Settings, About), `MapView`, `DimensionMap`, `PauseMenu`, `Dialog`, `Vision`, `SleepOverlay`, `DebugOverlay`, `TouchStick`, `ItemIcon`, `Hints` (first-time tips), `Fullscreen` (the Fullscreen API), `About` (privacy, credits, licenses), `Playground` (the story playground panel). |
 | **`src/audio/`** | `AudioSystem.ts`: synthesised sound effects, generated music and weather ambience; see [audio.md](audio.md). |
 | **`src/save/`** | `SaveManager.ts`: IndexedDB saves and migration. |
 
@@ -56,19 +59,19 @@ Tests sit next to the code they cover as `*.test.ts`.
 
 1. `handleKeys()`: debug overlay, menu, vision paging, Escape, save, zoom, hotbar, use, interact, attack, dodge and the debug far trip.
 2. If the player is waiting to be placed (`spawnTarget`), `trySpawn()` looks for open ground once the chunks around the target have loaded.
-3. Otherwise, unless a menu, dialog or vision pauses the world:
-   - `LivingWorld.update(dt)`: clock and hourly events, hazards, NPCs, the story, lost travellers and escorts.
+3. Indoors, `tickIndoors`; in an outer dimension, `tickDimension` (the clock, needs and villagers run as indoors; the player moves on the dimension, combat fights on it, and the run is stepped and its events acted on; see [dimensions.md](dimensions.md)). Otherwise, unless a menu, dialog or vision pauses the world:
+   - `LivingWorld.update(dt)`: clock and hourly events, hazards, NPCs, lost travellers and escorts.
    - Blocking state and movement speed (slow status, blocking, weather).
    - `Player.update`, then gathering, then `CombatSystem.update` with the player's body.
    - The camera follows the player.
-   - `Vitals.update`; a collapse sends the player to their waking spot (the last rest, Moonwell or story stage; the origin before any).
-4. `WorldManager.update(view)` with the camera's view in tiles: streaming, biome and object bookkeeping, discovery. `ChunkManager` draws at most 2 waiting chunks, nearest first.
+   - `Vitals.update`; a collapse sends the player to their waking spot (the last rest or Moonwell; the origin before any).
+4. `WorldManager.update(view)` with the camera's view in tiles (indoors and in a dimension, a view around the place's `spot` outside, so the world there stays loaded): streaming, biome and object bookkeeping, discovery. `ChunkManager` draws at most 2 waiting chunks, nearest first.
 5. The world layer is positioned and scaled for the camera.
-6. `TileRenderer.cull()` hides chunks outside the camera's view; buildings and ground items near the screen update.
+6. Indoors, the room renders; in a dimension, `DimensionRenderer` culls and animates, then entities and the dimension's lighting. Outdoors, `TileRenderer.cull()` hides chunks outside the camera's view, rifts animate, the glitches run near an open rift, and buildings and ground items near the screen update.
 7. `updateTarget()`: the interaction prompt and target outline.
 8. Rendering updates: tree fading, `EntityRenderer.update`, then `LivingWorld.render` (weather particles, effects, lighting), and the music mood (biome, band, indoors or cave, what is hunting the player).
 9. Touch stick, hotbar and menu refresh.
-10. Autosave every 30 seconds; every 0.25 seconds, the HUD refresh, first-time tips and the check for a new story stage (which moves the waking spot).
+10. Autosave every 30 seconds; every 0.25 seconds, the HUD refresh and first-time tips.
 11. `Input.endFrame()` clears one-frame inputs.
 
 The ticker is capped at 60 frames per second (30 with the setting).
@@ -89,14 +92,14 @@ Systems hold references to what they need and report back through callbacks:
 
 | Hook | Raised by | Used for |
 | --- | --- | --- |
-| `WorldManager.onDiscover(o)` | The player first stands inside an object | Discovery toast, XP, quest discovery objectives, lantern whispers |
-| `WorldManager.onForget(o)` | A discovered object is discarded | The story's lantern memories (`StorySystem` sets it) |
-| `ObjectManager.onDiscard(o)` | Any object is discarded | Forwarded by `WorldManager` to `onForget` |
+| `WorldManager.onDiscover(o)` | The player first stands inside an object | Discovery toast, XP, quest discovery objectives |
 | `ChunkListener.show / hide / changed` | `ChunkManager` | `TileRenderer` builds, removes and refreshes chunk meshes |
 | `CombatSystem.onKill(enemy)` | An enemy dies | Quest slay objectives |
 | `CombatSystem.onCleared(kind)` | A guarded group is wiped out | Quest clear objectives, village defence reward |
+| `Arena.killed(enemy)` | An enemy dies on an arena (a dimension) | `DimensionRun.enemyKilled` |
+| `DimensionRun.takeEvents()` | Each frame of a trip | `RiftTrip` spawns and removes enemies and scales the boss; `Game.tripEvent` moves the player after a fall, grants rewards, shows notices, closes the rift or leaves |
 | `QuestSystem.onComplete(q)` | A quest finishes | Rewards |
-| `CombatEvents`, `HazardHooks`, `EventHooks`, `StoryHooks` | Their systems | Damage numbers, swings, hurt flashes, notifications, visions, dialogs |
+| `CombatEvents`, `HazardHooks`, `EventHooks` | Their systems | Damage numbers, swings, hurt flashes, notifications, visions, dialogs |
 
 `WorldManager.now` is a function the game clock provides; the world uses it to timestamp harvests for regrowth.
 
@@ -107,16 +110,17 @@ Vitest runs headless. `WorldManager` does not touch the renderer, so tests build
 | File | Covers |
 | --- | --- |
 | `src/world/WorldManager.test.ts` | Streaming, minimum biome size, bounded memory, determinism, multi-chunk lifetime, regeneration |
-| `src/world/Buildings.test.ts` | Buildings, interiors, castles, discovered places, saves that keep the world as it was |
+| `src/world/Buildings.test.ts` | Buildings, interiors, castles, discovery and forgetting, saves that keep the world as it was |
 | `src/world/Rivers.test.ts` | Rivers and bridges, the spawn, mines |
-| `src/save/SaveManager.test.ts` | Persistent finds and save round trips |
+| `src/save/SaveManager.test.ts` | Save round trips and migrating older saves |
 | `src/entities/NPC.test.ts` | NPCs at night |
 | `src/systems/Survival.test.ts` | Inventory, crafting, vitals, gathering, chests that never refill |
-| `src/systems/Adventurer.test.ts` | Carrying, skills, semi-persistent places, the Moonwell, equipment |
+| `src/systems/Adventurer.test.ts` | Carrying, skills, places forgetting and the object indexes, the Moonwell, equipment |
 | `src/systems/Progress.test.ts` | Sorting the bag, selling a stack, damage types, legends and trophies, rare recipes and the star tier, abandoning and defending in quests, key bindings |
 | `src/systems/Combat.test.ts` | Damage, enemy AI, spawning, weapons, dungeons, progression |
 | `src/systems/LivingWorld.test.ts` | Time, weather, regrowth, NPCs, quests, trade, events, hazards |
 | `src/systems/Exploration.test.ts` | Fog of war, milestones, markers |
-| `src/story/Story.test.ts` | Story places and a full playthrough to an ending |
+| `src/dimension/Dimension.test.ts`, `Challenges.test.ts`, `DimensionRenderer.test.ts` | The Hollow's layout, every challenge and the run, the dimension renderer's culling and pooling |
+| `src/game/RiftTrip.test.ts` | Rift structures (placement, determinism, closing), trips (stashing and restoring the overworld's fights, kills and boss phases, closing through the portal), saving inside, dying inside, the story's objectives |
 
 See also: [World streaming](world-streaming.md), [Rendering](rendering.md)

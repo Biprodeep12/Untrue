@@ -40,7 +40,7 @@ describe('world streaming', () => {
       most = {
         chunks: Math.max(most.chunks, world.chunks.chunks.size),
         biomes: Math.max(most.biomes, world.biomes.records.size),
-        objects: Math.max(most.objects, [...world.objects.objects.values()].filter((o) => o.persistence !== 'persistent').length),
+        objects: Math.max(most.objects, world.objects.objects.size),
       };
     }
     expect(most.chunks).toBeLessThanOrEqual(world.chunks.cached.size);
@@ -67,7 +67,7 @@ describe('MVP: multi-chunk lifetime and regeneration', () => {
     for (; x < 20000 && !target; x += CHUNK_SIZE) {
       world.update(view(x, 0));
       target = [...world.objects.objects.values()].find(
-        (o) => o.persistence !== 'persistent' && new Set(o.chunks.map(keyX)).size >= 2 && cachedCount(world, o) === o.chunks.length,
+        (o) => new Set(o.chunks.map(keyX)).size >= 2 && cachedCount(world, o) === o.chunks.length,
       );
     }
     expect(target, 'no multi-chunk object found').toBeDefined();

@@ -140,7 +140,7 @@ The world is divided into regions of 8 × 8 chunks (`REGION_SIZE`). `RegionTrack
 
 Rivers, mountains and climate use only the seed, so landforms stay put while the biomes, plants and structures on them change.
 
-The story's endings change `WorldManager.rules.regenChance`: the visit counter only rises if `unit(hash(seed, region, visit, 0x4e9)) < regenChance`. At the default of 1, every region regenerates; after the Remembered World ending it is 0.25.
+Every region that fully unloads regenerates: its visit counter always rises.
 
 ## World-scale rules
 

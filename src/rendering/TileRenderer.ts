@@ -1,7 +1,9 @@
 // Draws chunks: one batched mesh per chunk over a single atlas texture, plus
 // pooled, y-sorted sprites for decorations. Chunks are loaded a chunk beyond
 // the screen; those outside the camera's view are culled, so their meshes are
-// not drawn and their sprites leave the sorted container.
+// not drawn and their sprites leave the sorted container. Rifts' tears are
+// animated by swapping a few frames on a timer, and a rift's glitch can nudge
+// a decoration near it for a moment; neither costs anything without a rift.
 
 import { Container, Mesh, MeshGeometry, Rectangle, Sprite, Texture } from 'pixi.js';
 import { CHUNK_AREA, CHUNK_SIZE, TILE_SIZE } from '../config';
@@ -10,7 +12,7 @@ import { hash3 } from '../generation/Random';
 import { Deco, DECO_COUNT, Tile } from '../generation/Tiles';
 import type { Chunk } from '../world/Chunk';
 import type { ChunkListener } from '../world/ChunkManager';
-import { ATLAS_H, ATLAS_W, decoFrame, tileCell, TILE_VARIANTS } from './Atlas';
+import { ATLAS_H, ATLAS_W, decoFrame, RIFT_FRAMES, riftFrame, tileCell, TILE_VARIANTS } from './Atlas';
 import type { Light } from './Lighting';
 
 /** Decorations that glow at night: radius in tiles and warmth. */
@@ -19,12 +21,11 @@ export const GLOWING: Partial<Record<number, [number, number]>> = {
   [Deco.Lamp]: [3.5, 0.8],
   [Deco.Campfire]: [5, 1],
   [Deco.Meteorite]: [2.5, 0.6],
-  [Deco.Pedestal]: [2.5, 0.1],
-  [Deco.AnchorCore]: [7, 0.3],
-  [Deco.Monument]: [1.5, 0],
-  [Deco.Book]: [2, 0.6],
   [Deco.Moonwell]: [6, 0],
+  [Deco.Rift]: [4.5, 0],
 };
+/** Frames per second of a rift's tear. */
+const RIFT_FPS = 7;
 /** Facade variant without a window; the rest glow at night. */
 const BLANK_FACADE = 3;
 /** Walls with something else below them show their front face. */
@@ -61,6 +62,14 @@ export class TileRenderer implements ChunkListener {
   private readonly view = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   /** Nothing is culled until the first cull. */
   private culled = false;
+  /** Rift sprites in drawn chunks, animated by `animate`; usually none. */
+  private readonly rifts: Sprite[] = [];
+  private readonly riftTextures: Texture[] = [];
+  private riftTime = 0;
+  /** Decorations a rift's glitch moved, their own x, and how long until they settle. */
+  private readonly jolted: Sprite[] = [];
+  private readonly joltX: number[] = [];
+  private joltLeft = 0;
 
   constructor(
     private readonly atlas: Texture,
@@ -72,6 +81,10 @@ export class TileRenderer implements ChunkListener {
     for (let d = 0; d < DECO_COUNT; d++) {
       const { x, y, w, h } = decoFrame(d);
       this.decoTextures.push(new Texture({ source: atlas.source, frame: new Rectangle(x, y, w, h) }));
+    }
+    for (let f = 0; f < RIFT_FRAMES; f++) {
+      const { x, y, w, h } = riftFrame(f);
+      this.riftTextures.push(f === 0 ? this.decoTextures[Deco.Rift] : new Texture({ source: atlas.source, frame: new Rectangle(x, y, w, h) }));
     }
     // Every chunk mesh shares the same quad layout; only UVs change.
     this.positions = new Float32Array(CHUNK_AREA * 8);
@@ -108,6 +121,54 @@ export class TileRenderer implements ChunkListener {
         }
       }
     }
+  }
+
+  /** Swaps the frames of every rift's tear; nothing to do without one. */
+  animate(dt: number): void {
+    if (!this.rifts.length) return;
+    this.riftTime += dt;
+    const tex = this.riftTextures[Math.floor(this.riftTime * RIFT_FPS) % RIFT_FRAMES];
+    for (const s of this.rifts) if (s.texture !== tex) s.texture = tex;
+  }
+
+  /** A rift's glitch: the decoration nearest a tile jumps sideways, tinted,
+   *  until `settle` puts it back. */
+  jolt(gx: number, gy: number, dx: number, tint: number, seconds: number): void {
+    const d = this.drawn.get(chunkKey(Math.floor(gx / CHUNK_SIZE), Math.floor(gy / CHUNK_SIZE)));
+    if (!d?.inView) return;
+    const px = (gx + 0.5) * TILE_SIZE;
+    const py = (gy + 1) * TILE_SIZE;
+    let best: Sprite | null = null;
+    let bestD = (4 * TILE_SIZE) ** 2;
+    for (const s of d.sprites) {
+      const e = (s.x - px) ** 2 + (s.y - py) ** 2;
+      if (e < bestD && !this.jolted.includes(s) && !this.rifts.includes(s)) {
+        bestD = e;
+        best = s;
+      }
+    }
+    if (!best) return;
+    this.jolted.push(best);
+    this.joltX.push(best.x);
+    best.x += dx;
+    best.tint = tint;
+    this.joltLeft = seconds;
+  }
+
+  /** Puts jolted decorations back once their moment is over (now, for `Infinity`). */
+  settle(dt: number): void {
+    if (!this.jolted.length || (this.joltLeft -= dt) > 0) return;
+    for (let i = 0; i < this.jolted.length; i++) {
+      this.jolted[i].x = this.joltX[i];
+      this.jolted[i].tint = 0xffffff;
+    }
+    this.jolted.length = 0;
+    this.joltX.length = 0;
+  }
+
+  /** Hides every chunk until the next `cull`, e.g. while the player is in a dimension. */
+  hideAll(): void {
+    this.cull(-Infinity, -Infinity, -Infinity, -Infinity);
   }
 
   get drawnCount(): number {
@@ -172,6 +233,7 @@ export class TileRenderer implements ChunkListener {
   changed(chunk: Chunk): void {
     const d = this.drawn.get(chunk.key);
     if (!d) return;
+    this.settle(Infinity);
     this.writeUVs(d.mesh, chunk);
     this.releaseSprites(d);
     this.addDecos(d, chunk);
@@ -262,11 +324,17 @@ export class TileRenderer implements ChunkListener {
       s.zIndex = y;
       if (d.inView) this.entities.addChild(s);
       d.sprites.push(s);
+      if (deco === Deco.Rift) this.rifts.push(s);
     }
   }
 
   private releaseSprites(d: Drawn): void {
+    this.settle(Infinity);
     for (const s of d.sprites) {
+      if (this.rifts.length) {
+        const r = this.rifts.indexOf(s);
+        if (r >= 0) this.rifts.splice(r, 1);
+      }
       s.alpha = 1;
       if (d.inView) this.entities.removeChild(s);
       this.spritePool.push(s);

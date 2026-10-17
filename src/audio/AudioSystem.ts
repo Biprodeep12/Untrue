@@ -1,8 +1,9 @@
 // Audio (spec 7.3): synthesised effects, gentle generated music that follows
 // the biome, the time of day and how far out the player is, weather
 // ambience, and the sounds of the land: birds by day, crickets by night,
-// howls and wails from what hunts, drips and a drone in caves. No audio
-// files ship.
+// howls and wails from what hunts, drips and a drone in caves, the hum of
+// an open rift, and the outer dimensions' own uneasy music. No audio files
+// ship.
 
 import { BiomeType } from '../generation/Tiles';
 import type { WeatherKind } from '../systems/WeatherSystem';
@@ -23,7 +24,8 @@ export type Sfx =
   | 'ui'
   | 'chest'
   | 'thunder'
-  | 'warn';
+  | 'warn'
+  | 'rift';
 
 /** Scales (semitones from the root) for each mood. */
 const SCALES = {
@@ -31,11 +33,15 @@ const SCALES = {
   night: [0, 3, 5, 7, 10],
   desert: [0, 1, 4, 5, 7, 8],
   snow: [0, 2, 4, 6, 7, 11],
+  /** The outer dimensions: close, unresolved intervals. */
+  rift: [0, 1, 3, 6, 7, 10],
 };
 const ROOTS = [220, 196, 174.6, 246.9];
 /** Seconds per music beat, per land: brisk in the desert, slow in the snow. */
 const BEAT = 0.75;
 const BEATS: Partial<Record<BiomeType, number>> = { [BiomeType.Desert]: 0.62, [BiomeType.Snow]: 0.9 };
+/** Inside an outer dimension, time drags. */
+const RIFT_BEAT = 1.05;
 /** The melody's voice per land. */
 const VOICES: Partial<Record<BiomeType, OscillatorType>> = { [BiomeType.Desert]: 'square', [BiomeType.Snow]: 'sine' };
 /** Creature calls, at most this often (seconds). */
@@ -60,6 +66,10 @@ export interface MusicMood {
   cave?: boolean;
   /** What is hunting the player, for its call: a howl or a wail. */
   hunter?: 'howl' | 'wail' | 'growl' | null;
+  /** How near an open rift is, 0 (none in range) to 1 (beside it): its hum. */
+  rift?: number;
+  /** Inside an outer dimension: its music (e.g. 'rift'). */
+  dimension?: string | null;
 }
 
 export class AudioSystem {
@@ -181,18 +191,11 @@ export class AudioSystem {
         // A two-note alarm, twice.
         [880, 660, 880, 660].forEach((f, i) => this.tone(t + i * 0.12, f, 0.1, 0.16, 'square'));
         break;
-    }
-  }
-
-  /** A distant bell, rung three times. */
-  bell(): void {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    for (let k = 0; k < 3; k++) {
-      const at = ctx.currentTime + 0.1 + k * 1.6;
-      for (const [ratio, level] of [[1, 0.25], [2.76, 0.11], [5.4, 0.05], [0.5, 0.08]]) {
-        this.tone(at, 196 * ratio, 3.5, level, 'sine', undefined, this.sfxBus);
-      }
+      case 'rift':
+        // Stepping through: a falling shimmer over a swell of noise.
+        this.noiseBurst(t, 0.9, 300, 0.2, 'bandpass', 3000);
+        [1320, 990, 740, 554].forEach((f, i) => this.tone(t + i * 0.08, f, 0.5, 0.08, 'sine', f * 0.94));
+        break;
     }
   }
 
@@ -204,7 +207,7 @@ export class AudioSystem {
     this.ambience(mood);
     if (this.nextBeat < ctx.currentTime) this.nextBeat = ctx.currentTime + 0.1;
     // Schedule a little ahead so timing stays steady.
-    const beat = (mood.biome !== undefined && BEATS[mood.biome]) || BEAT;
+    const beat = mood.dimension ? RIFT_BEAT : (mood.biome !== undefined && BEATS[mood.biome]) || BEAT;
     while (this.nextBeat < ctx.currentTime + 0.3) {
       this.playBeat(this.nextBeat, mood);
       this.nextBeat += beat;
@@ -224,6 +227,23 @@ export class AudioSystem {
     this.nextAmbient = t + 0.5;
     const wet = mood.weatherStrength > 0.3 && (mood.weather === 'rain' || mood.weather === 'storm');
     const r = Math.random();
+    // Ambience never crowds out the sound effects.
+    if (this.voices >= MAX_VOICES - 6) return;
+    if (mood.dimension) {
+      // Glassy chimes in the void, now and then.
+      if (r < 0.12) this.tone(t, 1800 + Math.random() * 1600, 1.2, 0.025, 'sine', undefined, this.sfxBus, 0.3);
+      return;
+    }
+    // An open rift hums: two close tones beating against each other, louder and more often near it.
+    const rift = mood.rift ?? 0;
+    if (rift > 0 && r < 0.2 + 0.5 * rift) {
+      const f = 70 + Math.random() * 12;
+      const level = 0.02 + 0.05 * rift;
+      this.tone(t, f, 1.6, level, 'sine', f * 0.97, this.sfxBus, 0.4);
+      this.tone(t, f * 1.5 + 3, 1.6, level * 0.6, 'triangle', undefined, this.sfxBus, 0.4);
+      if (rift > 0.5 && Math.random() < 0.3) this.noiseBurst(t + 0.2, 0.25, 2600, 0.03 * rift, 'bandpass', 600);
+      return;
+    }
     if (mood.cave) {
       // Water dripping in the dark, and a low drone now and then.
       if (r < 0.18) this.tone(t, 1400 + Math.random() * 800, 0.12, 0.05, 'sine', 700);
@@ -261,6 +281,10 @@ export class AudioSystem {
   }
 
   private playBeat(at: number, mood: MusicMood): void {
+    if (mood.dimension) {
+      this.riftBeat(at, mood);
+      return;
+    }
     const scale = mood.biome === BiomeType.Desert ? SCALES.desert : mood.biome === BiomeType.Snow ? SCALES.snow : mood.night ? SCALES.night : SCALES.day;
     if (this.beat % 16 === 0) this.rootIndex = (this.rootIndex + 1 + Math.floor(Math.random() * 2)) % ROOTS.length;
     // Further out the music drops lower, toward the unsettling.
@@ -277,6 +301,20 @@ export class AudioSystem {
     }
     // A low drone far out; a heartbeat when something hunts the player.
     if (far >= 2 && this.beat % 8 === 0) this.tone(at, root / 4, BEAT * 8, 0.04, 'sine', undefined, this.musicBus, 1.5);
+    if (mood.danger && this.beat % 2 === 0) this.tone(at, 55, 0.25, 0.25, 'sine', 40, this.musicBus);
+  }
+
+  /** An outer dimension's music: a low drone, sparse notes from a scale that
+   *  never settles, and the heartbeat when something hunts the player. */
+  private riftBeat(at: number, mood: MusicMood): void {
+    const scale = SCALES.rift;
+    const root = 130.8;
+    const note = (step: number) => root * Math.pow(2, (scale[step % scale.length] + 12 * Math.floor(step / scale.length)) / 12);
+    if (this.beat % 8 === 0) {
+      this.tone(at, root / 2, RIFT_BEAT * 8.2, 0.05, 'sine', undefined, this.musicBus, 1.5);
+      this.tone(at, root / 2 * 1.007, RIFT_BEAT * 8.2, 0.03, 'triangle', undefined, this.musicBus, 1.5);
+    }
+    if (Math.random() < 0.3) this.tone(at, note(Math.floor(Math.random() * 8) + 2), RIFT_BEAT * 2.6, 0.05, 'sine', undefined, this.musicBus, 0.08);
     if (mood.danger && this.beat % 2 === 0) this.tone(at, 55, 0.25, 0.25, 'sine', 40, this.musicBus);
   }
 

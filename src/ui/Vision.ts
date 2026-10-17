@@ -1,6 +1,10 @@
 // Full-screen story visions: a title and pages of text, read one at a time.
 
-import type { Vision as VisionText } from '../story/StoryScript';
+/** A vision's words: a title and its pages. */
+export interface VisionText {
+  title: string;
+  pages: readonly string[];
+}
 
 export class Vision {
   isOpen = false;

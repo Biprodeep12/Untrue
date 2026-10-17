@@ -38,7 +38,9 @@ The armour region starts at `ARMOR_Y`, below the creatures, with 32-pixel rows. 
 
 **Outfits.** `OUTFITS` holds skin, hair, shirt and trouser colours, plus an optional apron, robe, mask or rags: `player`, `villager-a`, `villager-b`, `villager-c`, `trader`, `merchant`, `lost` and `bandit`. `playerCell(dir, frame, outfit)` returns a frame.
 
-Lookup helpers: `tileCell`, `decoFrame`, `itemCell`, `playerCell`, `creatureFrame` (keys such as `wolf:1`, `lurker:buried` or `projectile:arrow`).
+Lookup helpers: `tileCell`, `decoFrame`, `itemCell`, `playerCell`, `creatureFrame` (keys such as `wolf:1`, `lurker:buried` or `projectile:arrow`), and for the outer dimensions `dimCell` (16 × 16 tiles from `DIM_Y`: void, floor, wall tops and faces, crumbling and glitching slabs, plates, safe pads, runes) and `dimFrame` (props: pillars, crystals, gates, the vault chest, the portal, the rift, mural stones).
+
+**Rifts in the overworld.** `Deco.Rift` (32 × 48) is frame 0 of a jagged violet and cyan tear over the scorched `Tile.RiftGround`; frames 1 and 2 (`tear:1`, `tear:2` among the dimension props) are the same tear with its seam wobbled and its glitch slices moved. `riftFrame(f)` returns frame `f` of `RIFT_FRAMES` (3). A closed rift shows `Deco.RiftScar` (16 × 16).
 
 ## Chunk meshes
 
@@ -56,7 +58,23 @@ Lookup helpers: `tileCell`, `decoFrame`, `itemCell`, `playerCell`, `creatureFram
 
 **Tree fading.** `fadeAround(px, py)` checks sprites in the 3 × 3 chunks around the player. Any sprite at least 24 pixels tall whose foot is below the player's and whose box overlaps the player's body is drawn at 45% opacity, so the player is never lost behind a tree.
 
-**Lights.** While collecting a chunk's sprites, `collectLights` also records light sources in world pixels: campfires (radius 5 tiles, warm), meteorites, memory pedestals, the Anchor core, monuments, story books, and windowed facade tiles (radius 1.8 tiles). `lights(out)` returns them for chunks in view only.
+**Lights.** While collecting a chunk's sprites, `collectLights` also records light sources in world pixels: campfires (radius 5 tiles, warm), fireplaces, lamps, meteorites, Moonwells, and windowed facade tiles (radius 1.8 tiles). `lights(out)` returns them for chunks in view only.
+
+## Rifts and their glitches
+
+`TileRenderer` keeps the rift sprites of drawn chunks in a list as decorations are added and released (usually empty) and `animate(dt)` swaps their texture between the three frames at 7 frames a second: textures swapped, never redrawn, and nothing at all without a rift.
+
+Near an open rift the world glitches (`src/rendering/RiftGlitch.ts`). The game finds the nearest open rift four times a second, with the HUD; only while one is within 12 tiles, and the game is not paused, does `RiftGlitch.update` run each frame. Every 0.7 to 4.5 seconds (sooner nearer the rift) one of:
+
+- **Jolt:** one to three decorations near the rift jump 2 to 5 pixels sideways, tinted violet, cyan or pink, for 0.08 to 0.2 s (`TileRenderer.jolt`, put back by `settle`; a chunk released or redrawn meanwhile settles first, so pooled sprites never keep a jolt).
+- **Colour slip:** the world layer is tinted and torn 2 pixels sideways for 0.06 to 0.14 s.
+- **HUD stutter:** the HUD's panels jump and shift hue for 0.18 s (`Hud.stutter`, a CSS animation).
+
+Colour slips and HUD stutters follow the "Screen flashes" setting, and reduced motion stops the stutter. Out of range everything is put back once and nothing runs. The rift's hum is in [audio.md](audio.md#ambience).
+
+## Outer dimensions
+
+`DimensionRenderer` (`src/rendering/DimensionRenderer.ts`) draws a dimension into the overworld's own ground and entities layers, while the overworld's sprites are hidden: the chunk meshes culled to nowhere (`TileRenderer.hideAll`), buildings and ground items cleared, NPCs not passed to the entity renderer. Its static floor is one batched mesh per 16 × 16 block over the atlas (as chunks are); tiles that change (crumbling and glitching slabs, plates) are flat overlay sprites; props (pillars, crystals, mural stones, gates, the chest, the portal, the rift) are y-sorted among the player and enemies. Everything is built in `open()`; frames only cull blocks to the camera and swap textures of slots in view whose look changed. Meshes, sprites and lights are pooled across trips. Crystals, the rift, safe pads and the portal light the dark in view only. See [dimensions.md](dimensions.md).
 
 ## Buildings and interiors
 
@@ -90,7 +108,7 @@ The player (`src/game/Player.ts`) is a container: the body sprite, the item in h
 2. For each light, a soft radial gradient sprite is drawn with the `erase` blend mode, cutting a hole in the darkness. Warm lights flicker slightly.
 3. The texture is shown above the world. A second set of the same gradient sprites, tinted orange with the `add` blend mode at `warmth × 0.35 × darkness`, gives fires and windows a warm glow.
 
-Darkness comes from the clock, plus up to 0.45 during a thunderstorm, plus a faint gloom of 0.03 per difficulty band. The player carries a light: 2.4 tiles with nothing, 5 with a torch, 6 with the Wanderer's Lantern (unless the story has darkened it), and 7 with a lantern. Burning trees are lights too.
+Darkness comes from the clock, plus up to 0.45 during a thunderstorm, plus a faint gloom of 0.03 per difficulty band. Inside an outer dimension it is the dimension's own (`mood.darkness`, 0.55 for The Hollow) at any hour, in its own colour (`update(..., tint)`, violet for The Hollow), with no weather. The player carries a light: 2.4 tiles with nothing, 5 with a torch and 7 with a lantern. Burning trees are lights too.
 
 **Flat tint.** When lights would not matter (by day, where only the band's gloom darkens the screen) or the Lighting setting is off, `update(..., flat)` shows a single tinted sprite over the screen instead (at 85% of the strength), with no light holes and no render pass. Lights are not even gathered then.
 
@@ -117,7 +135,6 @@ Particle counts scale with the screen area (relative to 480 × 270) and fade in 
 - **Fires.** Flickering flame circles and rising smoke over burning trees.
 - **Lightning warnings.** A circle that fills in over the 1.2 seconds before a strike lands.
 - **Meteors.** A streak falling toward the impact point, then an expanding shock ring.
-- **Memory ghosts.** Places the world has forgotten, drawn on the ground (`Effects.floor`, a layer between the tiles and everything standing) as a faint blue glow outlined along the place's edge, within the Wanderer's Lantern's light, pulsing gently and fading with distance. The ghosts are redrawn only when the player moves half a tile (or the lantern's reach or the memories change); the pulse is the layer's alpha.
 - **Particle bursts.** `burst(x, y, kind)` throws small squares with their own speed, gravity and lifetime: `wood` and `stone` chips while gathering, `leaf` for plants, `dust` for running, dodging and defeated enemies, `hit` sparks on damage, `magic` for crystals, `gold` for chests and level-ups. At most 400 live at once. The "Hit and dust particles" setting turns bursts off.
 - **Ambient life.** Fireflies drift around the player on calm forest nights and add small glowing lights to the lighting layer. Falling leaves drift and sway in autumn forests by day. Both follow the weather particles setting.
 
@@ -131,8 +148,9 @@ The interface is HTML and CSS over the canvas (`src/ui/`, styled in `src/style.c
 | --- | --- |
 | `Hud` | Compass, location panel (clock, weather, biome, difficulty, position), quest tracker with direction arrows, notifications, tips, alerts, action prompt, vitals, level and XP, status effects, boss bar, hurt flash, controls bar (naming the player's keys), touch buttons, loading screen |
 | `Hotbar` | The first 8 inventory slots, with counts and weapon durability bars; the selected item's name shows above the bar for 1.6 s |
-| `Menu` | Tabs: Inventory (with Sort bag), Crafting (with ×N), Skills, Quests (with Abandon and the legends), Map, Lantern, Settings (with key bindings on desktop), About (privacy, credits, licenses; `About.ts`) |
-| `MapView` | The world map canvas; see [exploration.md](exploration.md) |
+| `Menu` | Tabs: Inventory (with Sort bag), Crafting (with ×N), Skills, Quests (with Abandon and the legends), Map (hidden where maps don't work), Settings (with key bindings on desktop), About (privacy, credits, licenses; `About.ts`) |
+| `MapView` | The overworld map canvas, kept for if maps ever work there; see [exploration.md](exploration.md) |
+| `DimensionMap` | The map inside an outer dimension: seen tiles, chambers, the rift, the portal, the player; see [dimensions.md](dimensions.md#the-map) |
 | `PauseMenu` | Esc or the touch Pause button: Resume, Save, Settings, Full screen (where supported), New world, and the controls table (touch controls on touch screens, else the player's keys) |
 | `Dialog` | NPC conversation and trade |
 | `Vision` | Full-screen story text, one page at a time, with queued visions |
@@ -141,13 +159,13 @@ The interface is HTML and CSS over the canvas (`src/ui/`, styled in `src/style.c
 | `Hints` | First-time tips (`Hints.ts`); see below |
 | `Intro` | The opening screen (`Intro.ts`, markup in `index.html`): the title over darkness from the first paint; once the player is placed, the darkness breaks into 40px squares that clear outward from the centre in a ragged ring (about 1.3 s), then it is removed. A low-resolution canvas (8 pixels per square) scaled up with `image-rendering: pixelated`; reduced motion gets a 0.4 s fade. Later trips (death, travel) use the HUD's loading screen. |
 | `Fullscreen` | Full screen helpers for the Full button and the pause menu (`Fullscreen.ts`) |
-| `SleepOverlay`, `Playground` | The sleep transition; the story playground panel (development builds) |
+| `SleepOverlay`, `Playground` | The sleep transition; the story playground panel (development builds), with the rift tools |
 
 Item icons are copied from the atlas canvas into small canvases (`ItemIcon.ts`). Panels use a wood-framed style and the Pixelify Sans font.
 
 **Messages.** `notify` shows a short note bottom left. `tip` shows a "Tip:" note that stays 9 seconds. `alert` shows a message in the middle of the screen that stays until the player presses OK; the same text is never shown twice at once. Alerts carry what must not be missed: a collapse, a save that could not be read, another tab holding the save, a learned recipe.
 
-**First-time tips** (`src/ui/Hints.ts`) show once per browser, one at a time, the first time each applies: start (how to move and interact), an enemy hunting the player, hungry, thirsty, night, near a campfire, near an anvil, a skill point to spend, and a heavy bag. Shown ids are kept in `localStorage` under `untrue.hints` (once per session if storage is blocked). The story playground shows none. Tips name the player's own keys, or the touch buttons on touch screens.
+**First-time tips** (`src/ui/Hints.ts`) show once per browser, one at a time, the first time each applies: start (how to move and interact), an enemy hunting the player, hungry, thirsty, night, near a campfire, near an anvil, a skill point to spend, a heavy bag, near a rift (how to enter, and what dying there costs), and inside a dimension (the map works there). Shown ids are kept in `localStorage` under `untrue.hints` (once per session if storage is blocked). The story playground shows none. Tips name the player's own keys, or the touch buttons on touch screens.
 
 **Cheap updates.** The HUD refreshes several times a second but writes to the page only when a value changed (`Hud.changed`). The vitals, XP and boss bars move with `transform: scale` instead of resizing. The touch stick caches its resting spot and moves by transform. Under the system's reduced-motion setting, all HUD and menu animation stops.
 
@@ -163,7 +181,7 @@ The Settings tab (stored in `localStorage`) can switch off:
 | Weather particles | The weather layer (particles and veil) is hidden |
 | Hit and dust particles | No particle bursts |
 | Cap at 30 frames per second | Sets the ticker's `maxFPS` to 30 when on (60 when off) |
-| Screen flashes | No lightning flash and no red hurt flash; off by default under reduced motion |
+| Screen flashes | No lightning flash, no red hurt flash, and no colour slips or HUD stutters near a rift; off by default under reduced motion |
 | Show the controls bar | Hides the controls bar |
 
 The same tab has music and sound effects volume sliders; see [audio.md](audio.md).

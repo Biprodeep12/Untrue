@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The World That Forgets · Untrue docs</title>
+<title>Story · Untrue docs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
 <link rel="stylesheet" href="style.css">
@@ -17,381 +17,87 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html" class="current" aria-current="page">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html" class="current" aria-current="page">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Story</p>
-    <article><h1 id="the-world-that-forgets">The World That Forgets</h1>
-<p>The game&#39;s story, and how the code tells it. The design spec and the other pages cover the systems; this page covers what they mean and the story&#39;s own machinery.</p>
-<h2 id="prologue--a-world-with-no-beginning">Prologue — A world with no beginning<a class="anchor" href="#prologue--a-world-with-no-beginning" aria-label="Link to this section">#</a></h2>
-<p>Nobody knows when the world began. There are no surviving records of its creation, no reliable calendars, and no civilization old enough to claim it has witnessed even a fraction of its history. Across the endless wilderness, mountains rise where oceans once existed, forests grow over the remains of forgotten cities, and ancient roads stretch toward destinations that may no longer exist. Occasionally, a traveler discovers the remains of a civilization whose architecture is completely unfamiliar, despite its ruins appearing weathered by thousands of years. Other times, the same traveler returns to a familiar valley only to find a lake where a village once stood. The strangest part is that nobody seems particularly surprised. The people who inhabit this world have learned to accept that places disappear, landscapes change, and history contradicts itself. They call this phenomenon the Forgetting. Most believe it to be a natural law, as inevitable as death. A few believe the world is alive. Almost nobody believes it can be stopped.</p>
-<h2 id="chapter-i--the-stranger-with-the-lantern">Chapter I — The stranger with the lantern<a class="anchor" href="#chapter-i--the-stranger-with-the-lantern" aria-label="Link to this section">#</a></h2>
-<p>You awaken on a cold stone floor beneath an unfamiliar sky. There is no shelter nearby, no road, and no indication that anyone has ever lived here. You remember neither your name nor how you arrived. The only thing you possess is a small lantern containing a faint blue flame. Unlike an ordinary fire, its light does not illuminate the surroundings so much as reveal details that seem to exist just beyond the world&#39;s surface: footprints in empty grass, doorways inside solid rock, and fragments of buildings that vanish when you look directly at them. When you approach a broken stone monument, the lantern suddenly brightens. Words appear across its surface, carved in a language you somehow understand: &quot;If you have awakened again, do not search for the beginning. You will only find what you have already destroyed.&quot; Before you can understand the message, the monument crumbles into dust. Far away, somewhere beyond the horizon, a bell rings three times. You begin walking toward it.</p>
-<p>The world is your first mystery. You gather wood, search for food, rest by campfires, and explore the wilderness. Small structures appear in improbable places: abandoned cabins, half-buried temples, empty watchtowers, and villages whose inhabitants insist they have lived there for generations. Yet every location seems to carry an uncomfortable sense of familiarity. You sometimes recognize a path before walking it, know the layout of a house you&#39;ve never entered, or dream about people whose names you have never heard. The lantern grows brighter whenever you discover something unusual, and each time it does, you hear a brief whisper. The whispers sound like memories, but you cannot tell whether they belong to you.</p>
-<h2 id="chapter-ii--the-village-that-never-existed">Chapter II — The village that never existed<a class="anchor" href="#chapter-ii--the-village-that-never-existed" aria-label="Link to this section">#</a></h2>
-<p>After days of wandering, you discover a settlement surrounded by enormous trees. Its inhabitants are friendly, but their stories do not agree. The village elder describes a peaceful history spanning hundreds of years. A merchant remembers a terrible fire that destroyed half the settlement. A child draws pictures of a massive black tower standing where the village square should be, although no such tower exists. When you investigate the old cemetery, you discover gravestones bearing your name. Every stone has the same inscription: &quot;Returned, but not remembered.&quot; The dates are impossible. Some claim you died centuries ago; others suggest you have not yet been born.</p>
-<p>That night, the village disappears.</p>
-<p>You awaken to find yourself lying in an empty field. The trees remain, but the houses, roads, fences, and people are gone. In their place stands a dense forest containing unfamiliar plants and a narrow stream. There is no evidence that a village ever existed. Even the ground beneath your sleeping place has changed. Only the lantern remains, burning more brightly than before. Inside its glass, you can now see the faint silhouette of the village as it appeared the previous day. You realize that the lantern remembers places the world has forgotten. More disturbing still, you discover that the silhouettes inside it continue moving. The villagers are still there, living out their lives inside a memory that no longer belongs to reality.</p>
-<h2 id="chapter-iii--the-man-who-remembers-tomorrow">Chapter III — The man who remembers tomorrow<a class="anchor" href="#chapter-iii--the-man-who-remembers-tomorrow" aria-label="Link to this section">#</a></h2>
-<p>Far beyond the vanished village, you encounter an old man living inside a stone observatory. He recognizes you immediately, although he insists that this is the first time you have met. He tells you that he has spent his entire life studying the Forgetting, recording changes in terrain, tracking disappearing structures, and searching for patterns in a world that refuses to remain consistent. His journals describe locations that do not exist, civilizations that appear to have lived in different historical periods simultaneously, and people who remember events that have not happened yet.</p>
-<p>He explains that the world does not change randomly. It changes according to memories. Places with strong histories resist transformation, while forgotten regions are free to become something else. A battlefield may become a forest because nobody remembers the war. A castle may return as a mountain because its kingdom has vanished from history. Sometimes, entire civilizations are replaced by new ones, leaving behind ruins that suggest they never existed at all. The old man calls these events revisions. According to his research, the revisions are accelerating.</p>
-<p>Before you leave, he shows you a journal containing a detailed account of your journey so far, including the village&#39;s disappearance. The final pages describe a conversation you have not yet had with him. In the final entry, written in your own handwriting, are the words: &quot;Do not trust the man in the observatory. He is not the first version of himself.&quot; When you look up, the old man is watching you with an expression of profound sadness. He tells you that the journal was written by you. Then he adds that he has killed you before, and that every time you return, you ask him the same questions.</p>
-<h2 id="chapter-iv--the-archive-beneath-the-world">Chapter IV — The archive beneath the world<a class="anchor" href="#chapter-iv--the-archive-beneath-the-world" aria-label="Link to this section">#</a></h2>
-<p>Following the old man&#39;s directions, you search for structures containing the oldest surviving memories. These are not ordinary ruins. Some appear as enormous libraries carved into mountains; others are submerged beneath lakes or hidden inside forests that change shape around them. Their architecture suggests they were built by a civilization that understood the world&#39;s instability long before anyone else. Within these structures, the lantern reveals entire histories preserved as fragments of light. You witness cities being constructed, kingdoms rising, wars being fought, and civilizations disappearing in the space of a single moment. The same faces appear across different centuries, sometimes as rulers, sometimes as beggars, and sometimes as strangers who have never met.</p>
-<p>At the deepest point of an underground archive, you discover a room containing thousands of lanterns identical to your own. Most are dark. A few contain faint silhouettes of people wandering through landscapes. One contains a version of the vanished village. Another contains the observatory and its old inhabitant. In the largest lantern, you see a vast city beneath a red sky, surrounded by colossal machines that appear to be altering the land itself. At its center stands a figure wearing your clothes and carrying your lantern. The figure looks directly at you through the glass and speaks a sentence before the vision ends: &quot;You have finally found the place where I buried you.&quot;</p>
-<p>The archive contains a name repeated across its oldest records: the Worldmaker. Every civilization attributed the creation of the world to this mysterious being, but the records disagree about its appearance, intentions, and fate. Some describe a benevolent creator. Others call it a tyrant who imprisoned reality inside an endless cycle. One account claims the Worldmaker never created anything at all. It merely discovered a world that had already forgotten itself.</p>
-<h2 id="chapter-v--the-truth-about-the-worldmaker">Chapter V — The truth about the Worldmaker<a class="anchor" href="#chapter-v--the-truth-about-the-worldmaker" aria-label="Link to this section">#</a></h2>
-<p>The final records reveal that the Worldmaker was once a living person who discovered how to preserve reality through memory. It learned that memories could anchor places, stabilize landscapes, and prevent civilizations from disappearing. Using this knowledge, it created a network of enormous structures known as the Anchors. Each Anchor preserved a region of the world, allowing mountains, forests, cities, and entire kingdoms to survive the passage of time. For a while, the system worked. Civilizations flourished, knowledge accumulated, and history became permanent.</p>
-<p>But permanence created a different kind of suffering. Wars never truly ended because their consequences could not be forgotten. People remained trapped by the memories of their worst mistakes. Destroyed kingdoms were reconstructed exactly as they had been, including the conditions that caused their destruction. The dead could not return, but their suffering was remembered forever. The world became a prison in which nothing could truly move beyond its past. The Worldmaker eventually concluded that the only way to end suffering was to destroy the system of memory itself.</p>
-<p>It dismantled the Anchors and began erasing history. At first, the world changed slowly. Then entire regions began transforming within moments. Civilizations vanished, terrain shifted, and the distinction between past and present collapsed. But the Worldmaker discovered that destroying memory did not destroy suffering. It merely allowed suffering to repeat. Kingdoms rebuilt themselves only to repeat the same wars. People forgot their mistakes and made them again. The world had become endless, but it was no longer progressing. It was trapped in a cycle of creation and forgetting.</p>
-<p>The Worldmaker tried to stop the process, but the system had become inseparable from reality. The only way to restore stability was to reconstruct the original network of Anchors. However, doing so would restore the world&#39;s memories, including every tragedy the Worldmaker had tried to erase. Unable to accept either outcome, it created the lantern as a vessel capable of carrying memories outside the world&#39;s changing reality. Then it erased its own identity and divided its remaining memories across countless fragments. The final record ends with a message: &quot;I could not decide whether the world deserved to continue. So I created someone who would have to live in it before answering.&quot;</p>
-<p>You begin to understand why the old man recognized you, why the village carried your name, and why the archive contained so many versions of your journey. You are not the first person to discover the truth. You are not even the first version of yourself to attempt to solve the mystery. You are one of countless iterations created by the Worldmaker, each sent into the world with the same lantern and the same question. Every previous version eventually reached the same decision point. Every one of them failed to leave a final answer.</p>
-<h2 id="chapter-vi--the-final-twist-you-are-not-the-original">Chapter VI — The final twist: you are not the original<a class="anchor" href="#chapter-vi--the-final-twist-you-are-not-the-original" aria-label="Link to this section">#</a></h2>
-<p>You return to the observatory, but the old man is gone. In his place is a younger version of yourself, dressed in the clothes you wore when you first awakened. The younger figure appears exhausted and frightened, and carries a lantern whose flame is almost completely extinguished. They have been wandering through the world for years, searching for a way to stop the Forgetting. They found an archive, met an old man, and discovered a village where every gravestone carried their name. They tell you that they have finally understood the truth: you are the Worldmaker, and they are the person who must stop you.</p>
-<p>For a moment, you believe them. Then you notice something strange. The younger version of yourself does not cast a shadow. Their lantern does not illuminate the ground. When they walk across the observatory, the stone beneath their feet remains unchanged, as though they are not truly there. You realize that this is not another living version of yourself. It is a memory of the person you were before your first journey, preserved by the lantern and given a voice by the world&#39;s remaining fragments. The younger figure is everything you have forgotten about yourself: your original fear, your original intentions, and your original reason for beginning this journey.</p>
-<p>They tell you the final truth. The Worldmaker did not create the iterations to find someone capable of making the correct decision. It created them because it was afraid to make the decision itself. Every version of you that approached the end was allowed to believe it was the first, because the Worldmaker could not bear to remember its own failures. Each iteration was given the freedom to choose, but the world was arranged so that the choice would always return to the same impossible question. The endless world was not simply a consequence of the Worldmaker&#39;s failure. It was the mechanism through which the Worldmaker avoided responsibility.</p>
-<p>Then the younger figure asks you something no previous version was ever able to answer: &quot;If you knew the world would forget everything you did, would you still choose to save it?&quot;</p>
-<p>For the first time, the lantern goes dark.</p>
-<h2 id="chapter-vii--the-three-endings">Chapter VII — The three endings<a class="anchor" href="#chapter-vii--the-three-endings" aria-label="Link to this section">#</a></h2>
-<p>At the center of the world, you discover the remains of the original Anchor, a colossal structure extending beyond anything you have ever explored. Its machinery connects to every region, every surviving memory, and every version of yourself that has ever existed. The Anchor offers three possible futures, but none is presented as the objectively correct choice.</p>
-<p>If you restore the Anchors, the world will become stable again. Mountains will stop moving, cities will remain where they were built, and history will once again become permanent. People will remember their past, including the terrible things that happened to them. The endless cycle will end, but the world will inherit every wound the Worldmaker tried to erase. This ending is known as The Remembered World. The final scene shows you standing in the original village, now restored, watching its inhabitants continue their lives. Nobody recognizes you. For the first time, the world no longer needs to remember you in order to exist.</p>
-<p>If you destroy the remaining Anchors, the world will continue to evolve without a permanent record of its past. No kingdom will be guaranteed survival, no landscape will be guaranteed permanence, and no civilization will be able to rely on the mistakes of its predecessors. Yet life will continue to emerge in new forms, free from the burden of preserving everything that came before. This ending is known as The Living World. You walk into a wilderness that has never existed before. Behind you, the final Anchor collapses, and the lantern becomes an ordinary, unlit object. You cannot know what the world will become, but for the first time, neither can its creator.</p>
-<p>The third choice is to use the lantern to absorb every remaining memory, preserving the histories of all the civilizations that have ever existed. The world will finally stop changing because there will be nothing left to forget. However, the lantern can only contain these memories by replacing the consciousness of the person carrying it. You will become the new keeper of the world&#39;s entire history, unable to live beyond the memories you preserve. This ending is known as The Last Memory. The world becomes peaceful and unchanging. Centuries later, a traveler awakens beside the original monument. The traveler finds an unlit lantern and a message carved into the stone: &quot;If you have awakened again, do not search for the beginning.&quot; The cycle may have ended, or you may have simply become the next Worldmaker.</p>
-<h2 id="epilogue--the-world-beyond-the-ending">Epilogue — The world beyond the ending<a class="anchor" href="#epilogue--the-world-beyond-the-ending" aria-label="Link to this section">#</a></h2>
-<p>Regardless of the ending, the game can continue in an endless exploration mode. The ending changes the world rather than removing the ability to explore it. In the Remembered World, major structures and landscapes become more stable, but forgotten regions can still develop new life. In the Living World, terrain and structures transform more freely, and rare locations may appear that could never have existed under the old rules. In The Last Memory, the player can discover fragments of preserved histories, some of which contradict the story they have just completed.</p>
-<p>The world can continue generating forests, ruins, mountains, villages, caves, and civilizations long after the central mystery has been resolved. Some structures will be entirely new. Others will resemble places you visited during the story. Occasionally, the player may discover a familiar-looking monument containing a message that appears to have been written by a previous version of themselves. The game never confirms whether these are genuine remnants of the past or merely the world generating something similar.</p>
-<p>And perhaps, after hundreds of hours of exploration, the player will discover a small, ordinary cabin deep inside an unfamiliar forest. Inside is a table, a chair, an unlit lantern, and a book containing a single sentence:</p>
-<p>&quot;I think this time, I will let the world surprise me.&quot;</p>
-<p>The book has no author&#39;s name.</p>
-<h2 id="the-central-idea">The central idea<a class="anchor" href="#the-central-idea" aria-label="Link to this section">#</a></h2>
-<p>The World That Forgets is not ultimately a story about defeating a villain or reaching the end of an infinite map. It is a story about whether meaning requires permanence, whether a person can escape the consequences of their past by forgetting it, and whether a changing world is inherently worse than a stable one.</p>
-<p>The procedural generation becomes part of the storytelling. Temporary structures embody forgotten memories. Multi-chunk landmarks become physical anchors of history. Returning to a location can reveal a changed world, while rare persistent places provide continuity. The player gradually discovers that the world has been behaving this way for a reason, and that the rules governing its existence are inseparable from the decisions they must eventually make.</p>
-<p>The greatest twist is not simply that the player is the Worldmaker. It is that the Worldmaker has been using an endless world to postpone a decision that no amount of exploration can make painless. The player can explore forever, but eventually must decide what kind of world deserves to exist.</p>
-<hr>
-<h2 id="how-the-game-tells-it">How the game tells it<a class="anchor" href="#how-the-game-tells-it" aria-label="Link to this section">#</a></h2>
+    <article><h1 id="story">Story</h1>
+<p>The world has started to forget itself. Paths lead somewhere else from one day to the next, wells move in the night, valleys are not where the old maps put them. It began when rifts tore open all over the land: tears hanging in the air, burning violet at the edges, each one onto an outer dimension. Around them the land stutters and glitches. Something on the other side is calling.</p>
+<p>Why any of it is happening is left for later: the story hints and explains nothing. For now the player&#39;s thread is simple: find a rift, step through, survive what waits inside, and close it. The world is still open to explore around it.</p>
+<h2 id="in-play">In play<a class="anchor" href="#in-play" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>Story</th>
-<th>In the game</th>
+<th>Objective (HUD tracker)</th>
+<th>Shown when</th>
+<th>Arrow</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>The Forgetting</td>
-<td>Region regeneration: a region that fully leaves the cache radius comes back different.</td>
+<td>Find a rift</td>
+<td>No rift closed yet, and none within 14 tiles</td>
+<td>Toward the nearest open rift loaded, if any</td>
 </tr>
 <tr>
-<td>The lantern</td>
-<td>The Wanderer&#39;s Lantern, given at the start. It lights the night, and inside its light, places the world has forgotten show as faint blue ghosts. The Lantern tab lists every forgotten place.</td>
+<td>Enter the rift</td>
+<td>No rift closed yet, and an open rift within 14 tiles</td>
+<td>Toward it</td>
 </tr>
 <tr>
-<td>Anchors, history that lasts</td>
-<td>Persistent objects. Story places are persistent; ordinary places are temporary.</td>
+<td>Survive The Hollow: <em>k</em>/4 chambers</td>
+<td>Inside a dimension, its way home still shut</td>
+<td>None</td>
 </tr>
 <tr>
-<td>The monument and the bell</td>
-<td>The Waking Monument at the origin. Reading it crumbles it and rings a synthesised bell.</td>
+<td>Close the rift: step through the portal</td>
+<td>Inside, once its boss has fallen</td>
+<td>None</td>
 </tr>
 <tr>
-<td>The Village of Graves</td>
-<td>A story village about 260 tiles out: Elder Maren, Corwin the Merchant and little Pell, a cemetery with your name on every stone, and a campfire by the well.</td>
-</tr>
-<tr>
-<td>That night, the village disappears</td>
-<td>Resting by the village fire removes the whole village object. The terrain beneath grows back as forest, and the lantern keeps the village&#39;s memory.</td>
-</tr>
-<tr>
-<td>The observatory and the astronomer</td>
-<td>The Observatory, about 1,400 tiles out, with the astronomer&#39;s speech and the journal.</td>
-</tr>
-<tr>
-<td>The archive</td>
-<td>The Sunken Archive, about 3,200 tiles out: skeleton guards, three memory pedestals, and the Hall of Lanterns.</td>
-</tr>
-<tr>
-<td>The younger self</td>
-<td>A translucent, shadowless version of the player at the observatory. After the conversation, the lantern goes dark.</td>
-</tr>
-<tr>
-<td>The Original Anchor</td>
-<td>About 5,200 tiles out, in the Hard band. Touching its core offers the three endings.</td>
-</tr>
-<tr>
-<td>The Remembered World</td>
-<td>Only a quarter of unloaded regions regenerate.</td>
-</tr>
-<tr>
-<td>The Living World</td>
-<td>Everything regenerates, rare places are three times as common, and the lantern stays dark.</td>
-</tr>
-<tr>
-<td>The Last Memory</td>
-<td>Memory fragments appear in the world, some contradicting the story.</td>
-</tr>
-<tr>
-<td>Messages from previous selves</td>
-<td>After any ending, rare &quot;echo monuments&quot; carry messages in your own handwriting.</td>
-</tr>
-<tr>
-<td>The quiet cabin</td>
-<td>After any ending, a very rare event: a cabin with a book.</td>
+<td>Rifts closed: <em>N</em></td>
+<td>Once a rift has been closed, in the overworld</td>
+<td>Toward the nearest open rift loaded, if any</td>
 </tr>
 </tbody></table></div>
-<p>Adaptations from the text above: the wanderer rests by campfires rather than building shelters, because the player never builds. The younger self is written without a gender. The archive is a sunken ruin on the surface rather than underground, because the world has no underground layer yet.</p>
-<hr>
+<p>The objective is always the tracker&#39;s first line, and the compass needle points where its arrow does unless a map marker is tracked (<a href="exploration.html#compass">exploration.md</a>). &quot;Loaded&quot; means a live rift object, within the cache area around the player; rifts further out are not known.</p>
+<ul>
+<li><strong>A new world</strong> opens with a vision of three pages, <em>Rifts</em>, once the opening screen has cleared (<code>RiftStory.intro</code>).</li>
+<li><strong>Closing the first rift</strong> shows a one-page vision, <em>The Tear Seals</em>: the land holds still for a moment, and the call comes again from further off. Every rift closed counts toward &quot;Rifts closed&quot;, and is worth 150 XP.</li>
+<li><strong>Leaving without closing</strong> (stepping back onto the rift, or dying inside) leaves the rift open; the objective goes back to &quot;Enter the rift&quot;.</li>
+</ul>
+<p>Where rifts come from, how often, and what closing one does to the world: <a href="objects-and-structures.html#rifts">objects-and-structures.md</a>. What is behind them: <a href="dimensions.html">dimensions.md</a>.</p>
 <h2 id="implementation">Implementation<a class="anchor" href="#implementation" aria-label="Link to this section">#</a></h2>
-<p>Code:</p>
-<ul>
-<li><code>src/story/StorySystem.ts</code>: stages, objectives, people, endings, memories</li>
-<li><code>src/story/StoryPlaces.ts</code>: the story&#39;s places and their layouts</li>
-<li><code>src/story/StoryScript.ts</code>: every line of text</li>
-<li><code>src/ui/Vision.ts</code>: full-screen visions</li>
-<li><code>src/audio/AudioSystem.ts</code>: the bell (<code>AudioSystem.bell</code>)</li>
-</ul>
-<p><code>LivingWorld</code> owns the <code>StorySystem</code> and routes talk, rest, prompts and interactions through it.</p>
-<h3 id="starting">Starting<a class="anchor" href="#starting" aria-label="Link to this section">#</a></h3>
-<p><code>StorySystem.begin(isNew)</code> places any missing story place. The Village of Graves is never placed again once it has vanished. When the world has no saved story, this is a new story:</p>
-<ul>
-<li>the 3-page prologue vision plays</li>
-<li>the player is given the Wanderer&#39;s Lantern</li>
-</ul>
-<p>Saves from before the story start at the prologue.</p>
-<h3 id="stages">Stages<a class="anchor" href="#stages" aria-label="Link to this section">#</a></h3>
-<p>The HUD tracker shows the current objective with a ★ and an arrow toward the stage&#39;s place.</p>
+<p><code>RiftStory</code> (<code>src/story/RiftStory.ts</code>) holds the story&#39;s state: rifts closed and whether the player has ever entered one. It is built in <code>LivingWorld</code>&#39;s constructor (the seam where a story plugs in) with a function that shows a <code>Vision</code>.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>Stage</th>
-<th>Objective</th>
-<th>Advances when</th>
-<th>XP</th>
+<th>Seam</th>
+<th>What the story does</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>waking</code></td>
-<td>Read the monument</td>
-<td>E on the Monument shows the inscription. Continue crumbles the monument, rings the bell three times and plays &quot;The bell&quot;.</td>
-<td>–</td>
+<td><code>LivingWorld.tracker()</code></td>
+<td><code>objective(at, rift, run)</code> puts the objective first. <code>at</code> is the player&#39;s spot in the overworld, <code>rift</code> the centre of <code>WorldManager.nearestRift</code> (live, open rifts only), and <code>run</code> the trip in progress (<code>LivingWorld.trip</code>, set by <code>Game</code>; chambers done, chambers in all, whether the portal is open)</td>
 </tr>
 <tr>
-<td><code>bell</code></td>
-<td>Follow the bell</td>
-<td>The player enters the Village of Graves</td>
-<td>–</td>
+<td><code>Game.loaded()</code></td>
+<td>On a new world (not a loaded save, not the playground), <code>intro()</code> after the opening screen</td>
 </tr>
 <tr>
-<td><code>village</code></td>
-<td>Talk to the villagers (n/3), then Visit the cemetery</td>
-<td>After talking to all three villagers, the player reads a gravestone. Gravestones read earlier only show their inscription.</td>
-<td>80</td>
+<td><code>Game.enterRift</code> / <code>exitRift</code></td>
+<td><code>onEnter()</code>; <code>onClosed()</code> when the portal closed the rift</td>
 </tr>
 <tr>
-<td><code>night</code></td>
-<td>Rest by the village fire tonight</td>
-<td>E at the village campfire, at any hour. The &quot;Chapter II&quot; vision plays, the village and its three people vanish, the lantern keeps the village, and the clock skips to 6:00.</td>
-<td>80</td>
-</tr>
-<tr>
-<td><code>observatory</code></td>
-<td>Seek the observatory and speak to the old man</td>
-<td>The Astronomer&#39;s speech is finished. He shows a &quot;!&quot; through this stage, even if he was met before.</td>
-<td>80</td>
-</tr>
-<tr>
-<td><code>archive</code></td>
-<td>Read the memories (n/3), then Enter the Hall of Lanterns</td>
-<td>All three pedestals have been touched, then any lantern rack in the archive. Racks touched earlier answer &quot;The lanterns are dark. Not yet.&quot;</td>
-<td>160</td>
-</tr>
-<tr>
-<td><code>return</code></td>
-<td>Return to the observatory</td>
-<td>The Astronomer is gone and the translucent younger self waits. Their speech plays, then the Chapter V and VI visions; the lantern goes dark and the younger self leaves.</td>
-<td>–</td>
-</tr>
-<tr>
-<td><code>anchor</code></td>
-<td>Find the Original Anchor</td>
-<td>E on the Anchor core offers the three endings. Choosing one plays its vision.</td>
-<td>400</td>
-</tr>
-<tr>
-<td><code>epilogue</code></td>
-<td>–</td>
-<td>Endless play under the ending&#39;s rules</td>
-<td>–</td>
+<td><code>LivingWorld.save()</code> / <code>load()</code></td>
+<td><code>rift: { version: 1, closed, entered }</code> in the living save; a save without it (from before the rifts) starts at &quot;Find a rift&quot;, without the intro</td>
 </tr>
 </tbody></table></div>
-<p>The Observatory&#39;s journal (the Book) shows the entry in the player&#39;s handwriting until the <code>return</code> stage, and blank pages after.</p>
-<p>Reaching a new stage also moves the player&#39;s waking spot (where they wake after collapsing) to where they stand, outdoors (<a href="survival.html#collapse">survival.md</a>). Nothing is saved while a vision is open, so a reload never lands half way through a stage change.</p>
-<h3 id="places">Places<a class="anchor" href="#places" aria-label="Link to this section">#</a></h3>
-<p>All story places are persistent objects with id <code>story:&lt;id&gt;</code> and kind <code>story-&lt;id&gt;</code>. They&#39;re saved and restored like other persistent objects, and generated structures keep clear of them through ordinary object collision.</p>
-<p><strong>Placement:</strong> each place except the monument has a bearing seeded from the world seed. Placement starts at the place&#39;s distance and steps outward 12 tiles at a time, the bearing drifting 0.05 radians per step, for up to 80 steps. It stops at the first spot where a 5×5 grid of sample points across the footprint is all flat, dry ground (<code>TerrainFields.isBuildable</code>).</p>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Id</th>
-<th>Name</th>
-<th>Distance (tiles)</th>
-<th>Size</th>
-<th>Contents</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>monument</code></td>
-<td>Waking Monument</td>
-<td>0 (just north of the origin)</td>
-<td>7×7</td>
-<td>Path ring, stone floor, the Monument</td>
-</tr>
-<tr>
-<td><code>graves</code></td>
-<td>Village of Graves</td>
-<td>260</td>
-<td>village (46–56) + 14</td>
-<td>A generated village (houses, well, anvil, paths), a 12×12 cemetery on its east side with 12 gravestones, a campfire by the well</td>
-</tr>
-<tr>
-<td><code>observatory</code></td>
-<td>The Observatory</td>
-<td>1,400</td>
-<td>21×23</td>
-<td>A round stone wall, telescope, four bookshelves, the journal</td>
-</tr>
-<tr>
-<td><code>archive</code></td>
-<td>Sunken Archive</td>
-<td>3,200</td>
-<td>64×64</td>
-<td>Dark stone halls, shelves and rubble. Three memory rooms (north, west, east), each with a pedestal. A central 22×22 Hall of Lanterns with 16 lantern racks. 4 skeleton guards and 2 skeleton archers (<a href="combat.html#guarded-places">combat.md</a>).</td>
-</tr>
-<tr>
-<td><code>anchor</code></td>
-<td>The Original Anchor</td>
-<td>5,200</td>
-<td>72×72</td>
-<td>A round platform in rings of stone, temple and dark floor, with 16 pillars, 8 lantern racks, and the Anchor core at the centre</td>
-</tr>
-</tbody></table></div>
-<p>The distances put the archive in the Medium band and the Anchor in the Hard band (<a href="combat.html#difficulty-scaling-and-elites">combat.md</a>).</p>
-<p>The pedestals are numbered in reading order: north shows &quot;the builders&quot;, west &quot;the war&quot;, and east &quot;the Anchors&quot;.</p>
-<h3 id="people">People<a class="anchor" href="#people" aria-label="Link to this section">#</a></h3>
-<p>Story people are ordinary NPCs. They appear while their place&#39;s centre chunk is in the simulation radius and their stage is active, and leave otherwise. They show a &quot;!&quot; until spoken to (the Astronomer also during the <code>observatory</code> stage), and conversations go page by page (Continue, then Farewell).</p>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Person</th>
-<th>Place</th>
-<th>Outfit</th>
-<th>Present during</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Elder Maren</td>
-<td>Village of Graves</td>
-<td>merchant robe</td>
-<td><code>bell</code>, <code>village</code>, <code>night</code></td>
-</tr>
-<tr>
-<td>Corwin the Merchant</td>
-<td>Village of Graves</td>
-<td>trader</td>
-<td><code>bell</code>, <code>village</code>, <code>night</code></td>
-</tr>
-<tr>
-<td>Little Pell</td>
-<td>Village of Graves</td>
-<td>villager, drawn at 0.75 scale</td>
-<td><code>bell</code>, <code>village</code>, <code>night</code></td>
-</tr>
-<tr>
-<td>The Astronomer</td>
-<td>Observatory</td>
-<td>lost traveller&#39;s rags</td>
-<td><code>waking</code> through <code>archive</code></td>
-</tr>
-<tr>
-<td>Your younger self</td>
-<td>Observatory</td>
-<td>the player&#39;s, translucent</td>
-<td><code>return</code></td>
-</tr>
-</tbody></table></div>
-<h3 id="lantern-memories">Lantern memories<a class="anchor" href="#lantern-memories" aria-label="Link to this section">#</a></h3>
-<p>The lantern keeps places the world forgets:</p>
-<ul>
-<li><strong>Recording:</strong> when the world discards an object the player had discovered (<code>WorldManager.onForget</code>), <code>StorySystem.remember()</code> records it. A memory holds the name, footprint, a mask of every tile the place had built, and the day. The village recorded at the end of the night stage arrives the same way. The lantern keeps up to 40 memories, dropping the oldest.</li>
-<li><strong>Ghosts:</strong> while the Wanderer&#39;s Lantern is carried and lit, every remembered tile within 6 tiles of the player glows pale blue on the ground, with a bright line along the outline of the forgotten place. Ghosts are drawn under the player and everything standing, fade with distance and pulse slowly (<code>Effects.floor</code> in <code>src/rendering/Effects.ts</code>).</li>
-<li><strong>Whispers:</strong><ul>
-<li>the first time in a session the player walks into a memory&#39;s footprint: &quot;The lantern remembers: … stood here, once.&quot;</li>
-<li>one in five discoveries, chosen by object id, also whispers a line</li>
-</ul>
-</li>
-<li><strong>Lantern tab:</strong> the menu lists every memory, newest first, with its location and the day it was forgotten.</li>
-</ul>
-<p>This answers the design spec&#39;s question of what the map shows for a place that has regenerated.</p>
-<h3 id="endings">Endings<a class="anchor" href="#endings" aria-label="Link to this section">#</a></h3>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Ending</th>
-<th>Choice</th>
-<th><code>regenChance</code></th>
-<th><code>rareBoost</code></th>
-<th>Lantern afterwards</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>The Remembered World</td>
-<td>Restore the Anchors</td>
-<td>0.25</td>
-<td>1</td>
-<td>Relit</td>
-</tr>
-<tr>
-<td>The Living World</td>
-<td>Destroy the last Anchor</td>
-<td>1</td>
-<td>3</td>
-<td>Stays dark</td>
-</tr>
-<tr>
-<td>The Last Memory</td>
-<td>Take every memory into the lantern</td>
-<td>1</td>
-<td>1</td>
-<td>Relit</td>
-</tr>
-</tbody></table></div>
-<p>These are <code>WorldManager.rules</code>:</p>
-<ul>
-<li><code>regenChance</code> is the chance that a region which fully unloads regenerates differently next time. It&#39;s decided by a seeded hash of the region and its visit count.</li>
-<li><code>rareBoost</code> multiplies the odds of rare events and the weight of extremely rare structures.</li>
-</ul>
-<p>The rules are reapplied whenever a saved world loads. After an ending, touching the Anchor core only reports that it hums quietly.</p>
-<h3 id="after-the-ending">After the ending<a class="anchor" href="#after-the-ending" aria-label="Link to this section">#</a></h3>
-<p>Ending the story unlocks three world events (<a href="living-world.html#world-events">living-world.md</a>):</p>
-<ul>
-<li><strong>Echo Monument</strong> (any ending): a monument with one of 5 messages in the player&#39;s handwriting.</li>
-<li><strong>Memory Fragment</strong> (The Last Memory only): a pedestal with one of 4 preserved histories, some contradicting the story.</li>
-<li><strong>Quiet Cabin</strong> (any ending, once): a cabin with a table, a lantern rack and the book. Reading the book marks it found, so it won&#39;t appear again.</li>
-</ul>
-<h3 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h3>
-<p><code>StorySave</code> holds the stage, the flags (who has been spoken to, pedestals read, the village gone, the lantern dark, the cabin found), the ending and the memories. It&#39;s stored inside the living-world save (<a href="saves.html">saves.md</a>).</p>
-<h3 id="story-playground">Story playground<a class="anchor" href="#story-playground" aria-label="Link to this section">#</a></h3>
-<p>For testing, development builds open a story playground at <code>?playground</code> (or <code>?playground=SEED</code>; the default seed is 1). It is a fresh world that is never saved, so the real save is untouched. It does not take the save lock, so it can run beside a tab of the real game, and it shows no first-time tips.</p>
-<ul>
-<li><strong>Compact places:</strong> <code>StorySystem.compact</code> makes <code>placeStory</code> put the places near the spawn, one per direction: the Village of Graves 70 tiles east, the Observatory 80 south, the Sunken Archive 110 west and the Original Anchor 140 north.</li>
-<li><strong>Start chapter:</strong> <code>StorySystem.jumpTo(stage)</code> rebuilds every story place, clears memories, flags, the ending and its world rules, then sets the flags of every earlier chapter (villagers spoken to and the grave read, the village gone, the astronomer spoken to, the three pedestals read, the younger self met and the lantern dark). The monument is already crumbled from the bell onwards. The panel then takes the player to that chapter&#39;s place.</li>
-<li><strong>Endings:</strong> <code>StorySystem.chooseEnding(e)</code> jumps to the Anchor chapter if needed and plays that ending&#39;s vision.</li>
-<li><strong>Epilogue finds:</strong> after an ending, the Echo Monument, Memory Fragment and Quiet Cabin can be placed nearby on demand, through the same world events that place them in play.</li>
-<li><strong>World:</strong> travel to any story place or the spawn, set the clock to night or morning, god mode (on by default: vitals stay full), and restart.</li>
-</ul>
-<p>F4, or tapping the panel&#39;s title, folds and unfolds it. On touch screens it starts folded above the buttons and folds again after each chapter, ending, find or travel button.</p>
-<p>See also: <a href="index.html">README.md</a> · <a href="living-world.html">living-world.md</a> · <a href="combat.html">combat.md</a> · <a href="survival.html">survival.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a> · <a href="world-generation.html">world-generation.md</a></p>
+<p>Nothing in the story runs per frame: the tracker is refreshed with the HUD, four times a second.</p>
+<p><strong>Testing.</strong> The story playground (<code>?playground</code>, development builds; <a href="index.html#url-parameters">README.md</a>) has the rift tools: &quot;Rift nearby&quot; tears one open beside the player, &quot;Enter the Hollow&quot; jumps straight into a dimension (through the nearest rift, opening one if need be), and &quot;→ Combat&quot;, &quot;→ Path&quot;, &quot;→ Puzzle&quot;, &quot;→ Boss&quot; and &quot;→ Vault&quot; skip to that chamber with the ones before it done (<code>DimensionRun.skipTo</code>). The playground shows no intro vision and never saves.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="dimensions.html">dimensions.md</a> · <a href="living-world.html">living-world.md</a> · <a href="exploration.html">exploration.md</a></p>
 </article>
-    <nav class="pager"><a class="prev" href="audio.html"><small>Previous</small>Audio</a></nav>
+    <nav class="pager"><a class="prev" href="audio.html"><small>Previous</small>Audio</a><a class="next" href="dimensions.html"><small>Next</small>Dimensions</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#prologue--a-world-with-no-beginning">Prologue — A world with no beginning</a></li><li class="l2"><a href="#chapter-i--the-stranger-with-the-lantern">Chapter I — The stranger with the lantern</a></li><li class="l2"><a href="#chapter-ii--the-village-that-never-existed">Chapter II — The village that never existed</a></li><li class="l2"><a href="#chapter-iii--the-man-who-remembers-tomorrow">Chapter III — The man who remembers tomorrow</a></li><li class="l2"><a href="#chapter-iv--the-archive-beneath-the-world">Chapter IV — The archive beneath the world</a></li><li class="l2"><a href="#chapter-v--the-truth-about-the-worldmaker">Chapter V — The truth about the Worldmaker</a></li><li class="l2"><a href="#chapter-vi--the-final-twist-you-are-not-the-original">Chapter VI — The final twist: you are not the original</a></li><li class="l2"><a href="#chapter-vii--the-three-endings">Chapter VII — The three endings</a></li><li class="l2"><a href="#epilogue--the-world-beyond-the-ending">Epilogue — The world beyond the ending</a></li><li class="l2"><a href="#the-central-idea">The central idea</a></li><li class="l2"><a href="#how-the-game-tells-it">How the game tells it</a></li><li class="l2"><a href="#implementation">Implementation</a></li><li class="l3"><a href="#starting">Starting</a></li><li class="l3"><a href="#stages">Stages</a></li><li class="l3"><a href="#places">Places</a></li><li class="l3"><a href="#people">People</a></li><li class="l3"><a href="#lantern-memories">Lantern memories</a></li><li class="l3"><a href="#endings">Endings</a></li><li class="l3"><a href="#after-the-ending">After the ending</a></li><li class="l3"><a href="#saving">Saving</a></li><li class="l3"><a href="#story-playground">Story playground</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#in-play">In play</a></li><li class="l2"><a href="#implementation">Implementation</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

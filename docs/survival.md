@@ -65,9 +65,8 @@ Each status lasts a set number of seconds. A new hit refreshes it to whichever i
 
 When health reaches 0 the player collapses. `Game.collapse()` leaves any building, cancels gathering, calls `Vitals.revive()` and sends the player to their waking spot, with an alert that stays until dismissed. The waking spot (`Game.respawn`) is the start (0, 0) until the player:
 
-- rests at a campfire or in a bed (the spot outside the door, if indoors),
-- drinks from a Moonwell, or
-- reaches a new story stage.
+- rests at a campfire or in a bed (the spot outside the door, if indoors), or
+- drinks from a Moonwell.
 
 Each of these moves it to where the player stands (`Game.setRespawn`). It is saved as `player.respawn` ([saves.md](saves.md)). Revival sets:
 
@@ -76,7 +75,7 @@ Each of these moves it to where the player stands (`Game.setRespawn`). It is sav
 - hunger and thirst to at least 50
 - poison and slow to 0
 
-The player keeps everything they carry.
+The player keeps everything they carry, except behind a rift: dying in an outer dimension loses everything in the bag and the hotbar (worn equipment stays), and the rift throws the player back out at its doorstep instead of the waking spot ([dimensions.md](dimensions.md#dying)).
 
 ## Stamina
 
@@ -212,9 +211,11 @@ Rivers and lakes can be swum (`Game.walker` lets the player through water tiles 
 | Torch | Common | 99 | Light, radius 5 |
 | Lantern | Rare | 1 | Light, radius 7, never burns out |
 | Spirit Essence | Uncommon | 99 | Lantern, Health Potion, Spirit Blade; sell (8c) |
-| Wanderer's Lantern | Legendary | 1 | Light, radius 6, and lantern sight (see [story.md](story.md#lantern-memories)) |
 | Star Metal | Epic | 99 | Star ingots; sell (45c) |
 | Forgotten Schematic | Epic | 99 | Use it to learn a rare recipe |
+| Rift Shard | Epic | 99 | From the vaults behind the rifts: Rift Blade, Rift Tonic, arrows; sell (30c) |
+| Rift Blade | Epic | 1 | Melee 24, spirit, reach 1.7; see [combat.md](combat.md#weapons) |
+| Rift Tonic | Rare | 99 | +45 health, +10 thirst, cures poison |
 
 Every rare material now has a use in a recipe. Sell prices come from `SELL_PRICES` in `src/systems/TradeSystem.ts`. Items without a price can't be sold.
 
@@ -230,13 +231,13 @@ Every rare material now has a use in a recipe. Sell prices come from `SELL_PRICE
 
 ### Weight
 
-Every item has a carry weight (`weightOf` in `src/items/Items.ts`): set per item for some (coin 0.01, arrow 0.1, herb 0.1, schematic 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, star ingot 1, lantern 1, star metal 1.5, idol 2, the Wanderer's Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10; starforged boots 2, helm 3, greaves 4, plate 7) and shields (chitin 2, wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.
+Every item has a carry weight (`weightOf` in `src/items/Items.ts`): set per item for some (coin 0.01, arrow 0.1, herb 0.1, schematic 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, star ingot 1, lantern 1, star metal 1.5, idol 2), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10; starforged boots 2, helm 3, greaves 4, plate 7) and shields (chitin 2, wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.
 
 The player can carry 100, plus 25 per Pack Mule rank. Over that the player is **overloaded**: 60% speed and no running, with an "overloaded" badge on the HUD. The bag shows the load under the grid.
 
 ### Dropping and picking up
 
-- **Q** drops the selected hotbar stack in front of the player; the bag's **Drop** button drops the selected stack. Nothing can be dropped indoors, and the Wanderer's Lantern won't leave your hand.
+- **Q** drops the selected hotbar stack in front of the player; the bag's **Drop** button drops the selected stack. Nothing can be dropped indoors.
 - Dropped items lie on the ground as bobbing icons (`src/world/GroundItems.ts`). Walking over one picks it up, once the player has first stepped 1.4 tiles away from it, so a drop isn't picked straight back up. A full bag leaves the rest on the ground.
 - Weapons keep their durability on the ground. Up to 300 dropped stacks are kept (the oldest go first), and they are saved with the world.
 - Tools are never equipped: the best one carried applies (`toolTier()`).
@@ -257,7 +258,7 @@ Keys 1–8 select a hotbar slot, and its name (and a weapon's durability) shows 
 
 `src/systems/CraftingSystem.ts`. The player never builds, so stations are found in the world instead:
 
-- **Campfire:** found in camps and the Village of Graves.
+- **Campfire:** found in camps and nomad camps.
 - **Anvil:** found in villages, castles and nomad camps.
 
 A station counts if its decoration is within 3 tiles of the player (`STATION_RANGE`). Indoors, only the room's own furniture counts, not the world outside the door. "By hand" recipes work anywhere. The menu's Crafting tab lists every known recipe, what you have against what you need, and the station each requires.
@@ -302,8 +303,11 @@ Crafting removes the inputs, then adds the output. If the output doesn't fit, ev
 | Starforged Helm | 1 | Anvil | 2 Star Ingot |
 | Starforged Greaves | 1 | Anvil | 3 Star Ingot, 1 Hide |
 | Starforged Boots | 1 | Anvil | 2 Star Ingot |
+| Rift Tonic | 1 | By hand | 1 Rift Shard, 2 Herb |
+| Arrow | 10 | By hand | 1 Rift Shard, 2 Wood |
+| Rift Blade | 1 | Anvil | 1 Iron Sword, 4 Rift Shard, 1 Crystal |
 
-Star metal comes from meteorites (and some legends), so the starforged tier is for the far lands.
+Star metal comes from meteorites (and some legends), so the starforged tier is for the far lands. Rift shards come only from the vaults of the outer dimensions ([dimensions.md](dimensions.md#rewards)). Nothing can be crafted at a station inside a dimension: only by hand.
 
 ### Rare recipes
 
@@ -366,11 +370,10 @@ At night the player carries a light radius (`LivingWorld.playerLight()`):
 | --- | --- |
 | Nothing (night eyes) | 2.4 |
 | Torch | 5 |
-| Wanderer's Lantern (unless the story has put it out) | 6 |
 | Lantern | 7 |
 
-The largest radius applies.
+The largest radius applies. A new world starts with a Lantern in the bag.
 
-**Torches burn down:** for every 2 in-game hours with darkness above 0.5, one torch is used up, unless a lantern is already lighting the way: a Lantern, or a lit Wanderer's Lantern.
+**Torches burn down:** for every 2 in-game hours with darkness above 0.5, one torch is used up, unless a Lantern is already lighting the way.
 
-See also: [README.md](README.md) · [combat.md](combat.md) · [living-world.md](living-world.md) · [story.md](story.md) · [objects-and-structures.md](objects-and-structures.md)
+See also: [README.md](README.md) · [combat.md](combat.md) · [living-world.md](living-world.md) · [objects-and-structures.md](objects-and-structures.md)

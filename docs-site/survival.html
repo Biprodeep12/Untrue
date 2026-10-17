@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html" class="current" aria-current="page">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html" class="current" aria-current="page">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Gameplay</p>
     <article><h1 id="survival">Survival</h1>
@@ -158,9 +158,8 @@
 <h3 id="collapse">Collapse<a class="anchor" href="#collapse" aria-label="Link to this section">#</a></h3>
 <p>When health reaches 0 the player collapses. <code>Game.collapse()</code> leaves any building, cancels gathering, calls <code>Vitals.revive()</code> and sends the player to their waking spot, with an alert that stays until dismissed. The waking spot (<code>Game.respawn</code>) is the start (0, 0) until the player:</p>
 <ul>
-<li>rests at a campfire or in a bed (the spot outside the door, if indoors),</li>
-<li>drinks from a Moonwell, or</li>
-<li>reaches a new story stage.</li>
+<li>rests at a campfire or in a bed (the spot outside the door, if indoors), or</li>
+<li>drinks from a Moonwell.</li>
 </ul>
 <p>Each of these moves it to where the player stands (<code>Game.setRespawn</code>). It is saved as <code>player.respawn</code> (<a href="saves.html">saves.md</a>). Revival sets:</p>
 <ul>
@@ -169,7 +168,7 @@
 <li>hunger and thirst to at least 50</li>
 <li>poison and slow to 0</li>
 </ul>
-<p>The player keeps everything they carry.</p>
+<p>The player keeps everything they carry, except behind a rift: dying in an outer dimension loses everything in the bag and the hotbar (worn equipment stays), and the rift throws the player back out at its doorstep instead of the waking spot (<a href="dimensions.html#dying">dimensions.md</a>).</p>
 <h2 id="stamina">Stamina<a class="anchor" href="#stamina" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -735,12 +734,6 @@
 <td>Lantern, Health Potion, Spirit Blade; sell (8c)</td>
 </tr>
 <tr>
-<td>Wanderer&#39;s Lantern</td>
-<td>Legendary</td>
-<td>1</td>
-<td>Light, radius 6, and lantern sight (see <a href="story.html#lantern-memories">story.md</a>)</td>
-</tr>
-<tr>
 <td>Star Metal</td>
 <td>Epic</td>
 <td>99</td>
@@ -751,6 +744,24 @@
 <td>Epic</td>
 <td>99</td>
 <td>Use it to learn a rare recipe</td>
+</tr>
+<tr>
+<td>Rift Shard</td>
+<td>Epic</td>
+<td>99</td>
+<td>From the vaults behind the rifts: Rift Blade, Rift Tonic, arrows; sell (30c)</td>
+</tr>
+<tr>
+<td>Rift Blade</td>
+<td>Epic</td>
+<td>1</td>
+<td>Melee 24, spirit, reach 1.7; see <a href="combat.html#weapons">combat.md</a></td>
+</tr>
+<tr>
+<td>Rift Tonic</td>
+<td>Rare</td>
+<td>99</td>
+<td>+45 health, +10 thirst, cures poison</td>
 </tr>
 </tbody></table></div>
 <p>Every rare material now has a use in a recipe. Sell prices come from <code>SELL_PRICES</code> in <code>src/systems/TradeSystem.ts</code>. Items without a price can&#39;t be sold.</p>
@@ -764,11 +775,11 @@
 <li><strong>Sort bag</strong> (beside the load line) tidies every slot below the hotbar (<code>Inventory.sort()</code>): like items merge into full stacks (worn weapons never stack), then weapons, tools, armour, food, materials and treasure (Epic and above) follow in that order, rarest first, then by name. The hotbar is left alone.</li>
 </ul>
 <h3 id="weight">Weight<a class="anchor" href="#weight" aria-label="Link to this section">#</a></h3>
-<p>Every item has a carry weight (<code>weightOf</code> in <code>src/items/Items.ts</code>): set per item for some (coin 0.01, arrow 0.1, herb 0.1, schematic 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, star ingot 1, lantern 1, star metal 1.5, idol 2, the Wanderer&#39;s Lantern 0), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10; starforged boots 2, helm 3, greaves 4, plate 7) and shields (chitin 2, wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.</p>
+<p>Every item has a carry weight (<code>weightOf</code> in <code>src/items/Items.ts</code>): set per item for some (coin 0.01, arrow 0.1, herb 0.1, schematic 0.1, wood 0.5, coal 0.6, stone 0.8, ores and ingots 1, star ingot 1, lantern 1, star metal 1.5, idol 2), set per piece for armour (leather cap and boots 1, tunic and trousers 2; iron boots 3, helmet 4, greaves 6, chestplate 10; starforged boots 2, helm 3, greaves 4, plate 7) and shields (chitin 2, wooden 3, iron 7), otherwise by kind: melee weapons and tools 3, bows 2, food 0.3, everything else 0.5.</p>
 <p>The player can carry 100, plus 25 per Pack Mule rank. Over that the player is <strong>overloaded</strong>: 60% speed and no running, with an &quot;overloaded&quot; badge on the HUD. The bag shows the load under the grid.</p>
 <h3 id="dropping-and-picking-up">Dropping and picking up<a class="anchor" href="#dropping-and-picking-up" aria-label="Link to this section">#</a></h3>
 <ul>
-<li><strong>Q</strong> drops the selected hotbar stack in front of the player; the bag&#39;s <strong>Drop</strong> button drops the selected stack. Nothing can be dropped indoors, and the Wanderer&#39;s Lantern won&#39;t leave your hand.</li>
+<li><strong>Q</strong> drops the selected hotbar stack in front of the player; the bag&#39;s <strong>Drop</strong> button drops the selected stack. Nothing can be dropped indoors.</li>
 <li>Dropped items lie on the ground as bobbing icons (<code>src/world/GroundItems.ts</code>). Walking over one picks it up, once the player has first stepped 1.4 tiles away from it, so a drop isn&#39;t picked straight back up. A full bag leaves the rest on the ground.</li>
 <li>Weapons keep their durability on the ground. Up to 300 dropped stacks are kept (the oldest go first), and they are saved with the world.</li>
 <li>Tools are never equipped: the best one carried applies (<code>toolTier()</code>).</li>
@@ -786,7 +797,7 @@
 <h2 id="crafting">Crafting<a class="anchor" href="#crafting" aria-label="Link to this section">#</a></h2>
 <p><code>src/systems/CraftingSystem.ts</code>. The player never builds, so stations are found in the world instead:</p>
 <ul>
-<li><strong>Campfire:</strong> found in camps and the Village of Graves.</li>
+<li><strong>Campfire:</strong> found in camps and nomad camps.</li>
 <li><strong>Anvil:</strong> found in villages, castles and nomad camps.</li>
 </ul>
 <p>A station counts if its decoration is within 3 tiles of the player (<code>STATION_RANGE</code>). Indoors, only the room&#39;s own furniture counts, not the world outside the door. &quot;By hand&quot; recipes work anywhere. The menu&#39;s Crafting tab lists every known recipe, what you have against what you need, and the station each requires.</p>
@@ -1016,8 +1027,26 @@
 <td>Anvil</td>
 <td>2 Star Ingot</td>
 </tr>
+<tr>
+<td>Rift Tonic</td>
+<td>1</td>
+<td>By hand</td>
+<td>1 Rift Shard, 2 Herb</td>
+</tr>
+<tr>
+<td>Arrow</td>
+<td>10</td>
+<td>By hand</td>
+<td>1 Rift Shard, 2 Wood</td>
+</tr>
+<tr>
+<td>Rift Blade</td>
+<td>1</td>
+<td>Anvil</td>
+<td>1 Iron Sword, 4 Rift Shard, 1 Crystal</td>
+</tr>
 </tbody></table></div>
-<p>Star metal comes from meteorites (and some legends), so the starforged tier is for the far lands.</p>
+<p>Star metal comes from meteorites (and some legends), so the starforged tier is for the far lands. Rift shards come only from the vaults of the outer dimensions (<a href="dimensions.html#rewards">dimensions.md</a>). Nothing can be crafted at a station inside a dimension: only by hand.</p>
 <h3 id="rare-recipes">Rare recipes<a class="anchor" href="#rare-recipes" aria-label="Link to this section">#</a></h3>
 <p>Recipes marked <code>rare</code> in <code>RECIPES</code> stay hidden until learned. The Crafting tab says how many are still to discover. Using a <strong>Forgotten Schematic</strong> (from the hotbar or the bag) teaches one unknown rare recipe at random and says where to make it; with none left to learn, the schematic is kept. Schematics are in the Epic chest pool and are dropped by every legend and the Arena Guardian. Learned recipes are saved in progression (<code>recipes</code>).</p>
 <div class="table-wrap"><table>
@@ -1152,17 +1181,13 @@
 <td>5</td>
 </tr>
 <tr>
-<td>Wanderer&#39;s Lantern (unless the story has put it out)</td>
-<td>6</td>
-</tr>
-<tr>
 <td>Lantern</td>
 <td>7</td>
 </tr>
 </tbody></table></div>
-<p>The largest radius applies.</p>
-<p><strong>Torches burn down:</strong> for every 2 in-game hours with darkness above 0.5, one torch is used up, unless a lantern is already lighting the way: a Lantern, or a lit Wanderer&#39;s Lantern.</p>
-<p>See also: <a href="index.html">README.md</a> · <a href="combat.html">combat.md</a> · <a href="living-world.html">living-world.md</a> · <a href="story.html">story.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a></p>
+<p>The largest radius applies. A new world starts with a Lantern in the bag.</p>
+<p><strong>Torches burn down:</strong> for every 2 in-game hours with darkness above 0.5, one torch is used up, unless a Lantern is already lighting the way.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="combat.html">combat.md</a> · <a href="living-world.html">living-world.md</a> · <a href="objects-and-structures.html">objects-and-structures.md</a></p>
 </article>
     <nav class="pager"><a class="prev" href="saves.html"><small>Previous</small>Saves</a><a class="next" href="combat.html"><small>Next</small>Combat</a></nav>
   </main>

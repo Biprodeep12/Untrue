@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html" class="current" aria-current="page">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">The World That Forgets</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html" class="current" aria-current="page">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Engine</p>
     <article><h1 id="architecture">Architecture</h1>
@@ -56,7 +56,15 @@
 </tr>
 <tr>
 <td><code>LivingWorld.ts</code></td>
-<td>Owns time, weather, hazards, NPCs, quests, events, the story, lighting and weather rendering.</td>
+<td>Owns time, weather, hazards, NPCs, quests, events, visions, lighting and weather rendering, and the story (<code>RiftStory</code>), which plugs in here.</td>
+</tr>
+<tr>
+<td><code>Place.ts</code></td>
+<td><code>Place</code>: where the player is (the overworld, an <code>Interior</code>, or a <code>RiftTrip</code>): the player&#39;s collision, the combat <code>Arena</code>, and the player&#39;s spot in the overworld.</td>
+</tr>
+<tr>
+<td><code>RiftTrip.ts</code></td>
+<td>One trip into an outer dimension: the run, the enemies it asked for, the map&#39;s fog, and the dimension as a <code>Place</code> and combat <code>Arena</code>.</td>
 </tr>
 <tr>
 <td><code>Player.ts</code></td>
@@ -100,7 +108,7 @@
 </tr>
 <tr>
 <td><code>Interior.ts</code></td>
-<td>Building interiors, mine caves and the keep&#39;s floors, generated from the building&#39;s seed.</td>
+<td>Building interiors, mine caves and the keep&#39;s floors, generated from the building&#39;s seed; the bookshelves&#39; books.</td>
 </tr>
 <tr>
 <td><code>BiomeManager.ts</code></td>
@@ -108,7 +116,7 @@
 </tr>
 <tr>
 <td><code>ObjectManager.ts</code></td>
-<td>Live world objects indexed by chunk.</td>
+<td>Live world objects indexed by chunk and by kind.</td>
 </tr>
 <tr>
 <td><code>WorldObject.ts</code></td>
@@ -163,6 +171,14 @@
 <td><code>worldGenerator.worker.ts</code> (runs <code>generateChunk</code>) and <code>WorkerGenerator.ts</code> (the worker pool).</td>
 </tr>
 <tr>
+<td><strong><code>src/dimension/</code></strong></td>
+<td>The outer dimensions behind the rifts, with no rendering: <code>DimTile.ts</code> (their tiles), <code>Dimension.ts</code> (what a dimension is, and the registry), <code>Hollow.ts</code> (The Hollow and its generator), <code>Challenges.ts</code> (the challenge state machines and <code>DimensionRun</code>). See <a href="dimensions.html">dimensions.md</a>.</td>
+</tr>
+<tr>
+<td><strong><code>src/story/</code></strong></td>
+<td><code>RiftStory.ts</code>: the main story, its visions, objective and save. See <a href="story.html">story.md</a>.</td>
+</tr>
+<tr>
 <td><strong><code>src/entities/</code></strong></td>
 <td><code>Enemy.ts</code> (enemy AI), <code>Species.ts</code> (enemy roster, damage-type weaknesses and resistances, variants), <code>NPC.ts</code> (NPC schedules and following).</td>
 </tr>
@@ -175,16 +191,12 @@
 <td>Gameplay systems: inventory, crafting, gathering, loot, vitals, progression, combat, NPCs, quests, trade, time, weather, hazards, world events, exploration.</td>
 </tr>
 <tr>
-<td><strong><code>src/story/</code></strong></td>
-<td><code>StorySystem.ts</code>, <code>StoryPlaces.ts</code> (story landmarks), <code>StoryScript.ts</code> (all story text).</td>
-</tr>
-<tr>
 <td><strong><code>src/rendering/</code></strong></td>
-<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Buildings.ts</code>, <code>InteriorRenderer.ts</code>, <code>GroundItemRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>.</td>
+<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Buildings.ts</code>, <code>InteriorRenderer.ts</code>, <code>DimensionRenderer.ts</code>, <code>GroundItemRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>, <code>RiftGlitch.ts</code> (the world&#39;s glitches near a rift).</td>
 </tr>
 <tr>
 <td><strong><code>src/ui/</code></strong></td>
-<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code> (tabs: Inventory, Crafting, Skills, Quests, Map, Lantern, Settings, About), <code>MapView</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>SleepOverlay</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>, <code>Hints</code> (first-time tips), <code>Fullscreen</code> (the Fullscreen API), <code>About</code> (privacy, credits, licenses), <code>Playground</code> (the story playground panel).</td>
+<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code> (tabs: Inventory, Crafting, Skills, Quests, Map (only inside an outer dimension), Settings, About), <code>MapView</code>, <code>DimensionMap</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>SleepOverlay</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>, <code>Hints</code> (first-time tips), <code>Fullscreen</code> (the Fullscreen API), <code>About</code> (privacy, credits, licenses), <code>Playground</code> (the story playground panel).</td>
 </tr>
 <tr>
 <td><strong><code>src/audio/</code></strong></td>
@@ -201,21 +213,21 @@
 <ol>
 <li><code>handleKeys()</code>: debug overlay, menu, vision paging, Escape, save, zoom, hotbar, use, interact, attack, dodge and the debug far trip.</li>
 <li>If the player is waiting to be placed (<code>spawnTarget</code>), <code>trySpawn()</code> looks for open ground once the chunks around the target have loaded.</li>
-<li>Otherwise, unless a menu, dialog or vision pauses the world:<ul>
-<li><code>LivingWorld.update(dt)</code>: clock and hourly events, hazards, NPCs, the story, lost travellers and escorts.</li>
+<li>Indoors, <code>tickIndoors</code>; in an outer dimension, <code>tickDimension</code> (the clock, needs and villagers run as indoors; the player moves on the dimension, combat fights on it, and the run is stepped and its events acted on; see <a href="dimensions.html">dimensions.md</a>). Otherwise, unless a menu, dialog or vision pauses the world:<ul>
+<li><code>LivingWorld.update(dt)</code>: clock and hourly events, hazards, NPCs, lost travellers and escorts.</li>
 <li>Blocking state and movement speed (slow status, blocking, weather).</li>
 <li><code>Player.update</code>, then gathering, then <code>CombatSystem.update</code> with the player&#39;s body.</li>
 <li>The camera follows the player.</li>
-<li><code>Vitals.update</code>; a collapse sends the player to their waking spot (the last rest, Moonwell or story stage; the origin before any).</li>
+<li><code>Vitals.update</code>; a collapse sends the player to their waking spot (the last rest or Moonwell; the origin before any).</li>
 </ul>
 </li>
-<li><code>WorldManager.update(view)</code> with the camera&#39;s view in tiles: streaming, biome and object bookkeeping, discovery. <code>ChunkManager</code> draws at most 2 waiting chunks, nearest first.</li>
+<li><code>WorldManager.update(view)</code> with the camera&#39;s view in tiles (indoors and in a dimension, a view around the place&#39;s <code>spot</code> outside, so the world there stays loaded): streaming, biome and object bookkeeping, discovery. <code>ChunkManager</code> draws at most 2 waiting chunks, nearest first.</li>
 <li>The world layer is positioned and scaled for the camera.</li>
-<li><code>TileRenderer.cull()</code> hides chunks outside the camera&#39;s view; buildings and ground items near the screen update.</li>
+<li>Indoors, the room renders; in a dimension, <code>DimensionRenderer</code> culls and animates, then entities and the dimension&#39;s lighting. Outdoors, <code>TileRenderer.cull()</code> hides chunks outside the camera&#39;s view, rifts animate, the glitches run near an open rift, and buildings and ground items near the screen update.</li>
 <li><code>updateTarget()</code>: the interaction prompt and target outline.</li>
 <li>Rendering updates: tree fading, <code>EntityRenderer.update</code>, then <code>LivingWorld.render</code> (weather particles, effects, lighting), and the music mood (biome, band, indoors or cave, what is hunting the player).</li>
 <li>Touch stick, hotbar and menu refresh.</li>
-<li>Autosave every 30 seconds; every 0.25 seconds, the HUD refresh, first-time tips and the check for a new story stage (which moves the waking spot).</li>
+<li>Autosave every 30 seconds; every 0.25 seconds, the HUD refresh and first-time tips.</li>
 <li><code>Input.endFrame()</code> clears one-frame inputs.</li>
 </ol>
 <p>The ticker is capped at 60 frames per second (30 with the setting).</p>
@@ -240,17 +252,7 @@
 <tbody><tr>
 <td><code>WorldManager.onDiscover(o)</code></td>
 <td>The player first stands inside an object</td>
-<td>Discovery toast, XP, quest discovery objectives, lantern whispers</td>
-</tr>
-<tr>
-<td><code>WorldManager.onForget(o)</code></td>
-<td>A discovered object is discarded</td>
-<td>The story&#39;s lantern memories (<code>StorySystem</code> sets it)</td>
-</tr>
-<tr>
-<td><code>ObjectManager.onDiscard(o)</code></td>
-<td>Any object is discarded</td>
-<td>Forwarded by <code>WorldManager</code> to <code>onForget</code></td>
+<td>Discovery toast, XP, quest discovery objectives</td>
 </tr>
 <tr>
 <td><code>ChunkListener.show / hide / changed</code></td>
@@ -268,12 +270,22 @@
 <td>Quest clear objectives, village defence reward</td>
 </tr>
 <tr>
+<td><code>Arena.killed(enemy)</code></td>
+<td>An enemy dies on an arena (a dimension)</td>
+<td><code>DimensionRun.enemyKilled</code></td>
+</tr>
+<tr>
+<td><code>DimensionRun.takeEvents()</code></td>
+<td>Each frame of a trip</td>
+<td><code>RiftTrip</code> spawns and removes enemies and scales the boss; <code>Game.tripEvent</code> moves the player after a fall, grants rewards, shows notices, closes the rift or leaves</td>
+</tr>
+<tr>
 <td><code>QuestSystem.onComplete(q)</code></td>
 <td>A quest finishes</td>
 <td>Rewards</td>
 </tr>
 <tr>
-<td><code>CombatEvents</code>, <code>HazardHooks</code>, <code>EventHooks</code>, <code>StoryHooks</code></td>
+<td><code>CombatEvents</code>, <code>HazardHooks</code>, <code>EventHooks</code></td>
 <td>Their systems</td>
 <td>Damage numbers, swings, hurt flashes, notifications, visions, dialogs</td>
 </tr>
@@ -294,7 +306,7 @@
 </tr>
 <tr>
 <td><code>src/world/Buildings.test.ts</code></td>
-<td>Buildings, interiors, castles, discovered places, saves that keep the world as it was</td>
+<td>Buildings, interiors, castles, discovery and forgetting, saves that keep the world as it was</td>
 </tr>
 <tr>
 <td><code>src/world/Rivers.test.ts</code></td>
@@ -302,7 +314,7 @@
 </tr>
 <tr>
 <td><code>src/save/SaveManager.test.ts</code></td>
-<td>Persistent finds and save round trips</td>
+<td>Save round trips and migrating older saves</td>
 </tr>
 <tr>
 <td><code>src/entities/NPC.test.ts</code></td>
@@ -314,7 +326,7 @@
 </tr>
 <tr>
 <td><code>src/systems/Adventurer.test.ts</code></td>
-<td>Carrying, skills, semi-persistent places, the Moonwell, equipment</td>
+<td>Carrying, skills, places forgetting and the object indexes, the Moonwell, equipment</td>
 </tr>
 <tr>
 <td><code>src/systems/Progress.test.ts</code></td>
@@ -333,8 +345,12 @@
 <td>Fog of war, milestones, markers</td>
 </tr>
 <tr>
-<td><code>src/story/Story.test.ts</code></td>
-<td>Story places and a full playthrough to an ending</td>
+<td><code>src/dimension/Dimension.test.ts</code>, <code>Challenges.test.ts</code>, <code>DimensionRenderer.test.ts</code></td>
+<td>The Hollow&#39;s layout, every challenge and the run, the dimension renderer&#39;s culling and pooling</td>
+</tr>
+<tr>
+<td><code>src/game/RiftTrip.test.ts</code></td>
+<td>Rift structures (placement, determinism, closing), trips (stashing and restoring the overworld&#39;s fights, kills and boss phases, closing through the portal), saving inside, dying inside, the story&#39;s objectives</td>
 </tr>
 </tbody></table></div>
 <p>See also: <a href="world-streaming.html">World streaming</a>, <a href="rendering.html">Rendering</a></p>

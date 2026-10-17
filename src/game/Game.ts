@@ -1,11 +1,13 @@
 // Boots PixiJS, owns the game loop, and wires the world to the screen.
 
 import { Application, Container, Graphics, Texture, TextureStyle } from 'pixi.js';
-import { AudioSystem, type Sfx } from '../audio/AudioSystem';
+import { AudioSystem, type MusicMood, type Sfx } from '../audio/AudioSystem';
 import { CHUNK_SIZE, TILE_SIZE } from '../config';
 import { BIOME_TYPES, BiomeType, Deco, isWater, Tile } from '../generation/Tiles';
 import { DIFFICULTY_BANDS, difficultyBand } from '../generation/WorldRules';
 import { buildAtlas } from '../rendering/Atlas';
+import { DimensionRenderer } from '../rendering/DimensionRenderer';
+import { RiftGlitch, type GlitchTargets } from '../rendering/RiftGlitch';
 import { GroundItemRenderer } from '../rendering/GroundItemRenderer';
 import { BuildingRenderer } from '../rendering/Buildings';
 import { EntityRenderer } from '../rendering/EntityRenderer';
@@ -19,7 +21,7 @@ import { EXPLORE_XP, ExplorationSystem } from '../systems/ExplorationSystem';
 import { craft, STATION_DECO, STATION_NAMES, STATION_RANGE, unknownRare, type Recipe, type Station } from '../systems/CraftingSystem';
 import { GatheringSystem, interactionAt, type Interaction } from '../systems/GatheringSystem';
 import { Inventory } from '../systems/InventorySystem';
-import { Items, type ItemDef } from '../items/Items';
+import { itemById, Items, type ItemDef } from '../items/Items';
 import { Progression, type SkillId } from '../systems/Progression';
 import { SLOW_FACTOR, VITAL_MAX, Vitals } from '../systems/Vitals';
 import { WEATHER, type WeatherKind } from '../systems/WeatherSystem';
@@ -28,22 +30,21 @@ import { Hotbar } from '../ui/Hotbar';
 import { Hints } from '../ui/Hints';
 import { Intro } from '../ui/Intro';
 import { Hud } from '../ui/Hud';
-import { Playground, type PlaygroundFind } from '../ui/Playground';
-import type { Landmark } from '../ui/MapView';
+import { Playground } from '../ui/Playground';
 import { Menu } from '../ui/Menu';
 import { PauseMenu } from '../ui/PauseMenu';
 import { SleepOverlay } from '../ui/SleepOverlay';
 import { TouchStick } from '../ui/TouchStick';
 import { biomeName } from '../world/BiomeManager';
-import { hashString, streamRng, Stream } from '../generation/Random';
+import { hash, hashString, streamRng, Stream } from '../generation/Random';
+import type { DimEvent } from '../dimension/Challenges';
+import { pickDimension, type ChamberKind } from '../dimension/Dimension';
+import { DimTile } from '../dimension/DimTile';
 import type { BuildingSpec } from '../generation/StructureGenerator';
-import type { PlaceId } from '../story/StoryPlaces';
-import { BOOKS } from '../story/StoryScript';
-import { STAGE_TARGET } from '../story/StorySystem';
 import { rollChest } from '../systems/Loot';
 import { chunkKey, clampTile, tileToChunk } from '../coords';
 import type { Npc } from '../entities/NPC';
-import { Interior, KEEP_FLOORS } from '../world/Interior';
+import { BOOKS, Interior, KEEP_FLOORS } from '../world/Interior';
 import { WorldManager } from '../world/WorldManager';
 import type { WorldObject } from '../world/WorldObject';
 import { WorkerGenerator } from '../workers/WorkerGenerator';
@@ -51,6 +52,8 @@ import { SyncGenerator } from '../world/SyncGenerator';
 import { Camera } from './Camera';
 import { Input } from './Input';
 import { LivingWorld } from './LivingWorld';
+import type { Place } from './Place';
+import { riftDoorstep, riftTile, RiftTrip } from './RiftTrip';
 import { DODGE_STAMINA, Player, type Collider } from './Player';
 import { bindings, keyName, type Action } from './Keys';
 import { Settings } from './Settings';
@@ -68,6 +71,13 @@ const SPAWN_SEARCH = 24;
 const AUTOSAVE_SECONDS = 30;
 const DISCOVERY_XP = 15;
 const MOONWELL_XP = 25;
+/** Closing a rift is worth this much experience. */
+const RIFT_XP = 150;
+/** Glitches run within this many tiles of an open rift. */
+const GLITCH_RANGE = 12;
+const NO_NPCS: readonly Npc[] = [];
+const NO_MARKS: ReadonlyMap<number, string> = new Map();
+const NOWHERE = { x0: 0, y0: 0, x1: -1, y1: -1 };
 /** Movement speed while holding a block. */
 const BLOCK_SPEED = 0.5;
 /** Swimming speed in shallow and deep water. Deep water tires the player like
@@ -143,6 +153,21 @@ export class Game {
   private interiorRenderer!: InteriorRenderer;
   /** The room the player is in, if indoors. */
   private room: Interior | null = null;
+  /** The trip into an outer dimension the player is on, if any. */
+  private trip: RiftTrip | null = null;
+  private dimRenderer!: DimensionRenderer;
+  /** How far the nearest open rift's tear is, and where, refreshed with the HUD. */
+  private riftDistance = Infinity;
+  private readonly riftAt = { x: 0, y: 0 };
+  private readonly glitch = new RiftGlitch();
+  private glitching = false;
+  private readonly glitchTargets: GlitchTargets = {
+    jolt: (gx, gy, dx, tint, seconds) => this.renderer.jolt(gx, gy, dx, tint, seconds),
+    tint: (color) => {
+      if (this.settings.values.flashes || color === 0xffffff) this.worldLayer.tint = color;
+    },
+    stutter: () => this.hud.stutter(),
+  };
   private stepTimer = 0;
   private strikeTimer = 0;
   private living!: LivingWorld;
@@ -162,11 +187,15 @@ export class Game {
       return this.world.isSolidAt(gx, gy);
     },
   };
+  /** The overworld as a place: the player is where they stand. */
+  private outdoors!: Place;
   private drownNote = 0;
   private swimNote = 0;
   private markerDrawn = false;
   /** The same for the marker indoors. */
   private indoorMarkerDrawn = false;
+  /** The music's mood, filled in place each frame. */
+  private readonly mood: MusicMood = { biome: undefined, night: false, danger: false, weather: 'clear', weatherStrength: 0 };
   /** Per-frame arguments, filled in place instead of allocated each frame. */
   private readonly view = { minX: 0, minY: 0, maxX: 0, maxY: 0, playerX: 0, playerY: 0, dirX: 0, dirY: 0 };
   private readonly nearView = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -175,6 +204,7 @@ export class Game {
   private readonly screenAt: [number, number] = [0, 0];
   /** World pixels to screen pixels, for the lighting. The tuple is reused. */
   private readonly toScreen = (x: number, y: number): [number, number] => {
+    // A dimension is drawn in the world layer, like the overworld.
     const view = this.room ? this.interiorRenderer.view : this.worldLayer;
     this.screenAt[0] = x * this.camera.zoom + view.x;
     this.screenAt[1] = y * this.camera.zoom + view.y;
@@ -190,10 +220,8 @@ export class Game {
   private sleepOverlay!: SleepOverlay;
   /** Moonwells already drunk from; each gives its gift once. */
   private readonly usedMoonwells = new Set<string>();
-  /** Where the player wakes after collapsing: the last place they rested,
-   *  or the last story place reached. */
+  /** Where the player wakes after collapsing: the last place they rested. */
   private respawn = { x: 0, y: 0 };
-  private lastStage = '';
   /** Saving is off: the stored save could not be read this session, or
    *  another tab holds the save. Says why. */
   private saveLock: string | null = null;
@@ -216,6 +244,8 @@ export class Game {
   private hints!: Hints;
   /** The opening screen, until the first spawn clears it. */
   private intro: Intro | null = new Intro();
+  /** Show the story's opening vision after the opening screen. */
+  private storyIntro = false;
 
   async start(host: HTMLElement, ui: HTMLElement): Promise<void> {
     // ?new or ?seed=N start a fresh world; otherwise the save is loaded.
@@ -312,14 +342,12 @@ export class Game {
       notify: (t) => this.hud.notify(t),
       quests: () => this.living.questViews(),
       abandon: (id) => this.living.abandonQuest(id),
-      memories: () => this.living.story.memories,
       map: {
         exploration: this.exploration,
         player: () => ({ x: this.player.x, y: this.player.y }),
-        landmarks: () => this.landmarks(),
-        memories: () => this.living.story.memories,
-        objective: () => this.living.story.objective(),
       },
+      mapAvailable: () => this.mapAvailable,
+      dimensionMap: () => (this.trip ? { def: this.trip.def, run: this.trip.run, seen: this.trip.seen, seenVersion: this.trip.seenVersion, player: () => this.player } : null),
       settings: this.settings,
     });
     this.pause = new PauseMenu(ui, {
@@ -361,13 +389,16 @@ export class Game {
         this.living.effects.burst(this.player.x, this.player.y - 0.6, 'gold', 24);
       },
       playerHurt: (fx, fy) => {
-        this.player.hurt(fx, fy, this.walker);
+        this.player.hurt(fx, fy, this.place);
         this.gathering.cancel();
         this.hud.flashHurt();
         this.audio.play('hurt');
       },
       notify: (t) => this.hud.notify(t),
     });
+    this.outdoors = { kind: 'world', isSolidAt: this.walker.isSolidAt, spot: this.player, arena: this.combat.overworld };
+    // Draws into the overworld's layers, which it hides while a dimension shows.
+    this.dimRenderer = new DimensionRenderer(atlas, this.ground, this.entities);
     this.living = new LivingWorld({
       renderer: this.app.renderer,
       world: this.world,
@@ -379,7 +410,6 @@ export class Game {
       settings: this.settings,
       atlasCanvas,
       ui,
-      unstick: () => this.unstick(),
       audio: this.audio,
       overflow: (item, count) => this.overflow(item, count),
     });
@@ -405,15 +435,15 @@ export class Game {
     document.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('.btn, .slot, .menu-tab')) this.audio.play('ui');
     }, true);
-    this.living.attach(this.app.stage, this.worldLayer, this.entities);
+    this.living.attach(this.app.stage, this.worldLayer);
     if (saved?.living) {
       try {
         this.living.load(saved.living);
       } catch (e) {
-        // Keep the old save, since autosave would otherwise lose the story for good.
+        // Keep the old save, since autosave would otherwise lose its quests for good.
         console.error('Could not restore the living world; starting it afresh.', e);
         void this.saves.backup(saved).catch(() => {});
-        this.hud.alert("Part of your save (story, quests, clock) couldn't be read and started afresh. A copy of the old save was kept.");
+        this.hud.alert("Part of your save (quests, weather, clock) couldn't be read and started afresh. A copy of the old save was kept.");
       }
     }
     const wake = saved?.player.respawn;
@@ -421,7 +451,11 @@ export class Game {
     const wells: unknown = saved?.player.moonwells;
     if (Array.isArray(wells)) for (const id of wells) if (typeof id === 'string') this.usedMoonwells.add(id);
     if (playground) this.startPlayground(ui);
-    this.living.beginStory();
+    // A new world opens on the story's vision, once the world is revealed;
+    // older saves start without it.
+    this.storyIntro = !saved && !playground;
+    // A new world starts with a lantern, a light that never burns out.
+    if (!saved) this.inventory.add(Items.lantern, 1);
     // Debug: ?hour=22 sets the clock, ?weather=storm forces the weather everywhere.
     const hour = dev ? params.get('hour') : null;
     if (hour !== null) this.living.time.minutes = (Number(hour) % 24) * 60;
@@ -521,6 +555,8 @@ export class Game {
     if (this.spawnTarget) this.trySpawn();
     else if (this.room) {
       if (!this.paused) this.tickIndoors(dt);
+    } else if (this.trip) {
+      if (!this.paused) this.tickDimension(dt);
     } else if (!this.paused) {
       this.living.update(dt);
       const under = world.tileAt(Math.floor(player.x), Math.floor(player.y - 0.1))?.tile;
@@ -565,12 +601,13 @@ export class Game {
     }
 
     const { width, height } = this.app.renderer;
-    // Indoors, the world keeps streaming around the door outside.
-    const at = this.room ? this.room.outside : player;
+    // Indoors and in a dimension, the world keeps streaming around the door or the rift outside.
+    const at = this.place.spot;
+    const away = this.place !== this.outdoors;
     const halfW = width / 2 / camera.zoom / TILE_SIZE;
     const halfH = height / 2 / camera.zoom / TILE_SIZE;
-    const cx = this.room ? at.x : camera.x / TILE_SIZE;
-    const cy = this.room ? at.y : camera.y / TILE_SIZE;
+    const cx = away ? at.x : camera.x / TILE_SIZE;
+    const cy = away ? at.y : camera.y / TILE_SIZE;
     const v = this.view;
     v.minX = cx - halfW;
     v.minY = cy - halfH;
@@ -578,19 +615,27 @@ export class Game {
     v.maxY = cy + halfH;
     v.playerX = at.x;
     v.playerY = at.y;
-    v.dirX = this.room ? 0 : player.dirX;
-    v.dirY = this.room ? 0 : player.dirY;
+    v.dirX = away ? 0 : player.dirX;
+    v.dirY = away ? 0 : player.dirY;
     world.update(v);
 
     const view = this.room ? this.interiorRenderer.view : this.worldLayer;
     view.scale.set(camera.zoom);
-    view.position.set(Math.round(width / 2 - camera.x * camera.zoom), Math.round(height / 2 - camera.y * camera.zoom));
+    view.position.set(Math.round(width / 2 - camera.x * camera.zoom + this.glitch.offset), Math.round(height / 2 - camera.y * camera.zoom));
     if (this.room) {
       this.renderIndoors(dt);
       this.finishFrame(dt);
       return;
     }
+    if (this.trip) {
+      this.renderDimension(dt, halfW * TILE_SIZE, halfH * TILE_SIZE);
+      this.finishFrame(dt);
+      return;
+    }
     this.renderer.cull((cx - halfW) * TILE_SIZE, (cy - halfH) * TILE_SIZE, (cx + halfW) * TILE_SIZE, (cy + halfH) * TILE_SIZE);
+    this.renderer.animate(dt);
+    this.renderer.settle(dt);
+    this.riftGlitch(dt);
     this.buildings.update(world.objects.objects.values(), world.chunks.renderRect, player.x * TILE_SIZE, player.y * TILE_SIZE);
     const near = this.nearView;
     near.x0 = cx - halfW - 2;
@@ -607,19 +652,22 @@ export class Game {
 
   /** Music, HUD, autosave: everything a frame ends with, indoors or out. */
   private finishFrame(dt: number): void {
-    const { input, player, world } = this;
-    const at = this.room ? this.room.outside : player;
-    this.audio.update({
-      biome: world.biomeAt(Math.floor(at.x), Math.floor(at.y))?.type,
-      night: this.living.time.isNight,
-      danger: !this.room && this.combat.enemies.some((e) => e.state === 'chase' || e.state === 'attack'),
-      weather: this.living.kind,
-      weatherStrength: this.paused || this.room ? 0 : this.living.weatherStrength,
-      band: difficultyBand(Math.floor(at.x), Math.floor(at.y)),
-      indoors: !!this.room,
-      cave: !!this.room?.cave,
-      hunter: this.room ? null : this.hunterCall(),
-    });
+    const { input, world } = this;
+    const at = this.place.spot;
+    const outdoors = this.place === this.outdoors;
+    const mood = this.mood;
+    mood.biome = world.biomeAt(Math.floor(at.x), Math.floor(at.y))?.type;
+    mood.night = this.living.time.isNight;
+    mood.danger = !this.room && this.combat.enemies.some((e) => e.state === 'chase' || e.state === 'attack');
+    mood.weather = this.living.kind;
+    mood.weatherStrength = this.paused || !outdoors ? 0 : this.living.weatherStrength;
+    mood.band = difficultyBand(Math.floor(at.x), Math.floor(at.y));
+    mood.indoors = !!this.room;
+    mood.cave = !!this.room?.cave;
+    mood.hunter = outdoors ? this.hunterCall() : null;
+    mood.rift = this.glitching ? 1 - this.riftDistance / GLITCH_RANGE : 0;
+    mood.dimension = this.trip ? this.trip.def.mood.music : null;
+    this.audio.update(mood);
     this.stick.update(input.stick);
     this.hotbar.render();
     this.menu.render();
@@ -634,13 +682,6 @@ export class Game {
       this.uiTimer = 0.25;
       this.updateUi();
       this.tips();
-      this.playground?.update(this.living.story);
-      // Reaching a new story stage also moves the waking spot there.
-      const { stage } = this.living.story;
-      if (stage !== this.lastStage) {
-        if (this.lastStage) this.setRespawn();
-        this.lastStage = stage;
-      }
     }
     if (this.playground?.god) {
       const v = this.vitals;
@@ -674,6 +715,7 @@ export class Game {
   }
 
   private enter(object: WorldObject, index: number): void {
+    this.stopGlitch();
     const room = new Interior(object, index);
     this.room = room;
     this.player.swim = 0;
@@ -701,6 +743,249 @@ export class Game {
     this.worldLayer.visible = true;
     this.player.place(room.outside.x, room.outside.y);
     this.player.facing = 0;
+    this.camera.snap(this.player.x * TILE_SIZE, this.player.y * TILE_SIZE);
+  }
+
+  // Outer dimensions ----------------------------------------------------------
+
+  /** Where the player is: outdoors, in a room or in a dimension. */
+  private get place(): Place {
+    return this.room ?? this.trip ?? this.outdoors;
+  }
+
+  /** The rift whose tear is on this tile, if any. */
+  private riftObjectAt(gx: number, gy: number): WorldObject | null {
+    if (this.world.tileAt(gx, gy)?.deco !== Deco.Rift) return null;
+    return this.world.objects.inChunk(chunkKey(tileToChunk(gx), tileToChunk(gy))).find((o) => o.kind === 'rift' && o.contains(gx, gy)) ?? null;
+  }
+
+  /** Steps through a rift into the dimension behind it. */
+  private enterRift(rift: WorldObject): void {
+    // The rift's object id seeds the space: the same rift, the same space.
+    const seed = hash(this.world.seed, hashString(rift.id));
+    const tile = riftTile(rift);
+    const trip = new RiftTrip(pickDimension(seed), seed, rift, riftDoorstep(rift), difficultyBand(tile.x, tile.y), this.combat, {
+      event: (e) => this.tripEvent(e),
+      drop: (stack) => this.world.ground.drop(stack, trip.outside.x, trip.outside.y),
+    });
+    this.trip = trip;
+    trip.begin();
+    this.gathering.cancel();
+    this.player.swim = 0;
+    this.living.outside = trip.outside;
+    this.living.trip = trip;
+    this.living.story.onEnter();
+    // The overworld's sprites leave the scene until the player is back.
+    this.stopGlitch();
+    this.renderer.hideAll();
+    this.buildings.update([], null, 0, 0);
+    this.groundItems.update(0, [], NOWHERE);
+    this.living.effects.clear();
+    this.clearMarker();
+    this.dimRenderer.open(trip.run);
+    const a = trip.run.layout.arrival;
+    this.player.place(a.x, a.y);
+    this.player.facing = 0;
+    this.camera.snap(this.player.x * TILE_SIZE, this.player.y * TILE_SIZE);
+    this.audio.play('rift');
+    this.hud.notify(`You step through the rift into ${trip.def.name}...`);
+  }
+
+  /** Back out of the rift; `closed` when the portal closed it behind the player. */
+  private exitRift(closed: boolean): void {
+    const trip = this.trip;
+    if (!trip) return;
+    this.trip = null;
+    trip.end();
+    this.dimRenderer.close();
+    this.living.outside = null;
+    this.living.trip = null;
+    this.living.effects.clear();
+    this.gathering.cancel();
+    this.clearMarker();
+    this.player.place(trip.outside.x, trip.outside.y);
+    this.player.facing = 0;
+    this.camera.snap(this.player.x * TILE_SIZE, this.player.y * TILE_SIZE);
+    this.audio.play('rift');
+    if (!closed) return;
+    this.world.closeRift(trip.rift);
+    this.combat.grantXp(RIFT_XP);
+    this.living.story.onClosed();
+    this.living.effects.burst(this.player.x, this.player.y - 1.5, 'magic', 30);
+    this.audio.play('quest');
+  }
+
+  /** Dying behind a rift costs everything carried; what is worn stays. The
+   *  rift throws the player back out, still open. */
+  private riftDeath(): void {
+    this.inventory.clearCarried();
+    this.exitRift(false);
+    this.vitals.revive();
+    this.hud.alert('You collapse, and the rift throws you back out. The rift took everything you carried.');
+  }
+
+  /** Acts on what the run reports; spawns and boss phases are the trip's own. */
+  private tripEvent(e: DimEvent): void {
+    const { player, hud, audio } = this;
+    switch (e.type) {
+      case 'fell':
+        player.place(e.x, e.y);
+        this.camera.snap(player.x * TILE_SIZE, player.y * TILE_SIZE);
+        hud.flashHurt();
+        audio.play('hurt');
+        if (this.vitals.hurt(e.damage)) this.collapse();
+        break;
+      case 'door':
+        audio.play(e.open ? 'chest' : 'mine');
+        break;
+      case 'wave':
+        if (e.wave > 1) hud.notify(`Wave ${e.wave} of ${e.of}`);
+        break;
+      case 'plate':
+      case 'checkpoint':
+        audio.play('pickup');
+        break;
+      case 'puzzleReset':
+        audio.play('warn');
+        break;
+      case 'cleared':
+        audio.play('level');
+        break;
+      case 'notice':
+        hud.notify(e.text);
+        break;
+      case 'reward':
+        for (const { item: id, count } of e.items) {
+          const item = itemById(id);
+          if (!item || count <= 0) continue;
+          const left = this.inventory.add(item, count);
+          if (count > left) hud.notify(`+${count - left} ${item.name}`);
+          if (left > 0) this.overflow(item, left);
+        }
+        audio.play('chest');
+        break;
+      case 'closed':
+        this.exitRift(true);
+        break;
+      case 'leave':
+        hud.notify('You step back through the rift. It is still open.');
+        this.exitRift(false);
+        break;
+    }
+  }
+
+  private tickDimension(dt: number): void {
+    const { player, input, camera } = this;
+    const trip = this.trip!;
+    // The overworld's clock, needs and villagers carry on, as indoors.
+    this.living.updateIndoors(dt);
+    this.checkLoad();
+    this.blocking = input.holding('block') || input.mouseBlock || this.hud.blockHeld;
+    const speed = (this.vitals.status.slow > 0 ? SLOW_FACTOR : 1) * (this.blocking ? BLOCK_SPEED : 1) * (this.overloaded ? OVERLOADED_SPEED : 1);
+    this.dressPlayer();
+    player.update(dt, input, trip, this.vitals.canRun && !this.blocking && !this.overloaded, speed);
+    this.sounds(dt);
+    const body = this.body;
+    body.x = player.x;
+    body.y = player.y;
+    body.faceX = player.faceX;
+    body.faceY = player.faceY;
+    body.blocking = this.blocking;
+    body.invulnerable = player.invulnerable;
+    this.combat.update(dt, body);
+    trip.update(dt, player.x, player.y);
+    // The run may have taken the player home.
+    if (this.trip !== trip) return;
+    camera.follow(player.x * TILE_SIZE, player.y * TILE_SIZE, dt);
+    if (this.vitals.update(dt, player.running, undefined)) this.collapse();
+  }
+
+  /** `halfW`, `halfH`: half the view, in world pixels. */
+  private renderDimension(dt: number, halfW: number, halfH: number): void {
+    const trip = this.trip!;
+    const { camera } = this;
+    this.dimRenderer.update(camera.x - halfW, camera.y - halfH, camera.x + halfW, camera.y + halfH);
+    this.updateDimensionPrompt();
+    this.entityRenderer.update(dt, this.combat.enemies, this.combat.projectiles, NO_NPCS, NO_MARKS);
+    const lights = this.roomLights;
+    lights.length = 0;
+    this.dimRenderer.lights(lights);
+    const mood = trip.def.mood;
+    this.living.renderDimension(dt, lights, this.toScreen, camera.zoom, mood.darkness, mood.tint);
+  }
+
+  /** What E does in a dimension: open the vault; the rest is said, not done. */
+  private updateDimensionPrompt(): void {
+    const { player } = this;
+    const run = this.trip!.run;
+    this.clearMarker();
+    if (this.blocking) {
+      const a = Math.atan2(player.faceY, player.faceX);
+      this.drawMarker().arc(player.x * TILE_SIZE, (player.y - 0.4) * TILE_SIZE, 11, a - 0.9, a + 0.9).stroke({ width: 2, color: 0xa8d8ff, alpha: 0.85 });
+    }
+    if (this.paused) {
+      this.hud.setPrompt(null);
+      return;
+    }
+    const [fx, fy] = player.frontTile();
+    if (run.canInteract(fx, fy)) {
+      this.drawMarker().rect(fx * TILE_SIZE, fy * TILE_SIZE, TILE_SIZE, TILE_SIZE).stroke({ width: 1, color: 0xfff2b0, alpha: 0.8 });
+      this.hud.setPrompt('E  Open the vault');
+      return;
+    }
+    const t = run.tileAt(fx, fy);
+    if (t === DimTile.Chest) this.hud.setPrompt(run.state(fx, fy) === 2 ? 'The vault is empty' : 'Sealed until the Warden falls');
+    else if (t === DimTile.Portal) this.hud.setPrompt(run.portalOpen ? 'Step into the portal to close the rift' : 'The portal is dormant');
+    else this.hud.setPrompt(null);
+  }
+
+  private interactDimension(): void {
+    const [fx, fy] = this.player.frontTile();
+    if (this.trip!.run.interact(fx, fy)) this.living.effects.burst(fx + 0.5, fy + 0.6, 'magic', 16);
+  }
+
+  /** Near an open rift the world glitches; nothing of it runs anywhere else. */
+  private riftGlitch(dt: number): void {
+    if (this.paused || this.spawnTarget || this.riftDistance >= GLITCH_RANGE) {
+      this.stopGlitch();
+      return;
+    }
+    this.glitching = true;
+    this.glitch.update(dt, 1 - this.riftDistance / GLITCH_RANGE, this.riftAt.x, this.riftAt.y, Math.random, this.glitchTargets);
+  }
+
+  /** Puts back whatever a glitch has moved or tinted. */
+  private stopGlitch(): void {
+    if (!this.glitching) return;
+    this.glitching = false;
+    this.glitch.reset(this.glitchTargets);
+    this.renderer.settle(Infinity);
+  }
+
+  /** Playground: into a dimension by the nearest rift, opening one beside the player if need be. */
+  private enterHollow(): void {
+    if (this.trip || this.spawnTarget) return;
+    if (this.room) this.leave();
+    const { player } = this;
+    const near = this.world.nearestRift(player.x, player.y);
+    const rift = near && Math.hypot(near.x - player.x, near.y - player.y) < 40 ? near : this.living.events.openRift({ x: player.x, y: player.y, now: this.living.time.total }, 3, 8);
+    if (!rift) {
+      this.hud.notify('No open ground for a rift here');
+      return;
+    }
+    this.enterRift(rift);
+  }
+
+  /** Playground: on to the chamber of this kind, the ones before it done. */
+  private skipTo(kind: ChamberKind): void {
+    this.enterHollow();
+    const trip = this.trip;
+    if (!trip) return;
+    const i = trip.run.layout.chambers.findIndex((c) => c.kind === kind);
+    if (i < 0) return;
+    trip.run.skipTo(i);
+    const at = trip.run.layout.chambers[i].entry;
+    this.player.place(at.x, at.y);
     this.camera.snap(this.player.x * TILE_SIZE, this.player.y * TILE_SIZE);
   }
 
@@ -921,7 +1206,10 @@ export class Game {
       else if (this.menu.isOpen) this.menu.close();
       else if (!this.living.vision.isOpen) this.pause.toggle();
     }
-    if (input.act('map') && !this.pause.isOpen) this.menu.toggle('map');
+    if (input.act('map') && !this.pause.isOpen) {
+      if (this.mapAvailable) this.menu.toggle('map');
+      else this.hud.notify("Maps don't work here: the world won't hold still.");
+    }
     if (input.hit('Save')) this.save(true);
     if (this.paused) return;
 
@@ -934,11 +1222,11 @@ export class Game {
     if (input.act('interact')) this.interact();
     if (input.act('attack') || input.mouseAttack) this.attack(input.mouseAttack);
     if (input.act('dodge')) this.dodge();
-    if (import.meta.env.DEV && input.hit('KeyG') && !this.spawnTarget && !this.room) {
+    if (import.meta.env.DEV && input.hit('KeyG') && !this.spawnTarget && this.place === this.outdoors) {
       this.home = { x: player.x, y: player.y };
       this.travel(player.x + FAR_TRIP, player.y);
     }
-    if (import.meta.env.DEV && input.hit('KeyB') && this.home && !this.spawnTarget && !this.room) {
+    if (import.meta.env.DEV && input.hit('KeyB') && this.home && !this.spawnTarget && this.place === this.outdoors) {
       this.travel(this.home.x, this.home.y);
       this.home = null;
     }
@@ -968,9 +1256,8 @@ export class Game {
       this.hud.setPrompt('E  Enter');
       return;
     }
-    const storyPrompt = this.living.story.promptAt(px, py) ?? this.living.story.promptAt(Math.floor(player.x), Math.floor(player.y - 0.15));
-    if (storyPrompt) {
-      this.hud.setPrompt(storyPrompt);
+    if (this.riftObjectAt(px, py)) {
+      this.hud.setPrompt('E  Enter the rift');
       return;
     }
     if (this.restingSpot()) {
@@ -1006,22 +1293,6 @@ export class Game {
     else if (this.target.kind === 'harvest') this.hud.setPrompt(`E  ${this.target.harvest.action}`);
     else if (this.target.kind === 'locked') this.hud.setPrompt(this.target.reason);
     else this.hud.setPrompt(PROMPTS[this.target.kind]);
-  }
-
-  /** Moves the player to the nearest open ground, e.g. when a building vanishes around them. */
-  private unstick(): void {
-    const { player, walker: world } = this;
-    if (!player.blocked(player.x, player.y, world)) return;
-    for (let r = 1; r < 12; r++) {
-      for (let a = 0; a < 16; a++) {
-        const x = player.x + Math.cos((a / 16) * Math.PI * 2) * r;
-        const y = player.y + Math.sin((a / 16) * Math.PI * 2) * r;
-        if (!player.blocked(x, y, world)) {
-          player.place(x, y);
-          return;
-        }
-      }
-    }
   }
 
   /** The Moonwell the player faces, if any. */
@@ -1149,15 +1420,14 @@ export class Game {
     this.living.effects.burst(c.gx + 0.5, c.gy + 0.6, axe ? 'wood' : 'stone', 4);
   }
 
-  /** Discovered places still standing, for the map. */
-  private landmarks(): Landmark[] {
-    return [...this.world.known.values()];
-  }
-
   private interact(): void {
     if (this.paused || this.spawnTarget || this.gathering.current) return;
     if (this.room) {
       this.interactIndoors();
+      return;
+    }
+    if (this.trip) {
+      this.interactDimension();
       return;
     }
     const [fx, fy] = this.player.frontTile();
@@ -1166,8 +1436,11 @@ export class Game {
       this.enter(door.object, door.index);
       return;
     }
-    const { story } = this.living;
-    if (story.interactAt(fx, fy) || story.interactAt(Math.floor(this.player.x), Math.floor(this.player.y - 0.15))) return;
+    const rift = this.riftObjectAt(fx, fy);
+    if (rift) {
+      this.enterRift(rift);
+      return;
+    }
     if (this.living.talk()) return;
     if (this.restingSpot()) {
       this.sleep();
@@ -1206,6 +1479,12 @@ export class Game {
     return 1 + 0.15 * this.progression.rank('gatherer');
   }
 
+  /** Maps only work inside the outer dimensions: the overworld won't hold
+   *  still long enough to be drawn. */
+  private get mapAvailable(): boolean {
+    return !!this.trip;
+  }
+
   private get capacity(): number {
     return CARRY_BASE + CARRY_PER_RANK * this.progression.rank('packMule');
   }
@@ -1221,12 +1500,8 @@ export class Game {
   /** Drops a whole stack at the player's feet. */
   private drop(slot: number): void {
     if (this.spawnTarget) return;
-    if (this.room) {
+    if (this.place !== this.outdoors) {
       this.hud.notify("You can't drop things here");
-      return;
-    }
-    if (this.inventory.slots[slot]?.item.id === 'wanderers-lantern') {
-      this.hud.notify('The lantern will not leave your hand');
       return;
     }
     const stack = this.inventory.takeSlot(slot);
@@ -1278,6 +1553,8 @@ export class Game {
 
   private stations(): Set<Station> {
     const set = new Set<Station>(['hand']);
+    // Nothing behind a rift to work at.
+    if (this.trip) return set;
     // Indoors, the room's own furniture counts, not the world outside.
     const ground = this.room ?? this.world;
     const gx = Math.floor(this.player.x);
@@ -1306,57 +1583,35 @@ export class Game {
     if (result === 'full') this.hud.notify('Bag full');
   }
 
-  /** Story playground: places packed near the spawn, and a panel to drive the story. */
+  /** Story playground: a fresh world with a panel of test tools. */
   private startPlayground(ui: HTMLElement): void {
-    const { story } = this.living;
-    story.compact = true;
-    const goTo = (place: PlaceId | 'spawn') => {
-      if (place === 'spawn') return this.teleport(0, 0);
-      const o = this.world.objects.objects.get(`story:${place}`);
-      if (!o) return this.hud.notify('That place is gone at this point in the story');
-      // Just outside the south side, where the entrances are.
-      this.teleport(o.x + o.w / 2, o.y + o.h + 2);
-    };
     this.playground = new Playground(ui, {
-      goTo,
-      jump: (stage) => {
-        this.living.dialog.close();
-        story.jumpTo(stage);
-        const target = STAGE_TARGET[stage];
-        if (target) goTo(target);
-        this.hud.notify(`Playground: chapter "${stage}"`);
-      },
-      ending: (e) => {
-        this.living.dialog.close();
-        story.chooseEnding(e);
-      },
-      find: (kind: PlaygroundFind) => {
-        const { player } = this;
-        const placed = this.living.events.trigger(kind, {
-          x: player.x,
-          y: player.y,
-          night: this.living.time.isNight,
-          village: null,
-          merchantNearby: false,
-          now: this.living.time.total,
-          ending: story.ending,
-          cabinFound: story.cabinFound,
-        });
-        if (!placed) this.hud.notify('No open ground nearby; move somewhere clearer');
-      },
+      goToSpawn: () => this.teleport(0, 0),
       setHour: (hour) => (this.living.time.minutes = hour * 60),
       restart: () => (location.href = `${location.pathname}?playground=${this.world.seed}`),
+      riftNearby: () => {
+        if (this.place !== this.outdoors || this.spawnTarget) return;
+        const o = this.living.events.openRift({ x: this.player.x, y: this.player.y, now: this.living.time.total }, 4, 9);
+        this.hud.notify(o ? 'A rift tears open nearby.' : 'No open ground for a rift here');
+      },
+      enterHollow: () => this.enterHollow(),
+      skipTo: (kind) => this.skipTo(kind),
     });
   }
 
   private teleport(x: number, y: number): void {
     if (this.room) this.leave();
+    this.exitRift(false);
     this.gathering.cancel();
     this.travel(x, y);
   }
 
   /** Health ran out: wake up back at the start, keeping your things. */
   private collapse(): void {
+    if (this.trip) {
+      this.riftDeath();
+      return;
+    }
     if (this.room) this.leave();
     this.gathering.cancel();
     this.vitals.revive();
@@ -1365,11 +1620,12 @@ export class Game {
     this.travel(x, y);
   }
 
-  /** What does not fit in the bag is left on the ground, outside if indoors. */
+  /** What does not fit in the bag is left on the ground, outside if indoors or behind a rift. */
   private overflow(item: ItemDef, count: number): void {
-    const at = this.room ? this.room.outside : this.player;
+    const at = this.place.spot;
     this.world.ground.drop({ item, count }, at.x, at.y);
-    this.hud.notify(`Bag full: ${count} ${item.name} left on the ground${this.room ? ' outside' : ''}`);
+    const where = this.room ? ' outside' : this.trip ? ' outside the rift' : '';
+    this.hud.notify(`Bag full: ${count} ${item.name} left on the ground${where}`);
   }
 
   /** The target marker is cleared only when something was drawn on it:
@@ -1387,7 +1643,7 @@ export class Game {
 
   /** Remembers where the player is, outdoors, as the place to wake after collapsing. */
   private setRespawn(): void {
-    const at = this.room ? this.room.outside : this.player;
+    const at = this.place.spot;
     this.respawn = { x: at.x, y: at.y };
   }
 
@@ -1409,8 +1665,9 @@ export class Game {
       if (manual) this.hud.notify('Cannot save while travelling');
       return;
     }
-    // Indoors, the save keeps the spot outside the door.
-    const at = this.room ? this.room.outside : this.player;
+    // Indoors, the save keeps the spot outside the door; in a dimension, the
+    // spot outside the rift (the run itself is not kept).
+    const at = this.place.spot;
     this.saves
       .save(
         snapshot(this.world, {
@@ -1439,8 +1696,9 @@ export class Game {
   private loaded(): void {
     this.hud.setLoading(false);
     if (!this.intro) return;
-    void this.intro.play();
+    const intro = this.intro.play();
     this.intro = null;
+    if (this.storyIntro) void intro.then(() => this.living.story.intro());
   }
 
   private travel(x: number, y: number): void {
@@ -1496,8 +1754,8 @@ export class Game {
     const { vitals } = this;
     void (
       h.once('start', true, TOUCH
-        ? 'Drag on the left half to move; tap to talk, gather and open. The compass (top left) points to your next goal.'
-        : `${k('up')}${k('left')}${k('down')}${k('right')} to move, ${k('interact')} to talk, gather and open. The compass (top left) points to your next goal.`) ||
+        ? 'Drag on the left half to move; tap to talk, gather and open. The compass (top left) shows where you are.'
+        : `${k('up')}${k('left')}${k('down')}${k('right')} to move, ${k('interact')} to talk, gather and open. The compass (top left) shows where you are.`) ||
       h.once('enemy', !this.room && this.combat.enemies.some((e) => e.state === 'chase' || e.state === 'attack'), TOUCH
         ? 'An enemy! Hit attacks the nearest one, hold Block to block, Roll to dodge.'
         : `An enemy! Click or ${k('attack')} to attack, hold right-click or ${k('block')} to block, ${k('dodge')} to roll away.`) ||
@@ -1507,29 +1765,41 @@ export class Game {
       h.once('campfire', stations.has('campfire'), 'A campfire: cook food here from the Crafting tab of the Bag.') ||
       h.once('anvil', stations.has('anvil'), 'An anvil: forge tools, weapons and armour here from the Crafting tab.') ||
       h.once('skill', this.progression.skillPoints > 0, 'You have a skill point: spend it in the Skills tab of the Bag.') ||
-      h.once('heavy', this.overloaded, 'Your bag is too heavy and slows you down: drop or sell things.')
+      h.once('heavy', this.overloaded, 'Your bag is too heavy and slows you down: drop or sell things.') ||
+      h.once('rift', this.riftDistance < 10, `A rift! Face it and ${act === 'tap' ? 'tap' : `press ${act}`} to step through. Fall on the other side and you lose everything you carry; what you wear stays.`) ||
+      h.once('hollow', !!this.trip, `Maps work in here: open the Map tab (${TOUCH ? 'Bag, then Map' : k('map')}). Clear each chamber to reach the way home.`)
     );
   }
 
   private updateUi(): void {
     const { world } = this;
-    // Indoors, everything is measured from the door outside.
-    const player = this.room ? this.room.outside : this.player;
+    // Indoors and in a dimension, everything is measured from the door or rift outside.
+    const player = this.place.spot;
     const gx = Math.floor(player.x);
     const gy = Math.floor(player.y);
     const biome = world.biomeAt(gx, gy);
     const floor = this.room?.floorName ? ` · ${this.room.floorName}` : '';
-    const place = this.room ? `Inside · ${this.room.object.name}${floor}` : biome ? biomeName(biome) : '…';
+    const trip = this.trip;
+    const chamber = trip?.chamberAt(this.player.x, this.player.y);
+    const place = this.room ? `Inside · ${this.room.object.name}${floor}` : trip ? `${trip.def.name}${chamber ? ` · ${chamber}` : ''}` : biome ? biomeName(biome) : '…';
     this.hud.setLocation(place, DIFFICULTY_BANDS[difficultyBand(gx, gy)].name, gx, gy);
     this.hud.setClock(this.living.time.label(), this.living.effect.label);
+    // The nearest open rift: the story's arrow, and the glitches near it.
+    const rift = this.place === this.outdoors ? world.nearestRift(player.x, player.y) : null;
+    if (rift) {
+      const t = riftTile(rift);
+      this.riftAt.x = t.x;
+      this.riftAt.y = t.y;
+      this.riftDistance = Math.hypot(t.x + 0.5 - player.x, t.y + 0.5 - player.y);
+    } else this.riftDistance = Infinity;
     const lines = this.living.tracker();
     const marker = this.exploration.trackedMarker;
     if (marker) lines.push({ text: marker.label, angle: Math.atan2(marker.y - player.y, marker.x - player.x) });
     this.hud.setTracker(lines);
-    // The compass points at the story's next place, or the tracked marker.
-    const goal = this.living.story.objective() ?? marker;
-    const name = goal ? ('text' in goal ? goal.text : goal.label) : 'No destination';
-    this.hud.setCompass(goal ? Math.atan2(goal.y - player.y, goal.x - player.x) : null, `${gx}, ${gy} · ${name}`);
+    // The compass points at the tracked marker, else at the story's objective
+    // (a rift); it always shows where the player is.
+    const goal = marker ? Math.atan2(marker.y - player.y, marker.x - player.x) : (lines[0]?.angle ?? null);
+    this.hud.setCompass(goal, marker ? `${gx}, ${gy} · ${marker.label}` : `${gx}, ${gy}`);
     this.hud.setVitals(this.vitals, this.vitals.maxHealth);
     const { level, xp } = this.progression;
     this.hud.setLevel(level, xp, Progression.needed(level));
