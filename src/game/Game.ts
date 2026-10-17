@@ -8,6 +8,8 @@ import { DIFFICULTY_BANDS, difficultyBand } from '../generation/WorldRules';
 import { buildAtlas } from '../rendering/Atlas';
 import { DimensionRenderer } from '../rendering/DimensionRenderer';
 import { RiftGlitch, type GlitchTargets } from '../rendering/RiftGlitch';
+import { TEAR_MID_UP } from '../rendering/RiftArt';
+import { RiftPassageView } from '../rendering/RiftPassageView';
 import { GroundItemRenderer } from '../rendering/GroundItemRenderer';
 import { BuildingRenderer } from '../rendering/Buildings';
 import { EntityRenderer } from '../rendering/EntityRenderer';
@@ -54,6 +56,7 @@ import { Input } from './Input';
 import { LivingWorld } from './LivingWorld';
 import type { Place } from './Place';
 import { riftDoorstep, riftTile, RiftTrip } from './RiftTrip';
+import { RiftTransition, type RiftPassage } from './RiftTransition';
 import { DODGE_STAMINA, Player, type Collider } from './Player';
 import { bindings, keyName, type Action } from './Keys';
 import { Settings } from './Settings';
@@ -63,6 +66,13 @@ import { Settings } from './Settings';
 const TARGET_HEIGHT = 270;
 /** A touch screen: messages name buttons instead of keys. */
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+/** The system asks for reduced motion: passages through rifts only fade. */
+const REDUCED_MOTION = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** The player's body centre above the feet, in pixels: a passage spins them about it. */
+const BODY = 13;
+/** The cover over a passage: a bright flash, or (without flashes) the void's dark. */
+const PASSAGE_FLASH = 0xe6d8ff;
+const PASSAGE_DARK = 0x150a2a;
 /** How far the debug "far trip" jumps, in tiles. Far enough to unload everything. */
 const FAR_TRIP = 20000;
 /** Search radius when looking for open ground, in tiles. Stays inside the
@@ -161,6 +171,16 @@ export class Game {
   private readonly riftAt = { x: 0, y: 0 };
   private readonly glitch = new RiftGlitch();
   private glitching = false;
+  /** A passage through a rift, under way or not; the world waits while it runs. */
+  private readonly passage = new RiftTransition({
+    switch: (kind) => this.passageSwitch(kind),
+    collapse: () => this.passageCollapse(),
+    done: (kind) => this.passageDone(kind),
+  });
+  private passageView!: RiftPassageView;
+  /** The passage's rift and its points in world pixels: where the player's body
+   *  starts, where it is pulled to, and where it emerges; the zoom to go back to. */
+  private readonly passageAt = { rift: null as WorldObject | null, fromX: 0, fromY: 0, toX: 0, toY: 0, outX: 0, outY: 0, zoom: 1, burst: false };
   private readonly glitchTargets: GlitchTargets = {
     jolt: (gx, gy, dx, tint, seconds) => this.renderer.jolt(gx, gy, dx, tint, seconds),
     tint: (color) => {
@@ -436,6 +456,8 @@ export class Game {
       if ((e.target as HTMLElement).closest('.btn, .slot, .menu-tab')) this.audio.play('ui');
     }, true);
     this.living.attach(this.app.stage, this.worldLayer);
+    this.passageView = new RiftPassageView(atlas, this.entities);
+    this.app.stage.addChild(this.passageView.view);
     if (saved?.living) {
       try {
         this.living.load(saved.living);
@@ -473,12 +495,15 @@ export class Game {
     // Touch has no mouse to aim with: Hit aims at the nearest enemy in reach.
     this.hud.onAttack = () => this.attack(false, true);
     this.hud.onDodge = () => this.dodge();
+    // Menus stay shut while passing through a rift, as they do for keys.
     this.hud.onPause = () => {
-      if (!this.living.vision.isOpen) this.pause.toggle();
+      if (!this.living.vision.isOpen && !this.passage.active) this.pause.toggle();
     };
     this.hotbar.onUse = (slot) => this.useItem(slot);
     this.hud.onAction = () => this.interact();
-    this.hud.onBag = () => this.menu.toggle();
+    this.hud.onBag = () => {
+      if (!this.passage.active) this.menu.toggle();
+    };
     // Running low rings an alarm; running out of stamina is too common to.
     this.hud.onDanger = (key) => {
       if (key !== 'stamina') this.audio.play('warn');
@@ -493,11 +518,18 @@ export class Game {
     if (!playground) this.watchOtherTabs();
     if (recovered) this.hud.alert("Your save couldn't be read (it may be from a newer version), so a new world began. The old save was kept.");
     if (this.saveLock) this.hud.alert(this.saveLock);
+    // Leaving the page half way through a rift ends the passage at once, so
+    // the save sees one world (and a death behind a rift is not undone).
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.save(false);
+      if (!document.hidden) return;
+      this.passage.finish();
+      this.save(false);
     });
     // Safari may close a page without a visibility change.
-    window.addEventListener('pagehide', () => this.save(false));
+    window.addEventListener('pagehide', () => {
+      this.passage.finish();
+      this.save(false);
+    });
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -543,14 +575,15 @@ export class Game {
     this.stick.relayout();
   }
 
-  /** Menus and conversations pause the world. */
+  /** Menus, conversations and passages through rifts pause the world. */
   private get paused(): boolean {
-    return this.menu.isOpen || this.living.paused || this.pause.isOpen || this.sleepOverlay.playing;
+    return this.menu.isOpen || this.living.paused || this.pause.isOpen || this.sleepOverlay.playing || this.passage.active;
   }
 
   private tick(dt: number): void {
     const { input, camera, player, world } = this;
     this.handleKeys();
+    if (this.passage.active) this.updatePassage(dt);
 
     if (this.spawnTarget) this.trySpawn();
     else if (this.room) {
@@ -809,19 +842,219 @@ export class Game {
     this.audio.play('rift');
     if (!closed) return;
     this.world.closeRift(trip.rift);
+    this.riftSealed();
+    this.living.effects.burst(this.player.x, this.player.y - 1.5, 'magic', 30);
+  }
+
+  /** What closing a rift is worth: experience, and the story's next beat. */
+  private riftSealed(): void {
     this.combat.grantXp(RIFT_XP);
     this.living.story.onClosed();
-    this.living.effects.burst(this.player.x, this.player.y - 1.5, 'magic', 30);
     this.audio.play('quest');
   }
 
   /** Dying behind a rift costs everything carried; what is worn stays. The
    *  rift throws the player back out, still open. */
   private riftDeath(): void {
-    this.inventory.clearCarried();
-    this.exitRift(false);
-    this.vitals.revive();
-    this.hud.alert('You collapse, and the rift throws you back out. The rift took everything you carried.');
+    this.passageThrough('eject', this.trip!.rift);
+  }
+
+  // Passages through rifts --------------------------------------------------------
+
+  /** Steps through a rift with a short passage: pulled in, covered, switched
+   *  between the worlds once (`enterRift` / `exitRift`), then revealed. Input
+   *  is locked and the world waits until it is over. */
+  private passageThrough(kind: RiftPassage, rift: WorldObject): void {
+    if (!this.passage.start(kind, REDUCED_MOTION)) return;
+    const { player, camera } = this;
+    const at = this.passageAt;
+    at.rift = rift;
+    at.burst = false;
+    at.zoom = camera.zoom;
+    at.fromX = player.x * TILE_SIZE;
+    at.fromY = player.y * TILE_SIZE - BODY;
+    at.toX = at.fromX;
+    at.toY = at.fromY;
+    const trip = this.trip;
+    if (kind === 'enter') this.tearCentre(rift, at, 'to');
+    else if (trip && kind !== 'eject') {
+      // Into the arrival rift, or the portal home.
+      const L = trip.run.layout;
+      const i = kind === 'close' ? L.portal : L.rift;
+      at.toX = ((i % L.w) + 0.5) * TILE_SIZE;
+      at.toY = (Math.floor(i / L.w) + 1) * TILE_SIZE - (kind === 'close' ? 24 : TEAR_MID_UP);
+    }
+    this.gathering.cancel();
+    this.stopGlitch();
+    this.clearMarker();
+    this.hud.setPrompt(null);
+    player.sprite.pivot.set(0, -BODY);
+    this.audio.play('riftPull');
+    if (kind !== 'eject') this.living.effects.burst(at.toX / TILE_SIZE, at.toY / TILE_SIZE, 'magic', 16);
+  }
+
+  /** The middle of a rift's tear in the overworld, in world pixels. */
+  private tearCentre(rift: WorldObject, at: { toX: number; toY: number; outX: number; outY: number }, which: 'to' | 'out'): void {
+    const t = riftTile(rift);
+    const x = (t.x + 0.5) * TILE_SIZE;
+    const y = (t.y + 1) * TILE_SIZE - TEAR_MID_UP;
+    if (which === 'to') {
+      at.toX = x;
+      at.toY = y;
+    } else {
+      at.outX = x;
+      at.outY = y;
+    }
+  }
+
+  /** Under full cover: into the dimension, or back out of it. */
+  private passageSwitch(kind: RiftPassage): void {
+    const at = this.passageAt;
+    const rift = at.rift!;
+    if (kind === 'enter') {
+      this.enterRift(rift);
+      const L = this.trip!.run.layout;
+      at.outX = ((L.rift % L.w) + 0.5) * TILE_SIZE;
+      at.outY = (Math.floor(L.rift / L.w) + 1) * TILE_SIZE - TEAR_MID_UP;
+    } else {
+      if (kind === 'eject') this.inventory.clearCarried();
+      // Closing waits for the reveal: the tear collapses in front of the player.
+      this.exitRift(false);
+      if (kind === 'eject') {
+        this.vitals.revive();
+        this.hud.alert('You collapse, and the rift throws you back out. The rift took everything you carried.');
+      }
+      this.tearCentre(rift, at, 'out');
+    }
+    this.camera.snap(at.outX, at.outY);
+    this.living.effects.burst(at.outX / TILE_SIZE, at.outY / TILE_SIZE, 'magic', 20);
+  }
+
+  /** Closing: the player is out, and the tear behind them collapses. */
+  private passageCollapse(): void {
+    const rift = this.passageAt.rift!;
+    this.world.closeRift(rift);
+    const t = riftTile(rift);
+    this.passageView.showGhost((t.x + 0.5) * TILE_SIZE, (t.y + 1) * TILE_SIZE);
+    this.audio.play('riftClose');
+  }
+
+  /** Puts the player, camera and screen back as they were. */
+  private passageDone(kind: RiftPassage): void {
+    const { player } = this;
+    const s = player.sprite;
+    s.pivot.set(0, 0);
+    s.scale.set(1);
+    s.rotation = 0;
+    s.alpha = 1;
+    player.place(player.x, player.y);
+    this.camera.zoom = this.passageAt.zoom;
+    this.renderer.flare = 0;
+    this.slip(0, 0);
+    this.passageView.hide();
+    const rift = this.passageAt.rift;
+    this.passageAt.rift = null;
+    if (kind === 'close' && rift) this.riftSealed();
+  }
+
+  /** One frame of a passage: the player pulled in or emerging, the rift
+   *  flaring, the camera leaning in, and the screen covered and uncovered. */
+  private updatePassage(dt: number): void {
+    const tr = this.passage;
+    tr.update(dt);
+    const kind = tr.kind;
+    if (!kind) return;
+    const { player, camera } = this;
+    const at = this.passageAt;
+    const flashes = this.settings.values.flashes;
+    const still = tr.reduced;
+    const color = flashes && !still ? PASSAGE_FLASH : PASSAGE_DARK;
+    const { width, height } = this.app.renderer;
+    // Where the body is, how big, turned and seen; how covered the screen is.
+    let x: number;
+    let y: number;
+    let size = 1;
+    let turn = 0;
+    let seen = 1;
+    let veil = 0;
+    let edge = 0;
+    let lean = 0;
+    if (!tr.past) {
+      const p = tr.pull;
+      const e = p * p;
+      if (still) {
+        x = at.fromX;
+        y = at.fromY;
+        seen = 1 - p;
+        veil = p;
+      } else {
+        x = at.fromX + (at.toX - at.fromX) * e;
+        y = at.fromY + (at.toY - at.fromY) * e;
+        size = 1 - 0.85 * e;
+        turn = e * Math.PI * 4;
+        seen = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
+        veil = p < 0.5 ? 0 : ((p - 0.5) / 0.5) ** 1.5;
+        edge = p;
+        lean = e;
+        // The colours slip twice as the rift takes hold.
+        if (flashes) this.slip(p > 0.25 && p < 0.32 ? 0xa8fff4 : p > 0.5 && p < 0.56 ? 0xffb0e0 : 0, p > 0.25 && p < 0.32 ? 2 : -2);
+      }
+      if (kind === 'enter') this.renderer.flare = still ? 0 : p;
+    } else {
+      const r = tr.reveal;
+      const e = 1 - (1 - r) * (1 - r);
+      const endX = player.x * TILE_SIZE;
+      const endY = player.y * TILE_SIZE - BODY;
+      if (still) {
+        x = endX;
+        y = endY;
+        seen = r;
+        veil = 1 - r;
+      } else {
+        x = at.outX + (endX - at.outX) * e;
+        y = at.outY + (endY - at.outY) * e;
+        size = 0.15 + 0.85 * e;
+        turn = -(1 - e) * Math.PI * 2;
+        seen = Math.min(1, r * 2.5);
+        veil = (1 - r) ** 1.5;
+        edge = 1 - r;
+        lean = 1 - e;
+        if (flashes) this.slip(r < 0.08 ? 0xd0a8ff : 0, -2);
+      }
+      if (kind !== 'enter') this.renderer.flare = still ? 0 : 1 - r;
+      if (tr.collapse > 0) {
+        // The tear folds in on itself, then bursts.
+        const c = tr.collapse;
+        if (still) this.passageView.poseGhost(dt, 1, 1, 1 - c);
+        else {
+          const k = Math.min(1, c / 0.75);
+          this.passageView.poseGhost(dt, (1 - k * k) * (1 + 0.2 * Math.sin(k * Math.PI)), 1 + 0.3 * k, 1);
+        }
+        if (c >= 0.75 && !at.burst) {
+          at.burst = true;
+          const t = riftTile(at.rift!);
+          this.living.effects.burst(t.x + 0.5, t.y + 1 - TEAR_MID_UP / TILE_SIZE, 'magic', 30);
+          this.living.effects.burst(t.x + 0.5, t.y + 0.8, 'dust', 12);
+        }
+        veil = flashes && !still && c >= 0.75 ? 0.55 * (1 - (c - 0.75) / 0.25) : 0;
+        edge = 0;
+      }
+    }
+    const s = player.sprite;
+    s.position.set(Math.round(x), Math.round(y));
+    s.scale.set(size);
+    s.rotation = turn;
+    s.alpha = Math.max(0, seen);
+    camera.zoom = at.zoom * (1 + 0.25 * lean);
+    camera.follow(x, y, dt);
+    this.passageView.cover(width, height, veil, color, edge);
+  }
+
+  /** The world's colours slip (0: back to normal) and tear sideways by `dx` pixels. */
+  private slip(tint: number, dx: number): void {
+    const color = tint || 0xffffff;
+    if (this.worldLayer.tint !== color) this.worldLayer.tint = color;
+    this.glitch.offset = tint ? dx : 0;
   }
 
   /** Acts on what the run reports; spawns and boss phases are the trip's own. */
@@ -865,11 +1098,11 @@ export class Game {
         audio.play('chest');
         break;
       case 'closed':
-        this.exitRift(true);
+        this.passageThrough('close', this.trip!.rift);
         break;
       case 'leave':
         hud.notify('You step back through the rift. It is still open.');
-        this.exitRift(false);
+        this.passageThrough('leave', this.trip!.rift);
         break;
     }
   }
@@ -894,8 +1127,8 @@ export class Game {
     body.invulnerable = player.invulnerable;
     this.combat.update(dt, body);
     trip.update(dt, player.x, player.y);
-    // The run may have taken the player home.
-    if (this.trip !== trip) return;
+    // The run may have taken the player home, or begun to.
+    if (this.trip !== trip || this.passage.active) return;
     camera.follow(player.x * TILE_SIZE, player.y * TILE_SIZE, dt);
     if (this.vitals.update(dt, player.running, undefined)) this.collapse();
   }
@@ -964,7 +1197,7 @@ export class Game {
 
   /** Playground: into a dimension by the nearest rift, opening one beside the player if need be. */
   private enterHollow(): void {
-    if (this.trip || this.spawnTarget) return;
+    if (this.trip || this.spawnTarget || this.passage.active) return;
     if (this.room) this.leave();
     const { player } = this;
     const near = this.world.nearestRift(player.x, player.y);
@@ -1199,6 +1432,8 @@ export class Game {
     const { input, camera, player } = this;
     if (input.hit('F3')) this.debug.toggle();
     if (input.hit('F4')) this.playground?.toggle();
+    // Nothing else while passing through a rift.
+    if (this.passage.active) return;
     if (input.act('bag')) this.menu.toggle();
     if (this.living.vision.isOpen && (input.hit('Space') || input.act('interact') || input.act('dodge') || input.hit('Enter'))) this.living.vision.next();
     if (input.hit('Escape')) {
@@ -1438,7 +1673,7 @@ export class Game {
     }
     const rift = this.riftObjectAt(fx, fy);
     if (rift) {
-      this.enterRift(rift);
+      this.passageThrough('enter', rift);
       return;
     }
     if (this.living.talk()) return;
@@ -1600,6 +1835,7 @@ export class Game {
   }
 
   private teleport(x: number, y: number): void {
+    if (this.passage.active) return;
     if (this.room) this.leave();
     this.exitRift(false);
     this.gathering.cancel();
@@ -1663,6 +1899,11 @@ export class Game {
     }
     if (this.spawnTarget) {
       if (manual) this.hud.notify('Cannot save while travelling');
+      return;
+    }
+    // Half way through a rift, the player is in neither world.
+    if (this.passage.active) {
+      if (manual) this.hud.notify('Cannot save while passing through a rift');
       return;
     }
     // Indoors, the save keeps the spot outside the door; in a dimension, the

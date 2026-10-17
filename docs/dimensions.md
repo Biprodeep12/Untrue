@@ -6,7 +6,7 @@ Code: `src/dimension/` (the dimensions themselves, with no rendering), `src/game
 
 ## Entering and leaving
 
-Facing a rift's tear in the overworld shows **E Enter the rift** ([objects-and-structures.md](objects-and-structures.md#rifts)). Pressing E:
+Facing a rift's tear in the overworld shows **E Enter the rift** ([objects-and-structures.md](objects-and-structures.md#rifts)). Pressing E pulls the player into the tear in a short passage (about 1.3 s; [rendering.md](rendering.md#passing-through-a-rift)): input is locked and the world waits, and under the passage's cover the game:
 
 1. Seeds the space from the rift: `hash(worldSeed, hashString(rift.id))`, so the same rift always leads to the same layout, and `pickDimension(seed)` chooses which dimension (always The Hollow for now).
 2. Makes a `RiftTrip` and moves the fight there (`CombatSystem.enterArena`): the overworld's enemies and shots are stashed, untouched, until the player is back.
@@ -20,7 +20,7 @@ There are three ways out, all back to the doorstep below the rift in the overwor
 | Step back onto the arrival rift | Still open | Lost: entering again starts over |
 | Die | Still open | Lost, and so is everything carried ([below](#dying)) |
 
-Leaving restores the overworld exactly: the trip's enemies go, the overworld's come back as they were, the overworld renders again (chunks re-culled, buildings rescanned from their cached art, ground items redrawn), and the dimension's meshes and sprites go back to their pools.
+Every way out is a passage too: pulled into the portal or the arrival rift (on dying, spun away where the player falls), and emerging from the tear outside. Closing waits for the player to be out: then the tear collapses behind them, and only then come the experience and the story's beat. Leaving restores the overworld exactly: the trip's enemies go, the overworld's come back as they were, the overworld renders again (chunks re-culled, buildings rescanned from their cached art, ground items redrawn), and the dimension's meshes and sprites go back to their pools.
 
 **While inside**, the overworld goes on as it does for a player indoors ([buildings-and-interiors.md](buildings-and-interiors.md#entering)): the clock, hunger, thirst and villagers' days run (`LivingWorld.updateIndoors`), the world keeps streaming around the rift outside, and world events can still fire there (an ambush waits in the stash). Nothing of the overworld's combat runs: no wild spawning, despawning by distance, guard triggers or legend rolls. There is no weather; hazards, ground items and gathering are the overworld's and stay there. Only by-hand recipes can be crafted, nothing can be dropped, and what does not fit in the bag is left outside the rift.
 
@@ -97,7 +97,7 @@ It frames what has been seen so far, at a whole number of pixels per tile. Fog i
 
 ## Saving
 
-Saving inside records the doorstep outside the rift as the player's position, as indoors: a reload starts outside the rift, and the run's progress is gone. Nothing of a trip is saved. See [saves.md](saves.md).
+Saving inside records the doorstep outside the rift as the player's position, as indoors (and saving during a passage is refused, as during a vision): a reload starts outside the rift, and the run's progress is gone. Nothing of a trip is saved. See [saves.md](saves.md).
 
 ## Under the hood
 

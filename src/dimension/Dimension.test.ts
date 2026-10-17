@@ -139,7 +139,7 @@ describe('dimension art', () => {
       const [, y] = dimCell(key, 0);
       expect(y + 16).toBeLessThanOrEqual(ATLAS_H);
     }
-    for (const key of ['pillar', 'crystal', 'gate:0', 'chest:0', 'chest:2', 'portal:0', 'portal:3', 'rift:1', 'glyph:5:2']) {
+    for (const key of ['pillar', 'crystal', 'gate:0', 'chest:0', 'chest:2', 'portal:0', 'portal:3', 'tear:7', 'rift-halo', 'rift-ground:1', 'glyph:5:2']) {
       const f = dimFrame(key);
       expect(f.y + f.h).toBeLessThanOrEqual(ATLAS_H);
     }

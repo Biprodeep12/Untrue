@@ -25,7 +25,9 @@ export type Sfx =
   | 'chest'
   | 'thunder'
   | 'warn'
-  | 'rift';
+  | 'rift'
+  | 'riftPull'
+  | 'riftClose';
 
 /** Scales (semitones from the root) for each mood. */
 const SCALES = {
@@ -195,6 +197,17 @@ export class AudioSystem {
         // Stepping through: a falling shimmer over a swell of noise.
         this.noiseBurst(t, 0.9, 300, 0.2, 'bandpass', 3000);
         [1320, 990, 740, 554].forEach((f, i) => this.tone(t + i * 0.08, f, 0.5, 0.08, 'sine', f * 0.94));
+        break;
+      case 'riftPull':
+        // Drawn in: a rising whoosh over a low swell.
+        this.noiseBurst(t, 0.7, 350, 0.16, 'bandpass', 4200);
+        this.tone(t, 98, 0.7, 0.14, 'sine', 392, this.sfxBus, 0.45);
+        break;
+      case 'riftClose':
+        // The tear folds shut: a falling whine, then a soft thump.
+        this.tone(t, 1480, 0.45, 0.07, 'sine', 160, this.sfxBus, 0.25);
+        this.noiseBurst(t + 0.42, 0.5, 2400, 0.22, 'lowpass', 180);
+        this.tone(t + 0.42, 82, 0.45, 0.28, 'sine', 41);
         break;
     }
   }

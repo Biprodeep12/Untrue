@@ -2,8 +2,9 @@
 // pooled, y-sorted sprites for decorations. Chunks are loaded a chunk beyond
 // the screen; those outside the camera's view are culled, so their meshes are
 // not drawn and their sprites leave the sorted container. Rifts' tears are
-// animated by swapping a few frames on a timer, and a rift's glitch can nudge
-// a decoration near it for a moment; neither costs anything without a rift.
+// animated by swapping a few frames on a timer, their halos pulse, a scorched
+// decal lies under each, and a rift's glitch can nudge a decoration near it
+// for a moment; none of it costs anything without a rift.
 
 import { Container, Mesh, MeshGeometry, Rectangle, Sprite, Texture } from 'pixi.js';
 import { CHUNK_AREA, CHUNK_SIZE, TILE_SIZE } from '../config';
@@ -12,20 +13,23 @@ import { hash3 } from '../generation/Random';
 import { Deco, DECO_COUNT, Tile } from '../generation/Tiles';
 import type { Chunk } from '../world/Chunk';
 import type { ChunkListener } from '../world/ChunkManager';
-import { ATLAS_H, ATLAS_W, decoFrame, RIFT_FRAMES, riftFrame, tileCell, TILE_VARIANTS } from './Atlas';
+import { ATLAS_H, ATLAS_W, decoFrame, dimFrame, RIFT_FPS, RIFT_FRAMES, riftFrame, tileCell, TILE_VARIANTS } from './Atlas';
+import { TEAR_MID_UP } from './RiftArt';
 import type { Light } from './Lighting';
 
-/** Decorations that glow at night: radius in tiles and warmth. */
-export const GLOWING: Partial<Record<number, [number, number]>> = {
+/** Decorations that glow at night: radius in tiles, warmth, and the glow's
+ *  colour if not a fire's. */
+export const GLOWING: Partial<Record<number, [number, number, number?]>> = {
   [Deco.Fireplace]: [5, 1],
   [Deco.Lamp]: [3.5, 0.8],
   [Deco.Campfire]: [5, 1],
   [Deco.Meteorite]: [2.5, 0.6],
   [Deco.Moonwell]: [6, 0],
-  [Deco.Rift]: [4.5, 0],
+  [Deco.Rift]: [5, 1.1, 0xb07aff],
+  [Deco.RiftScar]: [1.5, 0.3, 0x9ff8f2],
 };
-/** Frames per second of a rift's tear. */
-const RIFT_FPS = 7;
+/** Rifts' ground decals sort below everything standing. */
+const GROUND_Z = -1e9;
 /** Facade variant without a window; the rest glow at night. */
 const BLANK_FACADE = 3;
 /** Walls with something else below them show their front face. */
@@ -44,6 +48,9 @@ interface Drawn {
   mesh: Mesh<MeshGeometry>;
   sprites: Sprite[];
   lights: Light[];
+  /** Rifts' halos and ground decals: shown and pooled with the chunk, but
+   *  never faded, jolted or reused as decorations. */
+  fx: Sprite[];
   /** On screen (or near it) as of the last cull. */
   inView: boolean;
   cx: number;
@@ -66,6 +73,14 @@ export class TileRenderer implements ChunkListener {
   private readonly rifts: Sprite[] = [];
   private readonly riftTextures: Texture[] = [];
   private riftTime = 0;
+  /** Rifts' halos, pulsing with them; their scorched ground, open and closed. */
+  private readonly halos: Sprite[] = [];
+  private readonly haloTexture: Texture;
+  private readonly groundTextures: Texture[];
+  private readonly haloPool: Sprite[] = [];
+  private readonly decalPool: Sprite[] = [];
+  /** 0 to 1: how hard rifts flare, while the player steps through one. */
+  flare = 0;
   /** Decorations a rift's glitch moved, their own x, and how long until they settle. */
   private readonly jolted: Sprite[] = [];
   private readonly joltX: number[] = [];
@@ -82,10 +97,10 @@ export class TileRenderer implements ChunkListener {
       const { x, y, w, h } = decoFrame(d);
       this.decoTextures.push(new Texture({ source: atlas.source, frame: new Rectangle(x, y, w, h) }));
     }
-    for (let f = 0; f < RIFT_FRAMES; f++) {
-      const { x, y, w, h } = riftFrame(f);
-      this.riftTextures.push(f === 0 ? this.decoTextures[Deco.Rift] : new Texture({ source: atlas.source, frame: new Rectangle(x, y, w, h) }));
-    }
+    const frame = ({ x, y, w, h }: { x: number; y: number; w: number; h: number }) => new Texture({ source: atlas.source, frame: new Rectangle(x, y, w, h) });
+    for (let f = 0; f < RIFT_FRAMES; f++) this.riftTextures.push(frame(riftFrame(f)));
+    this.haloTexture = frame(dimFrame('rift-halo'));
+    this.groundTextures = [frame(dimFrame('rift-ground:0')), frame(dimFrame('rift-ground:1'))];
     // Every chunk mesh shares the same quad layout; only UVs change.
     this.positions = new Float32Array(CHUNK_AREA * 8);
     this.indices = new Uint32Array(CHUNK_AREA * 6);
@@ -123,12 +138,26 @@ export class TileRenderer implements ChunkListener {
     }
   }
 
-  /** Swaps the frames of every rift's tear; nothing to do without one. */
+  /** Swaps the frames of every rift's tear and pulses its halo (harder while
+   *  it flares); nothing to do without one. */
   animate(dt: number): void {
     if (!this.rifts.length) return;
     this.riftTime += dt;
     const tex = this.riftTextures[Math.floor(this.riftTime * RIFT_FPS) % RIFT_FRAMES];
-    for (const s of this.rifts) if (s.texture !== tex) s.texture = tex;
+    const flare = this.flare;
+    const sx = 1 + 0.3 * flare;
+    const sy = 1 + 0.1 * flare;
+    for (const s of this.rifts) {
+      if (s.texture !== tex) s.texture = tex;
+      if (s.scale.x !== sx) s.scale.set(sx, sy);
+    }
+    const pulse = Math.sin(this.riftTime * 2.4);
+    const alpha = Math.min(1, 0.5 + 0.14 * pulse + 0.5 * flare);
+    const size = 1 + 0.05 * pulse + 0.6 * flare;
+    for (const h of this.halos) {
+      h.alpha = alpha;
+      h.scale.set(size);
+    }
   }
 
   /** A rift's glitch: the decoration nearest a tile jumps sideways, tinted,
@@ -202,6 +231,10 @@ export class TileRenderer implements ChunkListener {
       if (inView) this.entities.addChild(s);
       else this.entities.removeChild(s);
     }
+    for (const s of d.fx) {
+      if (inView) this.entities.addChild(s);
+      else this.entities.removeChild(s);
+    }
   }
 
   show(chunk: Chunk): void {
@@ -209,7 +242,7 @@ export class TileRenderer implements ChunkListener {
     this.writeUVs(mesh, chunk);
     mesh.position.set(chunk.cx * CHUNK_SIZE * TILE_SIZE, chunk.cy * CHUNK_SIZE * TILE_SIZE);
     this.ground.addChild(mesh);
-    const d: Drawn = { mesh, sprites: [], lights: [], inView: true, cx: chunk.cx, cy: chunk.cy };
+    const d: Drawn = { mesh, sprites: [], lights: [], fx: [], inView: true, cx: chunk.cx, cy: chunk.cy };
     d.inView = this.overlaps(d);
     mesh.visible = d.inView;
     this.addDecos(d, chunk);
@@ -265,7 +298,9 @@ export class TileRenderer implements ChunkListener {
       const gx = ox + (i % CHUNK_SIZE);
       const gy = oy + Math.floor(i / CHUNK_SIZE);
       const glow = GLOWING[chunk.decos[i]];
-      if (glow) d.lights.push({ x: (gx + 0.5) * TILE_SIZE, y: (gy + 0.5) * TILE_SIZE, radius: glow[0] * TILE_SIZE, warmth: glow[1] });
+      // A rift's light comes from its tear, hanging above the tile.
+      const lift = chunk.decos[i] === Deco.Rift ? TEAR_MID_UP - TILE_SIZE / 2 : 0;
+      if (glow) d.lights.push({ x: (gx + 0.5) * TILE_SIZE, y: (gy + 0.5) * TILE_SIZE - lift, radius: glow[0] * TILE_SIZE, warmth: glow[1], color: glow[2] });
       else if (chunk.tiles[i] === Tile.Facade && hash3(gx, gy, 17) % TILE_VARIANTS !== BLANK_FACADE) {
         d.lights.push({ x: (gx + 0.5) * TILE_SIZE, y: (gy + 0.5) * TILE_SIZE, radius: 1.8 * TILE_SIZE, warmth: 0.45 });
       }
@@ -319,13 +354,36 @@ export class TileRenderer implements ChunkListener {
       if (!deco || deco === Deco.Footprint) continue;
       const s = this.spritePool.pop() ?? new Sprite({ anchor: { x: 0.5, y: 1 } });
       s.texture = this.decoTextures[deco];
+      const x = ox + (i % CHUNK_SIZE) * TILE_SIZE + TILE_SIZE / 2;
       const y = oy + (Math.floor(i / CHUNK_SIZE) + 1) * TILE_SIZE;
-      s.position.set(ox + (i % CHUNK_SIZE) * TILE_SIZE + TILE_SIZE / 2, y);
+      s.position.set(x, y);
       s.zIndex = y;
       if (d.inView) this.entities.addChild(s);
       d.sprites.push(s);
-      if (deco === Deco.Rift) this.rifts.push(s);
+      if (deco === Deco.Rift) {
+        s.texture = this.riftTextures[Math.floor(this.riftTime * RIFT_FPS) % RIFT_FRAMES];
+        this.rifts.push(s);
+        this.addRiftFx(d, x, y, true);
+      } else if (deco === Deco.RiftScar) this.addRiftFx(d, x, y, false);
     }
+  }
+
+  /** A rift's scorched ground under it and, while open, its halo behind the
+   *  tear; (x, y) is the bottom centre of its tile. */
+  private addRiftFx(d: Drawn, x: number, y: number, open: boolean): void {
+    const g = this.decalPool.pop() ?? new Sprite({ anchor: 0.5 });
+    g.texture = this.groundTextures[open ? 0 : 1];
+    g.position.set(x, y - TILE_SIZE / 2);
+    g.zIndex = GROUND_Z;
+    d.fx.push(g);
+    if (d.inView) this.entities.addChild(g);
+    if (!open) return;
+    const h = this.haloPool.pop() ?? new Sprite({ texture: this.haloTexture, anchor: 0.5, blendMode: 'add' });
+    h.position.set(x, y - TEAR_MID_UP);
+    h.zIndex = y - 0.5;
+    d.fx.push(h);
+    this.halos.push(h);
+    if (d.inView) this.entities.addChild(h);
   }
 
   private releaseSprites(d: Drawn): void {
@@ -333,12 +391,24 @@ export class TileRenderer implements ChunkListener {
     for (const s of d.sprites) {
       if (this.rifts.length) {
         const r = this.rifts.indexOf(s);
-        if (r >= 0) this.rifts.splice(r, 1);
+        if (r >= 0) {
+          this.rifts.splice(r, 1);
+          s.scale.set(1);
+        }
       }
       s.alpha = 1;
       if (d.inView) this.entities.removeChild(s);
       this.spritePool.push(s);
     }
     d.sprites.length = 0;
+    for (const s of d.fx) {
+      if (d.inView) this.entities.removeChild(s);
+      const h = this.halos.indexOf(s);
+      if (h >= 0) {
+        this.halos.splice(h, 1);
+        this.haloPool.push(s);
+      } else this.decalPool.push(s);
+    }
+    d.fx.length = 0;
   }
 }

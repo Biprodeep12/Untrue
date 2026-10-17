@@ -29,6 +29,8 @@ A shared two-second white-noise buffer feeds the noise-based sounds.
 | `thunder` | A lightning strike | Long low-passed noise |
 | `warn` | A vital gets worse (low or critical), except stamina; a glyph puzzle resets | A two-note square alarm, played twice |
 | `rift` | Stepping into or out of a rift | A swell of band-passed noise under a falling four-note shimmer |
+| `riftPull` | Being pulled into a rift (a passage's start) | A rising band-passed whoosh over a low, swelling sine |
+| `riftClose` | A closed rift's tear collapsing | A falling whine, then a soft low thump |
 
 ## Music
 

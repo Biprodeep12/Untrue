@@ -27,7 +27,7 @@ Every image is painted in code at startup by `buildAtlas()` (`src/rendering/Atla
 | --- | --- | --- |
 | Tiles | 41 tile types × 4 variants | 16 × 16 cells, `cell = tileId × 4 + variant` |
 | Decorations | 36 decoration types | Shelf-packed frames from `DECO_Y`; most are 16 × 32, plants and trees larger (oaks and palms 32 × 48, pines 24 × 48, cacti 24 × 40, crystals 24 × 32, bushes 24 × 24, flowers, mushrooms and dead bushes 16 × 16, the Anchor core 32 × 48) |
-| Humans | 8 outfits × 4 directions × 4 walk frames | 16 × 32 cells from `PLAYER_Y`, one row per outfit |
+| Humans | 11 outfits × 4 directions × 4 walk frames | 16 × 32 cells from `PLAYER_Y`, one row per outfit |
 | Items | One icon per item | 16 × 16 cells from `ITEM_Y` |
 | Creatures and projectiles | Two walk frames per species with its own art, the buried sand lurker, and four projectiles | Shelf-packed frames from `CREATURE_Y` |
 | Armour | 3 sets (`ARMOR_SETS`: leather, iron, starforged) × parts × 16 frames | One row of 16 frames per set and part, from `ARMOR_Y` |
@@ -36,11 +36,19 @@ The armour region starts at `ARMOR_Y`, below the creatures, with 32-pixel rows. 
 
 **Painters.** A small `Painter` class draws into an `ImageData`: pixels with alpha blending, rectangles, ellipses, speckles, soft shadows, and `outline()`, which adds a dark one-pixel outline around opaque pixels for the Stardew look. Ground tiles use per-palette colour sets and speckle styles (grass, sand, snow, dirt). Foliage uses `foliage()`, which shades a leafy cluster from the top left with noise and ragged edges, then adds random leaf flecks.
 
-**Outfits.** `OUTFITS` holds skin, hair, shirt and trouser colours, plus an optional apron, robe, mask or rags: `player`, `villager-a`, `villager-b`, `villager-c`, `trader`, `merchant`, `lost` and `bandit`. `playerCell(dir, frame, outfit)` returns a frame.
+**People.** `OUTFITS` describes each look: skin, hair colour and style (spiky, short, long, bun, curly, ponytail, bald, messy), shirt and trousers, and optional skirt, boots, beard, hat (straw, wide-brimmed, hood), scarf, belt, apron, vest, long coat, worn cloak, pack (small or big), mask and freckles. Looks: `player` (an adventurer: blue tunic, red scarf, belt, tall boots), `villager-a` to `villager-f` (picked at random per villager), `trader` (apron, moustache, small pack), `merchant` (wide hat with a feather, beard, long coat, big pack with a bedroll), `lost` (worn, patched cloak) and `bandit` (hood and mask). `paintHuman` draws them in a 16 × 32 cell with the feet on row 29: hair from row 5, a ten-wide head on rows 7-16 with eyes and cheeks, torso 17-23, hips 24, legs 25-28, shoes 29, then the shared one-pixel outline. Frames 0 and 2 are the passing pose (0 is also standing); the stride frames 1 and 3 bob everything above the hips down a pixel and swing the arms against the legs. Facing left is facing right, mirrored (`Painter.mirror`). `playerCell(dir, frame, outfit)` returns a frame, and `humanHand(dir, frame, off?)` where a hand is, which the player uses for what it holds. Armour overlays (`paintArmor`) use the same geometry, bob, swing and mirroring.
 
-Lookup helpers: `tileCell`, `decoFrame`, `itemCell`, `playerCell`, `creatureFrame` (keys such as `wolf:1`, `lurker:buried` or `projectile:arrow`), and for the outer dimensions `dimCell` (16 × 16 tiles from `DIM_Y`: void, floor, wall tops and faces, crumbling and glitching slabs, plates, safe pads, runes) and `dimFrame` (props: pillars, crystals, gates, the vault chest, the portal, the rift, mural stones).
+Lookup helpers: `tileCell`, `decoFrame`, `itemCell`, `playerCell`, `creatureFrame` (keys such as `wolf:1`, `lurker:buried` or `projectile:arrow`), and for the outer dimensions `dimCell` (16 × 16 tiles from `DIM_Y`: void, floor, wall tops and faces, crumbling and glitching slabs, plates, safe pads, runes) and `dimFrame` (props: pillars, crystals, gates, the vault chest, the portal, mural stones, and the rifts' art).
 
-**Rifts in the overworld.** `Deco.Rift` (32 × 48) is frame 0 of a jagged violet and cyan tear over the scorched `Tile.RiftGround`; frames 1 and 2 (`tear:1`, `tear:2` among the dimension props) are the same tear with its seam wobbled and its glitch slices moved. `riftFrame(f)` returns frame `f` of `RIFT_FRAMES` (3). A closed rift shows `Deco.RiftScar` (16 × 16).
+**Rifts.** Painted by `src/rendering/RiftArt.ts` into the dimension props, and used in the overworld and the dimensions alike:
+
+| Key | Size | What |
+| --- | --- | --- |
+| `tear:0` to `tear:7` | 48 × 64 | The tear, one frame each (`riftFrame(f)`, `RIFT_FRAMES` 8 at `RIFT_FPS` 10): a jagged rip with barbed edges and a crackling white and cyan rim, inside it a tunnel of light rings (white heart, cyan, violet, then dark void with stars) twisted by a swirl that turns a step each frame, thin spiral streaks, a dithered violet glow around it, sparks jumping off the edges, shards and embers spiralling in, and bits of ground bobbing under it |
+| `rift-halo` | 64 × 80 | A dithered glow drawn additively behind the tear |
+| `rift-ground:0`, `:1` | 112 × 96 | The ground around a rift, open (charred earth, cracks glowing violet near the middle and going dark further out, a burn under the tear) and closed (cooled ash, dark cracks). The middle is solid; the edge is ragged (noise) and fades out through an ordered dither, so it blends into any biome |
+
+`Deco.Rift`'s own cell is left empty (the tear is bigger than it). `Tile.RiftGround` is the same charred earth, in case it shows. A closed rift's `Deco.RiftScar` (16 × 16) is a short healed seam of pale light, stitched shut.
 
 ## Chunk meshes
 
@@ -62,7 +70,9 @@ Lookup helpers: `tileCell`, `decoFrame`, `itemCell`, `playerCell`, `creatureFram
 
 ## Rifts and their glitches
 
-`TileRenderer` keeps the rift sprites of drawn chunks in a list as decorations are added and released (usually empty) and `animate(dt)` swaps their texture between the three frames at 7 frames a second: textures swapped, never redrawn, and nothing at all without a rift.
+`TileRenderer` keeps the rift sprites of drawn chunks in a list as decorations are added and released (usually empty) and `animate(dt)` swaps their texture between the eight frames at 10 frames a second, and pulses each halo's alpha and scale: textures swapped and sprites transformed, never redrawn, and nothing at all without a rift. Each rift (and each scar) also gets its ground decal, a sprite in the entities layer sorted below everything that stands (`zIndex` −10⁹), and an open rift its additive halo just behind the tear; both are pooled apart from the decorations, shown and hidden with their chunk, and never faded, jolted or reused as decorations. At night the rift is a light (5 tiles) hung at its tear, with a violet glow (`Light.color`; the warm glow is otherwise a fire's orange), and a scar a faint cyan one.
+
+`TileRenderer.flare` (0 to 1) swells every tear and brightens its halo while the player passes through a rift ([below](#passing-through-a-rift)).
 
 Near an open rift the world glitches (`src/rendering/RiftGlitch.ts`). The game finds the nearest open rift four times a second, with the HUD; only while one is within 12 tiles, and the game is not paused, does `RiftGlitch.update` run each frame. Every 0.7 to 4.5 seconds (sooner nearer the rift) one of:
 
@@ -71,6 +81,24 @@ Near an open rift the world glitches (`src/rendering/RiftGlitch.ts`). The game f
 - **HUD stutter:** the HUD's panels jump and shift hue for 0.18 s (`Hud.stutter`, a CSS animation).
 
 Colour slips and HUD stutters follow the "Screen flashes" setting, and reduced motion stops the stutter. Out of range everything is put back once and nothing runs. The rift's hum is in [audio.md](audio.md#ambience).
+
+## Passing through a rift
+
+Entering a rift, stepping back out, closing it through the portal and being thrown out on dying are short passages, not cuts. `RiftTransition` (`src/game/RiftTransition.ts`) is the clock: three phases, each hook fired once and in order even on one long frame; `Game.updatePassage` draws from its progress, and `RiftPassageView` (`src/rendering/RiftPassageView.ts`) owns the screen cover and the collapsing tear.
+
+| Phase | Enter | Leave / close | Thrown out (dying) |
+| --- | --- | --- | --- |
+| Pulled in | 0.7 s | 0.6 s | 0.45 s |
+| Revealed | 0.6 s | 0.6 s (0.55 closing) | 0.6 s |
+| The tear collapses | | 0.6 s (closing only) | |
+
+- **Pulled in.** The player's sprite (pivoted on the body) slides into the tear, or the arrival rift, or the portal, spinning twice, shrinking and fading (on dying it spins away where it stands); the overworld's tear flares; the camera leans in (zoom ×1.25); a violet vignette closes in, and the screen whitens under it. With "Screen flashes" on, the colours slip twice (world tint and a 2-pixel tear, as the glitches do); off, the cover is the void's dark instead of a flash.
+- **The switch**, under full cover: `enterRift` or `exitRift` (dying also empties the bag and revives the player there). The camera snaps to the far rift.
+- **Revealed.** The cover lifts on the player emerging from the far rift, growing and unspinning as they slide to where they stand; the rift they came out of flares and settles.
+- **Closing.** The tear is closed (the scar and its decal appear) and a ghost of it folds in on itself, then bursts (particles, a short flash if flashes are on); then the rewards and the story's beat.
+- **Reduced motion** (`prefers-reduced-motion`): 0.25 s out and 0.3 s in, a plain dark fade, no slide, spin, zoom or slip.
+
+While a passage runs, the game counts as paused (`Game.paused`): no input but F3 and F4, no world update, no combat, so no damage; the scene still renders. Saving is refused (an autosave waits), as during a vision. Nothing of it allocates per frame; the vignette's texture is made the first time a rift is crossed. The playground's jumps stay instant.
 
 ## Outer dimensions
 
@@ -82,7 +110,7 @@ Buildings are painted once per building into cached canvas textures and drawn as
 
 ## The player
 
-The player (`src/game/Player.ts`) is a container: the body sprite, the item in hand, and a two-pixel fist drawn over the grip. The hand position follows the arms in the human sprite (`handAt`), including the walk sway.
+The player (`src/game/Player.ts`) is a container: the body sprite, the item in hand, and a two-pixel fist drawn over the grip. The hand position follows the arms in the human sprite (`humanHand` in the atlas), including the bob and arm swing; actions keep the bob but not the swing.
 
 - **Holding:** the selected hotbar item is shown if it is a weapon, tool or light. Weapons, tools and torches are carried upright, tipped away from the body; lanterns hang from their handle and sway while walking; a bow is held at the side. Facing away, the item is drawn behind the body. Nothing is held while swimming or rolling.
 - **Actions** (`act()`): a **swing** (0.28 s) winds the item up behind and sweeps it through the facing, with a 2-pixel lunge; a **punch** (0.2 s) is a lunge with empty hands; a **shot** (0.3 s) holds the bow out in front; a **pick** (0.4 s) is a stoop. Attacks play a swing, shot or punch; chopping and mining swing the best axe or pickaxe carried (or punch bare-handed) on every strike; gathering plants stoops.

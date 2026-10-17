@@ -12,7 +12,7 @@ const NAMES = [
   'Abigail', 'Bram', 'Cora', 'Dillon', 'Elsie', 'Finn', 'Greta', 'Hollis', 'Ivy', 'Jasper', 'Keira', 'Linus',
   'Mabel', 'Nico', 'Odette', 'Pip', 'Quinn', 'Rosa', 'Silas', 'Tamsin', 'Ulric', 'Vera', 'Wren', 'Yara',
 ];
-const VILLAGER_OUTFITS = ['villager-a', 'villager-b', 'villager-c'];
+const VILLAGER_OUTFITS = ['villager-a', 'villager-b', 'villager-c', 'villager-d', 'villager-e', 'villager-f'];
 /** Lone buildings someone may live in. */
 const LONE_HOMES = new Set(['house', 'cabin']);
 /** Chance a lone house or cabin is lived in. */

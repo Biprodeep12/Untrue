@@ -11,10 +11,14 @@ export interface Light {
   radius: number;
   /** Warm glow strength, 0 for none. */
   warmth: number;
+  /** The glow's colour, if not a fire's orange (a rift's violet). */
+  color?: number;
 }
 
 const NIGHT = 0x080c22;
 const DUSK = 0x2a1430;
+/** The warm glow's colour, unless a light has its own. */
+const FIRE = 0xffa040;
 /** Darkness at its deepest; the world never goes fully black. */
 const MAX_ALPHA = 0.8;
 
@@ -42,6 +46,8 @@ export class Lighting {
   private readonly glow: Texture;
   private readonly holes: Sprite[] = [];
   private readonly warm: Sprite[] = [];
+  /** Each glow's tint as last set. */
+  private readonly warmTint: number[] = [];
   private readonly warmLayer = new Container();
   private rt: RenderTexture;
   private readonly sprite: Sprite;
@@ -99,6 +105,9 @@ export class Lighting {
       hole.scale.set(size);
       const glow = this.warm[used];
       glow.visible = l.warmth > 0;
+      // Set only on a change: a tint is parsed as a colour each time.
+      const color = l.color ?? FIRE;
+      if (this.warmTint[used] !== color) glow.tint = this.warmTint[used] = color;
       glow.position.set(sx, sy);
       glow.scale.set(size * 0.8);
       glow.alpha = l.warmth * 0.35 * darkness;
@@ -119,8 +128,9 @@ export class Lighting {
     this.holes.push(hole);
     const glow = new Sprite({ texture: this.glow, anchor: 0.5 });
     glow.blendMode = 'add';
-    glow.tint = 0xffa040;
+    glow.tint = FIRE;
     this.warmLayer.addChild(glow);
     this.warm.push(glow);
+    this.warmTint.push(FIRE);
   }
 }

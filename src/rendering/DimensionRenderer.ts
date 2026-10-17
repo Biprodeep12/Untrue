@@ -11,7 +11,7 @@ import { TILE_SIZE } from '../config';
 import type { DimensionRun } from '../dimension/Challenges';
 import { DimTile } from '../dimension/DimTile';
 import { hash3 } from '../generation/Random';
-import { ATLAS_H, ATLAS_W, dimCell, dimFrame, TILE_VARIANTS } from './Atlas';
+import { ATLAS_H, ATLAS_W, dimCell, dimFrame, RIFT_FPS, RIFT_FRAMES, riftFrame, TILE_VARIANTS } from './Atlas';
 import type { Light } from './Lighting';
 
 /** Block edge in tiles: one mesh and one cull test each. */
@@ -110,7 +110,10 @@ export class DimensionRenderer {
     for (let g = 0; g < GLYPHS; g++) for (let s = 0; s < 3; s++) this.stele.push(prop(`glyph:${g}:${s}`));
     this.chest = range(3).map((s) => prop(`chest:${s}`));
     this.portal = range(4).map((f) => prop(`portal:${f}`));
-    this.rift = range(2).map((f) => prop(`rift:${f}`));
+    this.rift = range(RIFT_FRAMES).map((f) => {
+      const { x, y, w, h } = riftFrame(f);
+      return this.texture(x, y, w, h);
+    });
     this.gate = range(2).map((f) => prop(`gate:${f}`));
     this.pillar = prop('pillar');
     this.crystal = prop('crystal');
@@ -259,7 +262,7 @@ export class DimensionRenderer {
         tex = run.portalOpen ? this.portal[1 + (Math.floor(time * 6) % 3)] : this.portal[0];
         break;
       case Kind.Rift:
-        tex = this.rift[Math.floor(time * 5) % 2];
+        tex = this.rift[Math.floor(time * RIFT_FPS) % RIFT_FRAMES];
         break;
       case Kind.Gate:
         if (run.stateOf(t) === 1) tex = this.gate[Math.floor(time * 6) % 2];

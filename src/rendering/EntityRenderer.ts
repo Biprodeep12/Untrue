@@ -33,6 +33,8 @@ interface Floating {
 
 export class EntityRenderer {
   private readonly textures = new Map<string, Texture>();
+  /** Human frames per outfit, by direction * 4 + walk frame. */
+  private readonly humans = new Map<string, Texture[]>();
   private readonly drawn = new Map<number, Drawn>();
   private readonly people = new Map<number, Drawn>();
   private readonly shots: Sprite[] = [];
@@ -113,14 +115,17 @@ export class EntityRenderer {
   }
 
   private human(outfit: string, dir: number, frame: number): Texture {
-    const key = `human:${outfit}:${dir}:${frame}`;
-    let t = this.textures.get(key);
-    if (!t) {
-      const [x, y] = playerCell(dir, frame, outfit);
-      t = new Texture({ source: this.atlas.source, frame: new Rectangle(x, y, 16, 32) });
-      this.textures.set(key, t);
+    // No string keys: this runs for every person every frame.
+    let frames = this.humans.get(outfit);
+    if (!frames) {
+      frames = [];
+      for (let k = 0; k < 16; k++) {
+        const [x, y] = playerCell(k >> 2, k & 3, outfit);
+        frames.push(new Texture({ source: this.atlas.source, frame: new Rectangle(x, y, 16, 32) }));
+      }
+      this.humans.set(outfit, frames);
     }
-    return t;
+    return frames[dir * 4 + frame];
   }
 
   private create(): Drawn {

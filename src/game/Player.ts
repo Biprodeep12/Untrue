@@ -5,7 +5,7 @@
 import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 import { PLAYER_DEPTH, PLAYER_HALF_W, RUN_SPEED, TILE_SIZE, WALK_SPEED } from '../config';
 import type { ItemDef } from '../items/Items';
-import { armorCell, ARMOR_PARTS, Dir, itemCell, playerCell } from '../rendering/Atlas';
+import { armorCell, ARMOR_PARTS, Dir, humanHand, itemCell, playerCell } from '../rendering/Atlas';
 import type { Input } from './Input';
 
 /** Anything the player can walk around in: the world, or a room. */
@@ -36,18 +36,6 @@ export type ActionKind = 'swing' | 'shoot' | 'pick' | 'punch';
 const ACTION_SECONDS: Record<ActionKind, number> = { swing: 0.28, shoot: 0.3, pick: 0.4, punch: 0.2 };
 /** Screen angle each facing points at (0 is right, down is positive). */
 const FACING_ANGLE = [Math.PI / 2, Math.PI, 0, -Math.PI / 2];
-/** The hand that holds things, in pixels from the feet, per facing, matching
- *  the arms in the human sprite (`paintHuman`); `step` is the walk sway. */
-function handAt(facing: number, step: number): [number, number] {
-  switch (facing) {
-    case Dir.Left:
-      return [1 + step, -7.5];
-    case Dir.Right:
-      return [-step, -7.5];
-    default:
-      return [3.5, -7.5 - step];
-  }
-}
 /** Skin of the player's hand, drawn over the grip. */
 const SKIN = 0xf2c29a;
 /** Item icons point up and to the right; this turns them to point along 0. */
@@ -81,7 +69,8 @@ export class Player {
   guarding = false;
   private readonly armor: Sprite[] = [];
   private readonly off = new Sprite();
-  private readonly armorTextures = new Map<string, Texture>();
+  /** Armour frames by set, part, direction, walk frame and swimming crop. */
+  private readonly armorTextures: Texture[] = [];
   private order = -1;
   /** A weapon, tool or light shown in hand, or null for empty hands. */
   holding: ItemDef | null = null;
@@ -264,7 +253,6 @@ export class Player {
     off.visible = !!item && !swimming && this.dodgeTime <= 0;
     if (!off.visible || !item) return;
     off.texture = this.icon(item);
-    const step = this.frame === 1 ? 1 : this.frame === 3 ? -1 : 0;
     const bx = this.body.x;
     const by = this.body.y;
     if (item.shield && this.guarding) {
@@ -275,7 +263,7 @@ export class Player {
       return;
     }
     // The other hand: on the left facing down or up, out of sight to the side.
-    const [hx, hy] = this.facing === Dir.Down || this.facing === Dir.Up ? [-3.5, -7.5 + step] : [this.facing === Dir.Left ? -2 : 2, -8];
+    const [hx, hy] = humanHand(this.facing, this.frame, true);
     off.position.set(bx + hx, by + hy);
     if (item.shield) {
       off.anchor.set(0.5, 0.55);
@@ -314,11 +302,12 @@ export class Player {
   }
 
   private armorTexture(set: number, part: number, dir: number, frame: number, swimming: boolean): Texture {
-    const key = `${set}:${part}:${dir}:${frame}:${swimming ? 1 : 0}`;
-    let t = this.armorTextures.get(key);
+    // A number, not a string key: this runs for every worn piece every frame.
+    const key = (((set * ARMOR_PARTS + part) * 4 + dir) * 4 + frame) * 2 + (swimming ? 1 : 0);
+    let t = this.armorTextures[key];
     if (!t) {
       const [x, y] = armorCell(set, part, dir, frame);
-      this.armorTextures.set(key, (t = new Texture({ source: this.atlas.source, frame: new Rectangle(x, y, 16, swimming ? SWIM_SHOWN : 32) })));
+      this.armorTextures[key] = t = new Texture({ source: this.atlas.source, frame: new Rectangle(x, y, 16, swimming ? SWIM_SHOWN : 32) });
     }
     return t;
   }
@@ -341,8 +330,8 @@ export class Player {
     fist.visible = held.visible && this.facing !== Dir.Up;
     if (!held.visible || !item) return;
     held.texture = this.icon(item);
-    const step = this.frame === 1 ? 1 : this.frame === 3 ? -1 : 0;
-    const [hx, hy] = handAt(this.facing, a ? 0 : step);
+    // Actions keep a steady grip: the bob, but not the arm swing.
+    const [hx, hy] = humanHand(this.facing, this.frame, false, !a);
     const x = hx + this.body.x;
     const y = hy + this.body.y;
     fist.position.set(x, y);

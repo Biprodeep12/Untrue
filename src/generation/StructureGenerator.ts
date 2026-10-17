@@ -736,12 +736,14 @@ function standingStones({ rng }: BuildContext, crystal: boolean): Layout {
   return l;
 }
 
-/** A rift: a tear in the air over a patch of scorched ground. Small, so it
- *  fits nearly anywhere; the tear stands in the middle, open ground below it. */
-export function rift({ rng }: BuildContext): Layout {
+/** A rift: a tear in the air over scorched ground. Small, so it fits nearly
+ *  anywhere; the tear stands in the middle, open ground below it. Only a plus
+ *  of tiles is scorched: the renderer lays a decal over it that fades raggedly
+ *  into whatever ground is around, so no square edge shows. */
+export function rift(_: BuildContext): Layout {
   const l = new Layout(7, 7);
   l.clearDecos(0, 0, 7, 7);
-  l.disc(3, 3, rng.range(1.8, 2.6), Tile.RiftGround);
+  l.disc(3, 3, 1.2, Tile.RiftGround);
   l.deco(3, 3, Deco.Rift);
   return l;
 }

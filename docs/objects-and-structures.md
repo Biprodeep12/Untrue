@@ -100,7 +100,7 @@ Villages, castles and nomad camps hold an anvil, a crafting station. Camps and n
 
 ## Rifts
 
-Tears in the air onto an outer dimension, the heart of the [story](story.md). `rift()` builds a 7 × 7 layout: decorations cleared, a disc of scorched, violet-veined ground (`Tile.RiftGround`) and the tear (`Deco.Rift`, solid) in the middle. The definition is `RIFT` in `StructureGenerator.ts` (kind `rift`, flat ground, spacing 160, mirror only); it is rolled on its own rather than through the tiers, so rifts grow commoner with distance however many other structures there are. A world event can also tear one open near the player ("A rift tears open nearby.", see [living-world.md](living-world.md)).
+Tears in the air onto an outer dimension, the heart of the [story](story.md). `rift()` builds a 7 × 7 layout: decorations cleared, a plus of five scorched tiles (`Tile.RiftGround`) and the tear (`Deco.Rift`, solid) in the middle. The renderer lays a scorched decal over it that fades raggedly into the ground around, so no square edge shows ([rendering.md](rendering.md#rifts-and-their-glitches)). The definition is `RIFT` in `StructureGenerator.ts` (kind `rift`, flat ground, spacing 160, mirror only); it is rolled on its own rather than through the tiers, so rifts grow commoner with distance however many other structures there are. A world event can also tear one open near the player ("A rift tears open nearby.", see [living-world.md](living-world.md)).
 
 Like every structure a rift is temporary. Its object id (which includes the region's visit) seeds the dimension behind it, so the same rift always leads to the same space. Facing the tear, E enters it ([dimensions.md](dimensions.md)).
 

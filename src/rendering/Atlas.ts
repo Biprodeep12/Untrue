@@ -13,6 +13,7 @@
 import { Rng } from '../generation/Random';
 import { Deco, DECO_COUNT, PALETTE_COUNT, Tile, TILE_COUNT } from '../generation/Tiles';
 import { ARMOR_SETS, ITEM_LIST, Items } from '../items/Items';
+import { HALO_H, HALO_W, paintHalo, paintRiftGround, paintScar, paintScorch, paintTear, SCORCH_H, SCORCH_W, TEAR_FRAMES, TEAR_H, TEAR_W } from './RiftArt';
 
 export const ATLAS_W = 256;
 export const TILE_VARIANTS = 4;
@@ -81,25 +82,50 @@ const DECOS = shelfPack(
 );
 export const PLAYER_Y = DECO_Y + DECOS.height;
 
+type HairStyle = 'spiky' | 'short' | 'long' | 'bun' | 'curly' | 'ponytail' | 'bald' | 'messy';
+
+/** A person's look: see `paintHuman`. */
 interface Outfit {
   skin: RGB;
   hair: RGB;
   shirt: RGB;
   pants: RGB;
-  /** Optional apron, robe, mask or rags drawn over the base figure. */
-  extra?: 'apron' | 'robe' | 'mask' | 'ragged';
+  hairStyle: HairStyle;
+  shoes?: RGB;
+  /** Tall boots instead of shoes. */
+  boots?: boolean;
+  /** The trousers colour is a skirt or dress to the knees. */
+  skirt?: boolean;
+  beard?: 'full' | 'moustache';
+  hat?: 'straw' | 'wide' | 'hood';
+  hatColor?: RGB;
+  scarf?: RGB;
+  belt?: RGB;
+  apron?: RGB;
+  vest?: RGB;
+  /** A long coat to the knees, in the shirt colour. */
+  coat?: boolean;
+  /** A worn cloak with a frayed hem and patches. */
+  cloak?: RGB;
+  pack?: 'small' | 'big';
+  mask?: RGB;
+  freckles?: boolean;
 }
 
-/** Index 0 is the player. */
+/** Index 0 is the player. Keys are stable ids used by NPCs and enemies. */
 export const OUTFITS: Record<string, Outfit> = {
-  player: { skin: 0xf2c29a, hair: 0x6b3a1f, shirt: 0x3a9a8a, pants: 0x3b4a6b },
-  'villager-a': { skin: 0xf2c29a, hair: 0xe8c050, shirt: 0xc8504a, pants: 0x4a3a2a },
-  'villager-b': { skin: 0xc8875a, hair: 0x241a14, shirt: 0x5a9a4a, pants: 0x3b4a6b },
-  'villager-c': { skin: 0xf6d2b0, hair: 0xa0522d, shirt: 0xb08ad8, pants: 0x5a4a6a },
-  trader: { skin: 0xe0a87a, hair: 0x5a3a20, shirt: 0xe8c050, pants: 0x4a3a2a, extra: 'apron' },
-  merchant: { skin: 0xf2c29a, hair: 0xd8d8d8, shirt: 0x6a3a9a, pants: 0x4a2a6a, extra: 'robe' },
-  lost: { skin: 0xe0b08a, hair: 0x7a5a3a, shirt: 0x8a8a7a, pants: 0x5a5a4a, extra: 'ragged' },
-  bandit: { skin: 0xd8a07a, hair: 0x1a1414, shirt: 0x8a2a2a, pants: 0x2a2a30, extra: 'mask' },
+  // An adventurer: blue tunic, red scarf, belt and tall boots.
+  player: { skin: 0xf2c29a, hair: 0x7a4424, shirt: 0x3f6fb8, pants: 0x4a3e52, hairStyle: 'spiky', boots: true, shoes: 0x6a4228, scarf: 0xd8483a, belt: 0x6a4228 },
+  'villager-a': { skin: 0xf2c29a, hair: 0xecc458, shirt: 0xf2e6d4, pants: 0xc4505c, hairStyle: 'long', skirt: true, vest: 0xc4505c, shoes: 0x7a4a30 },
+  'villager-b': { skin: 0xc8875a, hair: 0x2a1c16, shirt: 0x6aa04e, pants: 0x6a5038, hairStyle: 'short', hat: 'straw', hatColor: 0xe8c878, belt: 0x4a3020 },
+  'villager-c': { skin: 0xf8d8b8, hair: 0xb4562e, shirt: 0xb294dc, pants: 0x6a4a7a, hairStyle: 'bun', skirt: true, shoes: 0x4a3040 },
+  trader: { skin: 0xe0a87a, hair: 0x5a3a20, shirt: 0xe0b048, pants: 0x5a4430, hairStyle: 'short', beard: 'moustache', apron: 0xf0e6d0, pack: 'small' },
+  merchant: { skin: 0xf2c29a, hair: 0xdedad2, shirt: 0x7048a4, pants: 0x4a2e6a, hairStyle: 'short', beard: 'full', hat: 'wide', hatColor: 0x8a5a34, coat: true, belt: 0xe8c050, pack: 'big', boots: true },
+  lost: { skin: 0xe0b08a, hair: 0x7a5a3a, shirt: 0x9a8e74, pants: 0x5e5848, hairStyle: 'messy', cloak: 0x7c6e5a, shoes: 0x5a4a3a },
+  bandit: { skin: 0xd8a07a, hair: 0x1a1414, shirt: 0x8a2a2a, pants: 0x2a2a30, hairStyle: 'short', hat: 'hood', hatColor: 0x4e3e46, mask: 0x1e1a1c, belt: 0x4a3020, boots: true },
+  'villager-d': { skin: 0xeab890, hair: 0xe8e4dc, shirt: 0xeadcc0, pants: 0x6a6a72, hairStyle: 'bald', beard: 'full', vest: 0x8a5a34 },
+  'villager-e': { skin: 0x8a5634, hair: 0x1e1612, shirt: 0xe89038, pants: 0x3e5a8a, hairStyle: 'curly', belt: 0x5a3a24 },
+  'villager-f': { skin: 0xf4cca8, hair: 0xd8702e, shirt: 0x4aa898, pants: 0x5a6a3a, hairStyle: 'ponytail', freckles: true, vest: 0xf0e6d0 },
 };
 const OUTFIT_NAMES = Object.keys(OUTFITS);
 export const ITEM_Y = PLAYER_Y + OUTFIT_NAMES.length * 32;
@@ -199,6 +225,23 @@ export class Painter {
 
   shadow(cx = 8, cy = 30, rx = 6, ry = 2): void {
     this.ellipse(cx, cy, rx, ry, 0x000000, 60);
+  }
+
+  /** Flips the cell left to right (people facing left are drawn facing right). */
+  mirror(): void {
+    const d = this.img.data;
+    for (let y = 0; y < this.h; y++) {
+      const row = ((this.oy + y) * this.img.width + this.ox) * 4;
+      for (let x = 0; x < this.w >> 1; x++) {
+        const a = row + x * 4;
+        const b = row + (this.w - 1 - x) * 4;
+        for (let k = 0; k < 4; k++) {
+          const t = d[a + k];
+          d[a + k] = d[b + k];
+          d[b + k] = t;
+        }
+      }
+    }
   }
 }
 
@@ -522,21 +565,10 @@ function paintShared(p: Painter, id: number, rng: Rng, variant: number): void {
       p.rect(0, 0, 1, 16, 0x2f2a36);
       p.speckle(rng, 6, 0x4d4656);
       break;
-    case Tile.RiftGround: {
-      // Scorched earth, cracked by faintly glowing violet veins.
-      p.rect(0, 0, 16, 16, 0x6e5f5c);
-      p.speckle(rng, 12, 0x5c4e4e);
-      p.speckle(rng, 8, 0x80716c);
-      if (variant % 2) {
-        let x = rng.int(3, 12);
-        for (let y = rng.int(0, 6), n = rng.int(5, 9); n > 0 && y < 16; y++, n--) {
-          x = Math.max(0, Math.min(15, x + rng.int(-1, 1)));
-          p.set(x, y, n % 3 ? 0x8a6ab0 : 0xb07aff);
-        }
-      }
-      if (variant === 2) p.set(rng.int(2, 13), rng.int(2, 13), 0x5af0e8, 200);
+    case Tile.RiftGround:
+      // Scorched earth; the rift's ground decal covers it (RiftArt).
+      paintRiftGround(p, rng, variant);
       break;
-    }
     case Tile.Cave:
       p.rect(0, 0, 16, 16, 0x6c645b);
       p.ellipse(7.5, 9, 7, 6, 0x1c1714);
@@ -1278,15 +1310,12 @@ function paintDeco(p: Painter, id: number, rng: Rng): void {
       p.outline(0x1a1420);
       break;
     case Deco.Rift:
-      // Frame 0 of the tear; TileRenderer swaps in the others (`riftFrame`).
-      riftTear(p, 0);
+      // Left empty: the tear is larger than its cell, so its frames are
+      // painted with the dimension props (`riftFrame`).
       break;
     case Deco.RiftScar:
-      // A closed rift: a faint, cold scar on the ground.
-      p.ellipse(8, 11, 6, 2.5, 0x2a1e38, 120);
-      for (let k = -4; k <= 4; k++) p.set(8 + k, 11 + (k % 2), k % 3 ? 0x6a4a98 : 0x8a74a0, 200);
-      p.set(5, 9, 0x5af0e8, 160);
-      p.set(11, 13, 0x5af0e8, 120);
+      // A closed rift: a healed seam over cooled ash (RiftArt).
+      paintScar(p);
       break;
     case Deco.ChestOpen:
       p.shadow(8, 30, 6, 1.5);
@@ -2432,43 +2461,6 @@ function dimPortal(p: Painter, f: number): void {
   p.outline(RIFT.ink);
 }
 
-/** The rift the player came in by: a jagged tear of light over the floor. */
-function dimRift(p: Painter, f: number): void {
-  p.ellipse(16, 28, 10, 2.5, RIFT.violet, 90);
-  const xs: number[] = [];
-  for (let y = 2; y < 28; y++) xs.push(16 + Math.round(Math.sin(y * 0.7 + f * 1.3) * 2 + (y % 5 === 0 ? (f ? 1 : -1) : 0)));
-  xs.forEach((x, i) => {
-    const y = 2 + i;
-    const w = 1 + Math.round(Math.sin((i / xs.length) * Math.PI) * 3);
-    p.rect(x - w - 1, y, w * 2 + 3, 1, RIFT.violet, 120);
-    p.rect(x - w, y, w * 2 + 1, 1, RIFT.cyan);
-    p.rect(x - Math.floor(w / 2), y, Math.max(1, w), 1, 0xffffff);
-  });
-  for (const [x, y] of [[9, 8], [23, 14], [11, 21], [22, 5]]) p.set(x + f, y, RIFT.pink, 220);
-}
-
-/** An overworld rift, 32 x 48 standing on its tile: a tear hanging in the air
- *  over scorched ground. Three frames, swapped on a timer, never redrawn. */
-function riftTear(p: Painter, f: number): void {
-  p.ellipse(16, 45, 11, 2.5, RIFT.violetDk, 110);
-  p.ellipse(16, 45, 6, 1.4, RIFT.cyan, 120);
-  // The tear: a jagged seam, widest in the middle, wobbling per frame.
-  for (let y = 4; y < 41; y++) {
-    const t = (y - 4) / 37;
-    const x = 16 + Math.round(Math.sin(y * 0.55 + f * 2.1) * 1.6 + (y % 6 === f * 2 ? (f % 2 ? 1 : -1) : 0));
-    const w = Math.round(Math.sin(t * Math.PI) * 4.5);
-    p.rect(x - w - 2, y, w * 2 + 5, 1, RIFT.violet, 90);
-    p.rect(x - w - 1, y, w * 2 + 3, 1, RIFT.violetDk, 220);
-    p.rect(x - w, y, w * 2 + 1, 1, y % 4 === f ? RIFT.cyanLt : RIFT.cyan);
-    if (w > 0) p.rect(x - Math.floor(w / 2), y, Math.max(1, w), 1, 0xffffff);
-  }
-  // Glitch slices: a row of the tear slips sideways, fringed pink.
-  const row = 12 + f * 9;
-  p.rect(10 + f, row, 12, 1, RIFT.pink, 200);
-  p.rect(12 - f, row + 1, 9, 1, RIFT.cyanLt, 180);
-  for (const [x, y] of [[5, 10], [26, 18], [7, 30], [25, 36], [20, 6]]) p.set(x + ((f + y) % 3) - 1, y - f * 2, f === 1 ? RIFT.pink : 0xe8d0ff, 220);
-}
-
 /** A mural stone: 0 dark, 1 lit by the hint, 2 done. */
 function dimStele(p: Painter, g: number, s: number): void {
   p.shadow(8, 22, 5, 1.5);
@@ -2491,10 +2483,12 @@ const DIM_PROP_FRAMES: Array<[string, number, number, (p: Painter) => void]> = [
   ...[0, 1].map((f): [string, number, number, (p: Painter) => void] => [`gate:${f}`, 16, 32, (p) => dimGate(p, f)]),
   ...[0, 1, 2].map((s): [string, number, number, (p: Painter) => void] => [`chest:${s}`, 16, 24, (p) => dimChest(p, s)]),
   ...[0, 1, 2, 3].map((f): [string, number, number, (p: Painter) => void] => [`portal:${f}`, 32, 48, (p) => dimPortal(p, f)]),
-  ...[0, 1].map((f): [string, number, number, (p: Painter) => void] => [`rift:${f}`, 32, 32, (p) => dimRift(p, f)]),
-  // The overworld tear's other frames; frame 0 is its decoration cell.
-  ...[1, 2].map((f): [string, number, number, (p: Painter) => void] => [`tear:${f}`, 32, 48, (p) => riftTear(p, f)]),
   ...GLYPHS.flatMap((_, g) => [0, 1, 2].map((s): [string, number, number, (p: Painter) => void] => [`glyph:${g}:${s}`, 16, 24, (p) => dimStele(p, g, s)])),
+  // Rifts (RiftArt), in the overworld and the dimensions alike: the tear's
+  // frames, its halo, and the ground around it, open and closed.
+  ...Array.from({ length: TEAR_FRAMES }, (_, f): [string, number, number, (p: Painter) => void] => [`tear:${f}`, TEAR_W, TEAR_H, (p) => paintTear(p, f)]),
+  ['rift-halo', HALO_W, HALO_H, paintHalo],
+  ...[0, 1].map((s): [string, number, number, (p: Painter) => void] => [`rift-ground:${s}`, SCORCH_W, SCORCH_H, (p) => paintScorch(p, s === 1)]),
 ];
 
 /** The outer dimensions' tiles (16 x 16 cells) and props, below the armour. */
@@ -2526,81 +2520,173 @@ const ARMOR_COLORS = [
   { base: STAR_PLATE, light: 0xb8b0f0, dark: 0x4a4088, trim: 0xe8c050 },
 ];
 
-/** Paints one armour piece over the human figure (see `paintHuman`). */
+/** Paints one armour piece over the human figure, frame for frame: the same
+ *  bob, stride, arm swing and mirroring as `paintHuman`. */
 function paintArmor(p: Painter, set: number, part: number, dir: number, frame: number): void {
-  const { base, light, dark, trim } = ARMOR_COLORS[set];
-  const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  const c = ARMOR_COLORS[set];
   const side = dir === Dir.Left || dir === Dir.Right;
-  // Iron and starforged are plate; leather is soft.
-  const iron = set >= 1;
+  if (side) armorSide(p, set, part, frame, c);
+  else armorFront(p, set, part, frame, c, dir === Dir.Up);
+  if (dir === Dir.Left) p.mirror();
+  p.outline(shade(c.dark, 0.55));
+}
+
+type ArmorColors = (typeof ARMOR_COLORS)[number];
+
+/** Helmets: a leather cap, or a plate helm with a crest. */
+function helmDome(p: Painter, set: number, Y: number, c: ArmorColors): void {
+  const plate = set >= 1;
+  const top = 4;
+  p.rect(5, top + Y, 6, 1, c.base);
+  p.rect(4, top + 1 + Y, 8, 1, c.base);
+  p.rect(3, top + 2 + Y, 10, 10 - top - 2, c.base);
+  p.rect(5, top + 1 + Y, 3, 1, c.light);
+  p.rect(4, top + 2 + Y, 1, 2, c.light);
+  p.rect(11, top + 2 + Y, 2, 10 - top - 2, c.dark);
+  if (plate) {
+    p.rect(7, 2 + Y, 2, 2, set === 2 ? c.trim : 0xb8323a);
+    p.set(7, 2 + Y, set === 2 ? 0xfff0a0 : 0xe05a5a);
+  }
+}
+
+function armorFront(p: Painter, set: number, part: number, frame: number, c: ArmorColors, back: boolean): void {
+  const s = stride(frame);
+  const Y = bob(frame);
+  const plate = set >= 1;
   switch (part) {
     case 0: // Head.
-      if (dir === Dir.Up) {
-        p.rect(4, 8, 8, iron ? 9 : 5, base);
-        p.rect(4, 8, 8, 1, light);
-        if (iron) p.rect(4, 15, 8, 1, dark);
-      } else {
-        p.rect(4, iron ? 8 : 9, 8, iron ? 4 : 3, base);
-        p.rect(4, iron ? 8 : 9, 8, 1, light);
-        p.rect(4, 11, 8, 1, dark);
-        if (iron) {
-          // Cheek guards, and a nose guard from the front.
-          if (dir === Dir.Down) {
-            p.rect(4, 12, 1, 4, base);
-            p.rect(11, 12, 1, 4, base);
-            p.rect(7, 12, 2, 3, base);
-          } else {
-            p.rect(dir === Dir.Left ? 10 : 4, 12, 2, 4, base);
-            p.rect(dir === Dir.Left ? 5 : 10, 12, 1, 3, base);
-          }
-          p.set(7, 7, 0xb8323a);
-          p.set(8, 7, 0xb8323a);
+      helmDome(p, set, Y, c);
+      p.rect(2, 10 + Y, 12, 1, plate ? c.trim : c.dark);
+      if (back) {
+        if (plate) {
+          p.rect(3, 11 + Y, 10, 5, c.base);
+          p.rect(11, 11 + Y, 2, 5, c.dark);
+          p.rect(3, 15 + Y, 10, 1, c.dark);
+        } else {
+          p.rect(4, 11 + Y, 8, 2, c.base);
+          p.rect(4, 12 + Y, 8, 1, c.dark);
         }
+      } else if (plate) {
+        // Cheek guards and a nose guard.
+        p.rect(3, 11 + Y, 2, 4, c.base);
+        p.rect(11, 11 + Y, 2, 4, c.dark);
+        p.rect(7, 11 + Y, 2, 2, c.base);
+        p.set(7, 11 + Y, c.light);
+        if (set === 2) p.rect(7, 8 + Y, 2, 1, 0x7af0ff);
+      } else {
+        // Ear flaps.
+        p.rect(3, 11 + Y, 1, 2, c.base);
+        p.rect(12, 11 + Y, 1, 2, c.dark);
+        p.rect(5, 7 + Y, 6, 1, c.trim);
       }
       break;
-    case 1: // Chest.
-      p.rect(5, 18, 6, 6, base);
-      p.rect(5, 18, 6, 1, light);
-      p.rect(5, 23, 6, 1, dark);
-      if (iron) p.rect(8, 19, 1, 4, light);
-      else p.set(8, 23, trim);
-      if (side) {
-        const ax = dir === Dir.Left ? 8 + step : 7 - step;
-        p.rect(ax, 19, 2, 2, light);
+    case 1: // Chest: a breastplate or jerkin, pauldrons and bracers.
+      p.rect(5, 18 + Y, 6, 5, c.base);
+      p.rect(5, 18 + Y, 6, 1, c.light);
+      p.rect(10, 19 + Y, 1, 4, c.dark);
+      p.rect(5, 22 + Y, 6, 1, plate ? c.trim : c.dark);
+      if (!back) {
+        if (plate) {
+          p.rect(7, 19 + Y, 1, 3, c.light);
+          p.rect(8, 19 + Y, 1, 3, c.dark);
+          if (set === 2) p.rect(7, 19 + Y, 2, 1, c.trim);
+        } else {
+          p.set(7, 19 + Y, c.trim);
+          p.set(8, 20 + Y, c.trim);
+          p.set(7, 21 + Y, c.trim);
+        }
       } else {
-        p.rect(4, 18 + step, 1, 3, light);
-        p.rect(11, 18 - step, 1, 3, base);
+        p.rect(7, 19 + Y, 2, 3, c.dark);
+        p.rect(7, 19 + Y, 1, 3, c.base);
+      }
+      // Bracers on the swinging arms, then pauldrons over the shoulders.
+      p.rect(4, 20 + Y + s, 1, 2, c.base);
+      p.rect(11, 20 + Y - s, 1, 2, c.dark);
+      p.rect(3, 17 + Y, 3, 2, c.base);
+      p.rect(10, 17 + Y, 3, 2, c.dark);
+      p.rect(3, 17 + Y, 3, 1, c.light);
+      p.rect(10, 17 + Y, 3, 1, c.base);
+      if (set === 2) {
+        p.set(4, 18 + Y, c.trim);
+        p.set(11, 18 + Y, c.trim);
       }
       break;
     case 2: // Legs.
-      if (side) {
-        p.rect(7 + step, 25, 2, 3, base);
-        p.rect(7 - step, 25, 2, 3, dark);
-      } else {
-        p.rect(6, 25, 2, 3 - Math.max(0, step), base);
-        p.rect(9, 25, 2, 3 - Math.max(0, -step), base);
-        p.set(6, 25, light);
-        p.set(9, 25, light);
-      }
-      if (iron && !side) {
-        p.set(6, 26, light);
-        p.set(9, 26, light);
+      p.rect(5, 24 + Y, 6, 1, c.dark);
+      for (const [x, lift] of [[6, s > 0 ? 1 : 0], [8, s < 0 ? 1 : 0]]) {
+        const foot = 29 - lift;
+        p.rect(x, 25, 2, foot - 25, x === 6 ? c.base : shade(c.base, 0.85));
+        if (plate) p.rect(x, 26 - lift, 2, 1, c.light);
+        else p.set(x, 25, c.light);
       }
       break;
     case 3: // Feet.
-      if (side) {
-        p.rect(7 + step, 27, 2, 3, base);
-        p.rect(7 - step, 27, 2, 3, dark);
-        p.rect(dir === Dir.Left ? 6 + step : 8 + step, 29, 2, 1, dark);
-      } else {
-        p.rect(6, 27 - Math.max(0, step), 2, 3, base);
-        p.rect(9, 27 - Math.max(0, -step), 2, 3, base);
-        p.rect(6, 29 - Math.max(0, step), 2, 1, dark);
-        p.rect(9, 29 - Math.max(0, -step), 2, 1, dark);
+      for (const [x, lift] of [[6, s > 0 ? 1 : 0], [8, s < 0 ? 1 : 0]]) {
+        const foot = 29 - lift;
+        p.rect(x, foot - 2, 2, 3, x === 6 ? c.base : shade(c.base, 0.85));
+        p.rect(x, foot - 2, 2, 1, plate ? c.light : c.trim);
+        p.rect(x, foot, 2, 1, c.dark);
       }
       break;
   }
-  p.outline(shade(dark, 0.55));
+}
+
+/** Facing right; facing left is this, mirrored. */
+function armorSide(p: Painter, set: number, part: number, frame: number, c: ArmorColors): void {
+  const s = stride(frame);
+  const Y = bob(frame);
+  const plate = set >= 1;
+  const near = s > 0 ? LEG_FORWARD : s < 0 ? LEG_BACK : null;
+  const far = s > 0 ? LEG_BACK : s < 0 ? LEG_FORWARD : null;
+  switch (part) {
+    case 0: // Head.
+      helmDome(p, set, Y, c);
+      p.rect(3, 10 + Y, 11, 1, plate ? c.trim : c.dark);
+      if (plate) {
+        // Neck guard behind, cheek guard over the ear, nose guard in front.
+        p.rect(3, 11 + Y, 4, 4, c.base);
+        p.rect(3, 11 + Y, 1, 4, c.dark);
+        p.rect(7, 11 + Y, 2, 4, c.base);
+        p.set(7, 11 + Y, c.light);
+        p.rect(12, 11 + Y, 1, 2, c.base);
+        p.rect(5, 3 + Y, 4, 1, set === 2 ? c.trim : 0xb8323a);
+        p.set(6, 2 + Y, set === 2 ? c.trim : 0xb8323a);
+      } else {
+        p.rect(4, 11 + Y, 2, 2, c.base);
+        p.rect(7, 11 + Y, 1, 2, c.base);
+        p.rect(6, 7 + Y, 6, 1, c.trim);
+      }
+      break;
+    case 1: // Chest.
+      p.rect(6, 18 + Y, 5, 5, c.base);
+      p.rect(6, 18 + Y, 5, 1, c.light);
+      p.rect(6, 19 + Y, 1, 4, c.dark);
+      p.rect(6, 22 + Y, 5, 1, plate ? c.trim : c.dark);
+      if (plate) p.rect(10, 19 + Y, 1, 3, c.light);
+      else p.set(10, 20 + Y, c.trim);
+      // The near arm's bracer swings with it; the pauldron sits on top.
+      p.rect(7 - s, 21 + Y, 2, 2, c.base);
+      p.set(8 - s, 22 + Y, c.dark);
+      p.rect(6, 17 + Y, 4, 3, c.base);
+      p.rect(6, 17 + Y, 4, 1, c.light);
+      p.rect(6, 19 + Y, 4, 1, c.dark);
+      if (set === 2) p.set(8, 18 + Y, c.trim);
+      break;
+    case 2: // Legs.
+      p.rect(6, 24 + Y, 5, 1, c.dark);
+      for (const [lean, col] of [[far, shade(c.base, 0.72)], [near, c.base]] as const) {
+        for (let r = 25; r <= 28; r++) p.rect(7 + (lean ? lean[r - 25] : 0), r, 2, 1, r === 26 && plate ? c.light : col);
+      }
+      break;
+    case 3: // Feet.
+      for (const [lean, col] of [[far, shade(c.base, 0.72)], [near, c.base]] as const) {
+        const o = (r: number) => (lean ? lean[r - 25] : 0);
+        p.rect(7 + o(27), 27, 2, 1, plate ? c.light : c.trim);
+        p.rect(7 + o(28), 28, 2, 1, col);
+        p.rect(7 + o(28), 29, 3, 1, c.dark);
+      }
+      break;
+  }
 }
 
 /** Atlas frame for a creature or projectile key, e.g. `wolf:1`. */
@@ -2619,86 +2705,623 @@ export function dimFrame(key: string): Frame {
   return DIM_PROPS.frames[DIM_PROP_INDEX.get(key)!];
 }
 
-/** Frames of the overworld rift's animation. */
-export const RIFT_FRAMES = 3;
+/** Frames of a rift's tear, and how fast they loop. */
+export const RIFT_FRAMES = TEAR_FRAMES;
+export const RIFT_FPS = 10;
 
-/** Atlas frame `f` of the overworld rift's animation. */
+/** Atlas frame `f` of a rift's tear (48 x 64, standing on its tile). */
 export function riftFrame(f: number): Frame {
-  return f === 0 ? decoFrame(Deco.Rift) : dimFrame(`tear:${f}`);
+  return dimFrame(`tear:${f}`);
 }
 
 // ---------------------------------------------------------------------------
-// Player (four directions, four walk frames)
+// People: the player and NPCs (four directions, four walk frames)
+//
+// The figure stands in its 16 x 32 cell with its feet on row 29: hair from
+// row 5, head rows 7-16, torso 17-23, hips 24, legs 25-28, shoes 29. Frames 0
+// and 2 are the passing pose (frame 0 is also standing still); 1 and 3 are
+// strides, which drop everything above the hips a pixel (the bob) and swing
+// the arms against the legs. People facing left are painted facing right and
+// mirrored. Armour overlays (`paintArmor`) follow the same geometry, and
+// `humanHand` tells the player where the hands are.
+
+const EYE: RGB = 0x2a1a10;
+const BLUSH: RGB = 0xe8706a;
+const GOLD: RGB = 0xe8c050;
+const SHOES: RGB = 0x4a3020;
+const STOCKINGS: RGB = 0x5a4a50;
+const PACK: RGB = 0x9a6a3c;
+const BEDROLL: RGB = 0x5a7a4a;
+const STRAP: RGB = 0x5a3820;
+
+/** +1 or -1 on the stride frames (which leg is forward), else 0. */
+function stride(frame: number): number {
+  return frame === 1 ? 1 : frame === 3 ? -1 : 0;
+}
+
+/** How far everything above the hips drops on this frame. */
+function bob(frame: number): number {
+  return frame & 1;
+}
+
+/** Side view: how far rows 25-28 of a leg lean, striding forward or back. */
+const LEG_FORWARD = [0, 1, 1, 2];
+const LEG_BACK = [0, 0, -1, -1];
+
+/** Where a hand is in a human frame, in pixels from the feet (the sprite's
+ *  anchor): the hand that holds things, or with `off` the other one. Without
+ *  `swing` the arm swing is ignored, so actions keep a steady grip. */
+export function humanHand(dir: number, frame: number, off = false, swing = true): [number, number] {
+  const s = swing ? stride(frame) : 0;
+  const y = -8.5 + bob(frame);
+  if (dir === Dir.Right) return off ? [2, y] : [-s, y];
+  if (dir === Dir.Left) return off ? [-2, y] : [s, y];
+  return off ? [-3.5, y + s] : [3.5, y - s];
+}
 
 function paintHuman(p: Painter, dir: number, frame: number, o: Outfit): void {
-  const { skin, hair, shirt, pants } = o;
-  const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
-  p.shadow(8, 30, 5, 1.5);
-
-  // Legs and shoes.
-  if (dir === Dir.Left || dir === Dir.Right) {
-    p.rect(7 + step, 25, 2, 4, pants);
-    p.rect(7 - step, 25, 2, 4, shade(pants, 0.8));
-    p.rect(7 + step, 29, 2, 1, 0x4a3020);
-    p.rect(7 - step, 29, 2, 1, 0x4a3020);
-  } else {
-    p.rect(6, 25, 2, 4 - Math.max(0, step), pants);
-    p.rect(9, 25, 2, 4 - Math.max(0, -step), pants);
-    p.rect(6, 29 - Math.max(0, step), 2, 1, 0x4a3020);
-    p.rect(9, 29 - Math.max(0, -step), 2, 1, 0x4a3020);
-  }
-
-  // Body and arms.
-  p.rect(5, 18, 6, 7, shirt);
-  p.rect(5, 18, 6, 1, shade(shirt, 1.2));
-  if (dir === Dir.Left || dir === Dir.Right) {
-    const ax = dir === Dir.Left ? 8 + step : 7 - step;
-    p.rect(ax, 19, 2, 5, shade(shirt, 0.85));
-    p.rect(ax, 24, 2, 1, skin);
-  } else {
-    p.rect(4, 19 + step, 1, 5, shade(shirt, 0.85));
-    p.rect(11, 19 - step, 1, 5, shade(shirt, 0.85));
-    p.set(4, 24 + step, skin);
-    p.set(11, 24 - step, skin);
-  }
-
-  // Head.
-  p.rect(5, 11, 6, 7, skin);
-  p.rect(5, 10, 6, 2, hair);
-  if (dir === Dir.Up) {
-    p.rect(5, 10, 6, 7, hair);
-    p.rect(4, 11, 1, 5, hair);
-    p.rect(11, 11, 1, 5, hair);
-  } else if (dir === Dir.Down) {
-    p.rect(4, 11, 1, 4, hair);
-    p.rect(11, 11, 1, 4, hair);
-    p.set(6, 14, 0x2a1a10);
-    p.set(9, 14, 0x2a1a10);
-    p.set(7, 16, 0xd99a7a);
-    p.set(8, 16, 0xd99a7a);
-  } else {
-    const back = dir === Dir.Left ? 10 : 5;
-    const eye = dir === Dir.Left ? 6 : 9;
-    p.rect(back, 11, 1, 5, hair);
-    p.rect(dir === Dir.Left ? 9 : 6, 11, 1, 3, hair);
-    p.set(eye, 14, 0x2a1a10);
-  }
-
-  // Outfit details.
-  if (o.extra === 'apron' && dir !== Dir.Up) p.rect(6, 19, 4, 7, 0xf2ece0);
-  if (o.extra === 'robe') {
-    p.rect(5, 24, 6, 5, shirt);
-    p.rect(4, 8, 8, 2, shade(shirt, 0.8));
-    p.rect(6, 6, 4, 2, shade(shirt, 0.8));
-    p.set(7, 5, 0xe8c050);
-  }
-  if (o.extra === 'mask' && dir !== Dir.Up) p.rect(5, 15, 6, 2, 0x1a1414);
-  if (o.extra === 'ragged') {
-    p.rect(5, 24, 2, 1, shade(shirt, 0.6));
-    p.set(10, 23, shade(shirt, 0.7));
-    p.set(7, 21, shade(shirt, 0.7));
-  }
+  p.shadow(7.5, 30, 5, 1.5);
+  if (dir === Dir.Left || dir === Dir.Right) humanSide(p, frame, o);
+  else humanFront(p, frame, o, dir === Dir.Up);
+  if (dir === Dir.Left) p.mirror();
   p.outline();
+}
+
+/** One leg seen from the side (facing right): rows `top`-28 at `x`, leaning
+ *  by `lean`, then the shoe on row 29 with its toe forward. */
+function sideLeg(p: Painter, x: number, lean: number[] | null, leg: RGB, shoe: RGB, boots: boolean): void {
+  for (let r = 25; r <= 28; r++) p.rect(x + (lean ? lean[r - 25] : 0), r, 2, 1, boots && r >= 27 ? shoe : leg);
+  p.rect(x + (lean ? lean[3] : 0), 29, 3, 1, shoe);
+  if (boots) p.set(x + (lean ? lean[2] : 0), 27, shade(shoe, 1.3));
+}
+
+/** Facing the viewer, or with `back` facing away. */
+function humanFront(p: Painter, frame: number, o: Outfit, back: boolean): void {
+  const s = stride(frame);
+  const Y = bob(frame);
+  const shoe = o.shoes ?? SHOES;
+  const shirtLt = shade(o.shirt, 1.15);
+  const shirtDk = shade(o.shirt, 0.8);
+  const sleeve = shade(o.shirt, 0.86);
+
+  // Behind the body: a big pack's frame and bedroll, long hair, a cloak's hood.
+  if (o.pack === 'big' && !back) {
+    p.rect(2, 11 + Y, 12, 13, shade(PACK, 0.8));
+    p.rect(1, 9 + Y, 14, 3, BEDROLL);
+    p.rect(1, 9 + Y, 14, 1, shade(BEDROLL, 1.25));
+    p.rect(1, 11 + Y, 14, 1, shade(BEDROLL, 0.75));
+  }
+  if (!back && o.hairStyle === 'long') {
+    p.rect(3, 12 + Y, 10, 8, shade(o.hair, 0.72));
+    p.rect(2, 14 + Y, 12, 5, shade(o.hair, 0.72));
+  }
+  if (!back && o.cloak) p.rect(3, 14 + Y, 10, 4, shade(o.cloak, 0.7));
+
+  // Legs: the lifted one is a pixel shorter.
+  const legs = o.skirt ? STOCKINGS : o.pants;
+  for (const [x, lift] of [[6, s > 0 ? 1 : 0], [8, s < 0 ? 1 : 0]]) {
+    const foot = 29 - lift;
+    p.rect(x, 25, 2, foot - 25, x === 6 ? legs : shade(legs, 0.82));
+    if (o.boots) {
+      p.rect(x, foot - 2, 2, 3, x === 6 ? shoe : shade(shoe, 0.85));
+      p.rect(x, foot - 2, 2, 1, shade(shoe, 1.3));
+    } else {
+      p.rect(x, foot, 2, 1, shoe);
+    }
+  }
+
+  // Hips, torso and arms; from here everything bobs.
+  if (!o.skirt) p.rect(5, 24 + Y, 6, 1, o.pants);
+  p.rect(5, 17 + Y, 6, 7, o.shirt);
+  p.rect(5, 17 + Y, 6, 1, shirtLt);
+  p.rect(10, 18 + Y, 1, 6, shirtDk);
+  // The arms swing against the legs: one hangs a pixel lower, one higher.
+  const arms: Array<[number, number]> = [[4, s], [11, -s]];
+  for (const [x, a] of arms) {
+    p.rect(x, 17 + Y, 1, 6 + a, x === 4 ? sleeve : shade(sleeve, 0.88));
+    p.set(x, 23 + Y + a, o.skin);
+  }
+
+  // Clothes.
+  if (o.skirt) {
+    p.rect(5, 22 + Y, 6, 2, o.pants);
+    p.rect(4, 24 + Y, 8, 3, o.pants);
+    p.rect(10, 22 + Y, 2, 4, shade(o.pants, 0.82));
+    p.rect(4, 26 + Y, 8, 1, shade(o.pants, 0.72));
+  }
+  if (o.coat) {
+    p.rect(4, 23 + Y, 8, 4, o.shirt);
+    p.rect(10, 23 + Y, 2, 4, shirtDk);
+    p.rect(4, 26 + Y, 8, 1, shirtDk);
+    if (!back) {
+      p.rect(7, 23 + Y, 2, 4, shade(o.shirt, 0.6));
+      p.rect(6, 17 + Y, 1, 4, shirtLt);
+      p.rect(9, 17 + Y, 1, 4, shirtLt);
+    } else {
+      p.rect(7, 24 + Y, 1, 3, shade(o.shirt, 0.6));
+    }
+  }
+  if (o.vest) {
+    if (back) p.rect(5, 17 + Y, 6, 6, o.vest);
+    else {
+      p.rect(5, 17 + Y, 2, 6, o.vest);
+      p.rect(9, 17 + Y, 2, 6, shade(o.vest, 0.85));
+      p.set(6, 20 + Y, shade(o.vest, 0.7));
+    }
+  }
+  if (o.belt) {
+    p.rect(5, 22 + Y, 6, 1, o.belt);
+    if (!back) p.rect(7, 22 + Y, 2, 1, GOLD);
+  }
+  if (o.apron) {
+    const a = o.apron;
+    if (!back) {
+      p.set(6, 17 + Y, a);
+      p.set(9, 17 + Y, a);
+      p.rect(6, 18 + Y, 4, 3, a);
+      p.rect(5, 21 + Y, 6, 5, a);
+      p.rect(10, 21 + Y, 1, 5, shade(a, 0.86));
+      p.rect(5, 25 + Y, 6, 1, shade(a, 0.86));
+      p.rect(7, 23 + Y, 2, 1, shade(a, 0.78));
+    } else {
+      p.rect(5, 21 + Y, 6, 1, a);
+      p.set(7, 22 + Y, a);
+      p.set(8, 22 + Y, a);
+      p.set(7 + (frame & 1), 23 + Y, a);
+    }
+  }
+  if (o.cloak) {
+    const c = o.cloak;
+    const cd = shade(c, 0.8);
+    if (back) {
+      p.rect(3, 16 + Y, 10, 11, c);
+      p.rect(11, 16 + Y, 2, 11, cd);
+      p.rect(5, 19 + Y, 2, 2, shade(c, 1.18));
+      p.rect(9, 23 + Y, 2, 2, shade(c, 0.7));
+      p.rect(4, 15 + Y, 8, 3, cd);
+      for (let x = 3; x <= 12; x++) if ((x + frame) % 2) p.set(x, 27 + Y, c);
+    } else {
+      p.rect(3, 16 + Y, 3, 11, c);
+      p.rect(10, 16 + Y, 3, 11, cd);
+      p.rect(4, 20 + Y, 1, 2, shade(c, 1.18));
+      p.set(11, 24 + Y, shade(c, 0.65));
+      for (const x of [3, 5, 10, 12]) if ((x + frame) % 2) p.set(x, 27 + Y, x < 8 ? c : cd);
+      // Hands clutching the cloak closed.
+      p.set(5, 22 + Y + s, o.skin);
+      p.set(10, 22 + Y - s, o.skin);
+    }
+  }
+  if (o.pack) {
+    const big = o.pack === 'big';
+    if (back) {
+      const [x0, y0, w, h] = big ? [2, 12, 12, 13] : [5, 17, 6, 6];
+      p.rect(x0, y0 + Y, w, h, PACK);
+      p.rect(x0 + w - 2, y0 + Y, 2, h, shade(PACK, 0.8));
+      p.rect(x0, y0 + Y, w, big ? 3 : 2, shade(PACK, 0.72));
+      p.rect(x0 + (w >> 1) - 1, y0 + Y + (big ? 3 : 2), 2, 1, GOLD);
+      if (big) {
+        p.rect(3, 19 + Y, 3, 4, shade(PACK, 1.15));
+        p.rect(10, 19 + Y, 3, 4, shade(PACK, 0.9));
+        p.rect(2, 9 + Y, 12, 3, BEDROLL);
+        p.rect(2, 9 + Y, 12, 1, shade(BEDROLL, 1.25));
+        p.rect(4, 9 + Y, 1, 3, STRAP);
+        p.rect(11, 9 + Y, 1, 3, STRAP);
+      }
+    } else {
+      for (const x of big ? [5, 10] : [6, 9]) p.rect(x, 17 + Y, 1, 5, STRAP);
+    }
+  }
+  if (o.scarf) {
+    const c = o.scarf;
+    const cd = shade(c, 0.75);
+    p.rect(4, 17 + Y, 8, 1, c);
+    p.rect(5, 16 + Y, 6, 1, c);
+    if (back) {
+      // The tail flutters behind.
+      p.rect(6, 18 + Y, 2, 2, cd);
+      p.set(6 + Math.max(0, s), 20 + Y, cd);
+    } else {
+      p.rect(9, 18 + Y, 1, 2, cd);
+      p.set(10, 19 + Y, cd);
+      p.rect(4, 17 + Y, 8, 1, c);
+      p.rect(5, 17 + Y, 6, 1, shade(c, 0.88));
+    }
+  }
+
+  headFront(p, o, back, Y);
+}
+
+function headFront(p: Painter, o: Outfit, back: boolean, Y: number): void {
+  const { skin, hair } = o;
+  const skinDk = shade(skin, 0.84);
+  const hl = shade(hair, 1.32);
+  const hd = shade(hair, 0.72);
+  const style = o.hairStyle;
+  // A round head: rows 7-16, ten wide.
+  p.rect(4, 7 + Y, 8, 10, skin);
+  p.rect(3, 8 + Y, 10, 8, skin);
+  p.rect(12, 10 + Y, 1, 5, skinDk);
+  p.rect(5, 16 + Y, 6, 1, skinDk);
+
+  if (back) {
+    // The back of the head is all hair, but for a bald crown.
+    if (style === 'bald') {
+      p.rect(3, 11 + Y, 10, 3, hair);
+      p.rect(3, 13 + Y, 10, 1, shade(hair, 0.82));
+      p.rect(5, 8 + Y, 2, 1, shade(skin, 1.12));
+    } else {
+      const bottom = style === 'long' ? 19 : style === 'curly' ? 15 : 14;
+      p.rect(4, 6 + Y, 8, 1, hair);
+      p.rect(3, 7 + Y, 10, bottom - 6, hair);
+      if (style === 'long') p.rect(2, 13 + Y, 12, 6, hair);
+      p.rect(11, 8 + Y, 2, bottom - 7, hd);
+      p.rect(5, 7 + Y, 3, 1, hl);
+      p.set(4, 8 + Y, hl);
+      p.rect(7, 9 + Y, 1, 4, shade(hair, 0.86));
+      if (style === 'curly') {
+        p.rect(2, 6 + Y, 12, 8, hair);
+        for (let k = 0; k < 9; k++) p.set(3 + ((k * 5) % 10), 7 + Y + ((k * 3) % 7), hl);
+      }
+      if (style === 'ponytail') {
+        p.rect(7, 13 + Y, 2, 6, hair);
+        p.rect(7, 13 + Y, 2, 1, 0xd84a5a);
+        p.set(8, 17 + Y, hd);
+      }
+      if (style === 'bun') {
+        p.rect(6, 3 + Y, 4, 3, hair);
+        p.rect(7, 3 + Y, 2, 1, hl);
+      }
+      if (style === 'spiky' || style === 'messy') for (const x of [4, 7, 10]) p.set(x, 5 + Y, hair);
+      // Ears.
+      p.set(3, 12 + Y, skin);
+      p.set(12, 12 + Y, skinDk);
+    }
+  } else {
+    // Face: eyes, cheeks, mouth.
+    p.rect(6, 12 + Y, 1, 2, EYE);
+    p.rect(9, 12 + Y, 1, 2, EYE);
+    p.set(6, 12 + Y, 0x4a3428);
+    p.set(9, 12 + Y, 0x4a3428);
+    p.set(5, 14 + Y, BLUSH, 110);
+    p.set(10, 14 + Y, BLUSH, 110);
+    if (o.freckles) {
+      p.set(5, 13 + Y, shade(skin, 0.78));
+      p.set(10, 13 + Y, shade(skin, 0.78));
+      p.set(4, 14 + Y, shade(skin, 0.78));
+    }
+    hairFront(p, o, Y, hl, hd);
+    if (o.beard === 'full') {
+      p.rect(4, 14 + Y, 8, 3, hair);
+      p.rect(5, 17 + Y, 6, 1, hair);
+      p.rect(6, 18 + Y, 4, 1, hd);
+      p.rect(10, 14 + Y, 2, 3, hd);
+      p.rect(7, 15 + Y, 2, 1, shade(skin, 0.6));
+      p.set(3, 13 + Y, hair);
+      p.set(12, 13 + Y, hd);
+    } else if (o.beard === 'moustache') {
+      p.rect(6, 14 + Y, 4, 1, hair);
+      p.set(5, 15 + Y, hair);
+      p.set(10, 15 + Y, hair);
+    }
+  }
+  if (o.mask && !back) {
+    p.rect(3, 14 + Y, 10, 3, o.mask);
+    p.rect(4, 14 + Y, 8, 1, shade(o.mask, 1.4));
+  }
+  hat(p, o, Y, back, false);
+}
+
+function hairFront(p: Painter, o: Outfit, Y: number, hl: RGB, hd: RGB): void {
+  const { hair, skin } = o;
+  const style = o.hairStyle;
+  if (style === 'bald') {
+    p.set(5, 8 + Y, shade(skin, 1.12));
+    p.set(6, 8 + Y, shade(skin, 1.12));
+    p.rect(3, 10 + Y, 1, 4, hair);
+    p.rect(12, 10 + Y, 1, 4, hd);
+    // Bushy brows.
+    p.rect(5, 11 + Y, 2, 1, hair);
+    p.rect(9, 11 + Y, 2, 1, hair);
+    return;
+  }
+  // The crown, with a highlight on the top left.
+  p.rect(4, 6 + Y, 8, 1, hair);
+  p.rect(3, 7 + Y, 10, 3, hair);
+  p.rect(11, 8 + Y, 2, 2, hd);
+  p.rect(5, 7 + Y, 3, 1, hl);
+  p.set(4, 8 + Y, hl);
+  // Sideburns.
+  p.rect(3, 10 + Y, 1, 3, hair);
+  p.rect(12, 10 + Y, 1, 3, hd);
+  switch (style) {
+    case 'spiky':
+      for (const x of [4, 7, 10]) p.set(x, 5 + Y, hair);
+      p.set(7, 4 + Y, hair);
+      p.set(5, 6 + Y, hl);
+      for (const x of [4, 5, 7, 9, 10, 11]) p.set(x, 10 + Y, hair);
+      p.set(4, 11 + Y, hair);
+      p.set(11, 11 + Y, hd);
+      p.set(8, 6 + Y, hl);
+      break;
+    case 'short':
+      p.rect(4, 10 + Y, 3, 1, hair);
+      p.set(11, 10 + Y, hd);
+      p.set(7, 9 + Y, hl);
+      break;
+    case 'long':
+      p.rect(4, 10 + Y, 2, 1, hair);
+      p.rect(10, 10 + Y, 2, 1, hd);
+      p.rect(3, 10 + Y, 1, 9, hair);
+      p.rect(12, 10 + Y, 1, 9, hd);
+      p.rect(2, 12 + Y, 1, 7, hair);
+      p.rect(13, 12 + Y, 1, 7, hd);
+      p.set(7, 6 + Y, hd);
+      p.set(8, 6 + Y, hd);
+      p.set(3, 14 + Y, hl);
+      break;
+    case 'bun':
+      p.rect(6, 3 + Y, 4, 3, hair);
+      p.rect(7, 3 + Y, 2, 1, hl);
+      p.set(9, 5 + Y, hd);
+      p.set(4, 10 + Y, hair);
+      p.set(11, 10 + Y, hd);
+      break;
+    case 'curly':
+      p.rect(3, 5 + Y, 10, 2, hair);
+      p.rect(2, 6 + Y, 12, 6, hair);
+      p.rect(12, 7 + Y, 2, 5, hd);
+      for (const x of [4, 6, 9, 11]) p.set(x, 10 + Y, hair);
+      for (const [x, y] of [[4, 6], [7, 5], [3, 9], [6, 8], [9, 7], [5, 11]]) p.set(x, y + Y, hl);
+      break;
+    case 'ponytail':
+      p.rect(4, 10 + Y, 2, 1, hair);
+      p.rect(10, 10 + Y, 2, 1, hd);
+      // Tied at the side, falling over the shoulder.
+      p.rect(13, 9 + Y, 1, 7, hair);
+      p.set(13, 9 + Y, 0xd84a5a);
+      p.set(13, 15 + Y, hd);
+      p.set(14, 12 + Y, hd);
+      break;
+    case 'messy':
+      for (const x of [4, 8, 11]) p.set(x, 5 + Y, hair);
+      p.set(13, 8 + Y, hair);
+      for (const x of [4, 5, 6, 8, 10, 11]) p.set(x, 10 + Y, hair);
+      p.set(5, 11 + Y, hair);
+      p.set(9, 9 + Y, hl);
+      break;
+  }
+}
+
+/** Hats and hoods, front or back (`side` false) or facing right. */
+function hat(p: Painter, o: Outfit, Y: number, back: boolean, side: boolean): void {
+  if (!o.hat) return;
+  const c = o.hatColor ?? 0x8a5a34;
+  const lt = shade(c, 1.18);
+  const dk = shade(c, 0.72);
+  if (o.hat === 'hood') {
+    // Over the head and shoulders, open around the face.
+    for (let y = 5; y <= 17; y++) {
+      for (let x = 2; x <= 12; x++) {
+        const edge = (y === 5 && (x < 5 || x > 10)) || (y === 6 && (x < 4 || x > 11)) || (y === 17 && (x < 4 || x > 11));
+        if (edge) continue;
+        if (x === 2 && !(side && y >= 9 && y <= 11)) continue;
+        if (side && x > 11) continue;
+        const open = side ? x >= 9 && y >= 10 && y <= 16 : !back && x >= 5 && x <= 10 && y >= 10 && y <= 16;
+        if (open) continue;
+        p.set(x, y + Y, (side ? x <= 4 : x >= 11) ? dk : y <= 7 && x <= 7 ? lt : c);
+      }
+    }
+    if (back) p.rect(7, 8 + Y, 1, 8, dk);
+    if (!side && !back) p.rect(5, 10 + Y, 6, 1, shade(c, 0.5));
+    if (side) p.rect(9, 10 + Y, 3, 1, shade(c, 0.5));
+    return;
+  }
+  const wide = o.hat === 'wide';
+  const band = wide ? GOLD : 0xc84a3a;
+  const top = wide ? 2 : 3;
+  p.rect(6, top + Y, 4, 1, c);
+  p.rect(5, top + 1 + Y, 6, 7 - top - 1, c);
+  p.rect(6, top + 1 + Y, 2, 1, lt);
+  p.rect(9, top + 1 + Y, 2, 7 - top - 1, dk);
+  p.rect(5, 7 + Y, 6, 1, band);
+  if (side) {
+    p.rect(2, 8 + Y, 13, 1, lt);
+    p.rect(3, 9 + Y, 11, 1, dk);
+  } else {
+    p.rect(1, 8 + Y, 14, 1, lt);
+    p.rect(2, 9 + Y, 12, 1, dk);
+  }
+  if (wide) {
+    // A feather in the band.
+    const fx = side ? 4 : 11;
+    p.rect(fx, 2 + Y, 1, 5, 0xd04a3a);
+    p.set(fx + (side ? -1 : 1), 2 + Y, 0xf07a5a);
+  }
+}
+
+/** Facing right; facing left is this, mirrored. */
+function humanSide(p: Painter, frame: number, o: Outfit): void {
+  const s = stride(frame);
+  const Y = bob(frame);
+  const shoe = o.shoes ?? SHOES;
+  const shirtDk = shade(o.shirt, 0.8);
+  const sleeve = shade(o.shirt, 0.86);
+
+  // Behind the body: the pack, long hair and a ponytail come with the head.
+  if (o.pack === 'big') {
+    p.rect(1, 11 + Y, 5, 14, PACK);
+    p.rect(1, 11 + Y, 5, 2, shade(PACK, 0.72));
+    p.rect(1, 18 + Y, 2, 4, shade(PACK, 1.15));
+    p.rect(5, 11 + Y, 1, 14, shade(PACK, 0.8));
+    p.rect(0, 8 + Y, 7, 3, BEDROLL);
+    p.rect(0, 8 + Y, 7, 1, shade(BEDROLL, 1.25));
+    p.rect(2, 8 + Y, 1, 3, STRAP);
+  } else if (o.pack === 'small') {
+    p.rect(3, 17 + Y, 3, 6, PACK);
+    p.rect(3, 17 + Y, 3, 2, shade(PACK, 0.72));
+    p.set(3, 20 + Y, shade(PACK, 1.15));
+  }
+  if (o.cloak) p.rect(3, 15 + Y, 6, 12, shade(o.cloak, 0.8));
+
+  // Legs: the far one darker, behind.
+  const legs = o.skirt ? STOCKINGS : o.pants;
+  const near = s > 0 ? LEG_FORWARD : s < 0 ? LEG_BACK : null;
+  const far = s > 0 ? LEG_BACK : s < 0 ? LEG_FORWARD : null;
+  sideLeg(p, 7, far, shade(legs, 0.72), shade(shoe, 0.75), !!o.boots);
+  sideLeg(p, 7, near, legs, shoe, !!o.boots);
+
+  // Hips and torso.
+  if (!o.skirt) p.rect(6, 24 + Y, 5, 1, o.pants);
+  p.rect(6, 17 + Y, 5, 7, o.shirt);
+  p.rect(6, 17 + Y, 5, 1, shade(o.shirt, 1.15));
+  p.rect(6, 18 + Y, 1, 6, shirtDk);
+  if (o.skirt) {
+    p.rect(6, 22 + Y, 5, 2, o.pants);
+    p.rect(5, 24 + Y, 7, 3, o.pants);
+    p.rect(5, 24 + Y, 2, 3, shade(o.pants, 0.82));
+    p.rect(5, 26 + Y, 7, 1, shade(o.pants, 0.72));
+  }
+  if (o.coat) {
+    p.rect(5, 23 + Y, 6, 4, o.shirt);
+    p.rect(5, 23 + Y, 2, 4, shirtDk);
+    p.rect(5, 26 + Y, 6, 1, shirtDk);
+    p.rect(10, 17 + Y, 1, 6, shade(o.shirt, 1.15));
+  }
+  if (o.vest) p.rect(6, 17 + Y, 4, 6, o.vest);
+  if (o.belt) {
+    p.rect(6, 22 + Y, 5, 1, o.belt);
+    p.set(10, 22 + Y, GOLD);
+  }
+  if (o.apron) {
+    p.rect(10, 18 + Y, 1, 3, o.apron);
+    p.rect(10, 21 + Y, 2, 5, o.apron);
+    p.rect(10, 25 + Y, 2, 1, shade(o.apron, 0.86));
+    p.set(6, 21 + Y, o.apron);
+  }
+  if (o.pack) p.rect(7, 17 + Y, 1, 5, STRAP);
+
+  // The near arm swings against the near leg.
+  const sw = -s;
+  p.rect(7, 17 + Y, 2, 4, sleeve);
+  p.rect(7 + sw, 21 + Y, 2, 2, sleeve);
+  p.rect(7 + sw, 23 + Y, 2, 1, o.skin);
+  p.set(8 + sw, 23 + Y, shade(o.skin, 0.85));
+
+  if (o.cloak) {
+    const c = o.cloak;
+    p.rect(4, 16 + Y, 5, 11, c);
+    p.rect(4, 16 + Y, 1, 11, shade(c, 0.8));
+    p.rect(6, 19 + Y, 2, 2, shade(c, 1.18));
+    for (let x = 4; x <= 8; x++) if ((x + frame) % 2) p.set(x, 27 + Y, c);
+    p.rect(4, 15 + Y, 4, 2, shade(c, 0.7));
+    p.set(8 + sw, 23 + Y, o.skin);
+  }
+  if (o.scarf) {
+    const c = o.scarf;
+    p.rect(6, 16 + Y, 6, 2, c);
+    p.rect(6, 17 + Y, 6, 1, shade(c, 0.85));
+    // The tail streams behind, flapping as they walk.
+    p.rect(4, 17 + Y, 2, 1, shade(c, 0.75));
+    p.set(3, 18 + Y - (frame & 1), shade(c, 0.75));
+    p.set(4, 18 + Y, shade(c, 0.75));
+  }
+
+  headSide(p, o, Y);
+}
+
+function headSide(p: Painter, o: Outfit, Y: number): void {
+  const { skin, hair } = o;
+  const skinDk = shade(skin, 0.84);
+  const hl = shade(hair, 1.32);
+  const hd = shade(hair, 0.72);
+  const style = o.hairStyle;
+  // Hair hanging down the back goes behind the head.
+  if (style === 'long') {
+    p.rect(3, 10 + Y, 5, 10, hd);
+    p.rect(3, 10 + Y, 1, 9, hair);
+  }
+  if (style === 'ponytail') {
+    p.rect(2, 9 + Y, 2, 7, hair);
+    p.set(2, 15 + Y, hd);
+    p.set(4, 9 + Y, 0xd84a5a);
+  }
+  // Head: rows 7-16, nine wide, the face to the right.
+  p.rect(5, 7 + Y, 7, 10, skin);
+  p.rect(4, 8 + Y, 9, 8, skin);
+  p.rect(5, 16 + Y, 6, 1, skinDk);
+  p.rect(10, 12 + Y, 1, 2, EYE);
+  p.set(10, 12 + Y, 0x4a3428);
+  p.set(11, 14 + Y, BLUSH, 110);
+  if (o.freckles) p.set(10, 14 + Y, shade(skin, 0.78));
+
+  if (style === 'bald') {
+    p.rect(4, 10 + Y, 3, 4, hair);
+    p.set(7, 8 + Y, shade(skin, 1.12));
+    p.rect(9, 11 + Y, 3, 1, hair);
+  } else {
+    p.rect(5, 6 + Y, 6, 1, hair);
+    p.rect(4, 7 + Y, 8, 3, hair);
+    p.rect(4, 10 + Y, o.hat ? 2 : 3, 4, hair);
+    p.set(12, 9 + Y, hair);
+    p.rect(4, 10 + Y, 1, 4, hd);
+    p.rect(6, 7 + Y, 3, 1, hl);
+    p.set(5, 8 + Y, hl);
+    switch (style) {
+      case 'spiky':
+        for (const x of [5, 8, 11]) p.set(x, 5 + Y, hair);
+        p.set(3, 8 + Y, hair);
+        p.set(3, 11 + Y, hd);
+        p.rect(11, 10 + Y, 2, 1, hair);
+        p.set(9, 10 + Y, hair);
+        break;
+      case 'short':
+        p.rect(10, 10 + Y, 2, 1, hair);
+        break;
+      case 'long':
+        p.rect(4, 10 + Y, 3, 8, hair);
+        p.rect(11, 10 + Y, 1, 1, hair);
+        break;
+      case 'bun':
+        p.rect(3, 4 + Y, 3, 3, hair);
+        p.set(4, 4 + Y, hl);
+        p.set(11, 10 + Y, hair);
+        break;
+      case 'curly':
+        p.rect(4, 5 + Y, 8, 2, hair);
+        p.rect(3, 6 + Y, 9, 6, hair);
+        p.rect(3, 12 + Y, 3, 2, hair);
+        for (const [x, y] of [[5, 6], [8, 5], [4, 9], [7, 8], [10, 7]]) p.set(x, y + Y, hl);
+        p.set(11, 10 + Y, hair);
+        break;
+      case 'ponytail':
+        p.rect(10, 10 + Y, 2, 1, hair);
+        break;
+      case 'messy':
+        for (const x of [5, 9]) p.set(x, 5 + Y, hair);
+        p.set(3, 7 + Y, hair);
+        p.set(3, 12 + Y, hair);
+        p.rect(10, 10 + Y, 2, 1, hair);
+        p.set(12, 11 + Y, hair);
+        break;
+    }
+    // The ear.
+    p.rect(7, 12 + Y, 1, 2, skinDk);
+  }
+  if (o.beard === 'full') {
+    p.rect(9, 14 + Y, 4, 1, hair);
+    p.rect(8, 15 + Y, 5, 1, hair);
+    p.rect(8, 16 + Y, 4, 1, hd);
+    p.rect(9, 17 + Y, 2, 1, hd);
+    p.rect(7, 12 + Y, 1, 3, hd);
+  } else if (o.beard === 'moustache') {
+    p.rect(11, 14 + Y, 2, 1, hair);
+    p.set(11, 15 + Y, hair);
+  }
+  if (o.mask) {
+    p.rect(8, 14 + Y, 5, 3, o.mask);
+    p.rect(9, 14 + Y, 4, 1, shade(o.mask, 1.4));
+  }
+  hat(p, o, Y, false, true);
 }
 
 // ---------------------------------------------------------------------------
