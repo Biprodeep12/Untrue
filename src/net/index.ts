@@ -106,6 +106,7 @@ export class Net {
    *  to show (XXXX-XXXX). Joins wait for `session.on.joinRequest`. `capacity`:
    *  most players, the host included (5 by default). */
   async hostWorld(capacity?: number): Promise<{ session: Session; code: string; stop: () => void }> {
+    await this.identity.claim();
     const config = this.config(Mode.Overworld, '', new Uint8Array(32));
     const session = Session.host(capacity ? { ...config, capacity: Math.min(MAX_MEMBERS, capacity) } : config);
     const code = newCode();
@@ -120,6 +121,7 @@ export class Net {
   /** Joins a friend's overworld by code. While the host's link is down the
    *  session tries to rejoin by the same code, within the reconnect window. */
   async joinWorld(typed: string): Promise<Session> {
+    await this.identity.claim();
     const code = normalizeCode(typed);
     if (!code) throw new JoinError('bad-code', 'That is not a code');
     const session = Session.guest(this.config(Mode.Overworld, '', new Uint8Array(32)));
@@ -147,7 +149,8 @@ export class Net {
   }
 
   /** Open instances of a dimension, best first. */
-  findInstances(dimension: string, timeoutMs?: number): Promise<BoardEntry[]> {
+  async findInstances(dimension: string, timeoutMs?: number): Promise<BoardEntry[]> {
+    await this.identity.claim();
     return this.board.query(dimension, this.options.gameVersion, (host) => this.identity.isBlocked(host) || host === this.identity.keys.pubkey, timeoutMs);
   }
 
@@ -156,6 +159,7 @@ export class Net {
    *  `timeoutMs` bounds the whole attempt. If this player later becomes its
    *  host, it takes over listening for the instance's code (and its board note). */
   async joinInstance(entry: BoardEntry, mapHash: Uint8Array, isPublic = true, timeoutMs?: number): Promise<Session> {
+    await this.identity.claim();
     const session = Session.guest(this.config(Mode.Dimension, entry.dimension, mapHash));
     const limits = timeoutMs ? { timeoutMs, connectMs: timeoutMs } : {};
     const joining = joinByCode(session, this.linker, this.bus, entry.code, this.who, { ...this.options, ...limits, expectHost: entry.host || undefined });
@@ -185,6 +189,7 @@ export class Net {
    *  while this player hosts them; whoever takes over keeps them listed under
    *  the same code. Set `runInfo` to report seals for the board. */
   async hostInstance(dimension: string, mapHash: Uint8Array, isPublic = true): Promise<{ session: Session; code: string; stop: () => void }> {
+    await this.identity.claim();
     const session = Session.host(this.config(Mode.Dimension, dimension, mapHash));
     const code = newCode();
     const stop = this.keepListed(session, code, isPublic);

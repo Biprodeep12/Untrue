@@ -136,4 +136,46 @@ describe('identity', () => {
     expect(new Identity(null).keys.pubkey).toMatch(/^[0-9a-f]{64}$/);
     expect(cleanName('x'.repeat(40)).length).toBe(24);
   });
+
+  it('gives each tab of one browser its own key, kept across a reload of that tab', async () => {
+    const shared = new Map<string, string>();
+    const local: KeyValueStore = { getItem: (k) => shared.get(k) ?? null, setItem: (k, v) => void shared.set(k, v) };
+    const tabStore = () => {
+      const data = new Map<string, string>();
+      return { data, store: { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) } as KeyValueStore };
+    };
+    // One browser's locks: held until released (a tab closing).
+    const held = new Set<string>();
+    const lockManager = {
+      request: async (name: string, _o: { ifAvailable: boolean }, cb: (lock: unknown) => unknown) => {
+        if (held.has(name)) return cb(null);
+        held.add(name);
+        return cb({ name });
+      },
+    };
+    const tab1 = tabStore();
+    const tab2 = tabStore();
+    const first = new Identity(local, tab1.store, lockManager);
+    await first.claim();
+    const second = new Identity(local, tab2.store, lockManager);
+    await second.claim();
+    // The first tab is the browser's player; the second is someone else, named for its own key.
+    expect(first.keys.pubkey).toBe(new Identity(local, null, null).keys.pubkey);
+    expect(second.keys.pubkey).not.toBe(first.keys.pubkey);
+    expect(second.name).not.toBe(first.name);
+    // The second tab reloads: its old page let go of its lock, and it keeps its key.
+    held.delete('untrue.net.id:' + second.keys.pubkey);
+    const reloaded = new Identity(local, tab2.store, lockManager);
+    await reloaded.claim();
+    expect(reloaded.keys.pubkey).toBe(second.keys.pubkey);
+    // A duplicate of that tab comes with a copy of its storage, but not its lock: a new key.
+    const copy = tabStore();
+    for (const [k, v] of tab2.data) copy.data.set(k, v);
+    const duplicate = new Identity(local, copy.store, lockManager);
+    await duplicate.claim();
+    expect(new Set([first, reloaded, duplicate].map((i) => i.keys.pubkey)).size).toBe(3);
+    // A chosen name is shared by every tab.
+    first.name = 'Ana';
+    expect(new Identity(local, tab1.store, lockManager).name).toBe('Ana');
+  });
 });
