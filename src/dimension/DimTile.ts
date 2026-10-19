@@ -1,39 +1,36 @@
-// Tiles of the outer dimensions behind the rifts. Kept apart from the
-// overworld's `Tile`, so dimensions never touch the world's ids or saves.
+// Site tiles of an outer dimension: the parts of its challenges that change as
+// they are played (gates, crumbling and glitching slabs, plates, mural stones,
+// a tide hall's flooding floor and valves, the portal and the vault's chest). They lie over the dimension's land, which
+// is ordinary world tiles (`Tile`); everywhere else the land alone decides.
 
 export const DimTile = {
-  /** Nothing: walking onto it is a fall. */
-  Void: 0,
-  Floor: 1,
-  Wall: 2,
-  /** Seals shut while a chamber holds the player, or until the one before is done. */
-  Door: 3,
+  /** No site tile: the land decides. */
+  None: 0,
+  /** A site's gate: sealed while its site holds the player, or until the site may be entered. */
+  Gate: 1,
   /** Flickers in and out on a timer. */
-  Glitch: 4,
+  Glitch: 2,
   /** Falls a moment after it is stepped on, then reforms. */
-  Crumble: 5,
+  Crumble: 3,
   /** Pressure plate with a glyph; pressed in the order the mural shows. */
-  Plate: 6,
+  Plate: 4,
   /** A standing stone of the mural, showing one glyph of the order. */
-  Glyph: 7,
-  Pillar: 8,
-  /** Light crystal. */
-  Crystal: 9,
+  Glyph: 5,
   /** The way home; wakes once the boss falls. */
-  Portal: 10,
-  Chest: 11,
-  /** The rift the player came in through. */
-  Rift: 12,
-  /** A safe pad on the hazard path; falls return to the last one touched. */
-  Checkpoint: 13,
-  /** Floor with a rune inlay (decoration). */
-  Rune: 14,
+  Portal: 6,
+  Chest: 7,
+  /** Floor a tide hall's water covers while it stands high enough (its depth
+   *  is in the layout's `phase`); flooded, nothing can walk it. */
+  Flood: 8,
+  /** A sluice valve in the floor: stepped on in turn, it lowers the water a stage. */
+  Valve: 9,
 } as const;
 export type DimTile = (typeof DimTile)[keyof typeof DimTile];
+export const DIM_TILE_COUNT = 10;
 
-/** Blocks the player whatever the run's state (doors depend on it). */
-const SOLID = new Uint8Array(16);
-for (const t of [DimTile.Wall, DimTile.Glyph, DimTile.Pillar, DimTile.Crystal, DimTile.Chest]) SOLID[t] = 1;
+/** Blocks the player whatever the run's state (gates depend on it). */
+const SOLID = new Uint8Array(DIM_TILE_COUNT);
+for (const t of [DimTile.Glyph, DimTile.Chest]) SOLID[t] = 1;
 
 export function isSolidDim(t: number): boolean {
   return SOLID[t] === 1;

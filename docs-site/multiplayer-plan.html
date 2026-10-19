@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiplayer plan · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html" class="current" aria-current="page">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Multiplayer</p>
+    <article><h1 id="multiplayer-plan">Multiplayer plan</h1>
+<p>Playing with others, with <strong>no server of our own</strong>: players&#39; browsers link directly over WebRTC, public Nostr relays carry the few messages needed to find each other, and public STUN servers tell each browser its own address. The overview diagram is <a href="overview-diagram.html">overview-diagram.html</a>; the network itself is <a href="networking.html">networking.md</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Overworld</th>
+<th>Outer dimensions</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Who</td>
+<td>Friends, by invite code on the Drift Beacon</td>
+<td>Anyone: instances are listed on a public board</td>
+</tr>
+<tr>
+<td>Shape</td>
+<td>Star: guests link to the host</td>
+<td>Mesh: everyone links to everyone (8 at most)</td>
+</tr>
+<tr>
+<td>The land</td>
+<td>Streamed by the host (its world is generated, and only the host&#39;s is right)</td>
+<td>A fixed map file everyone already has (hash-checked)</td>
+</tr>
+<tr>
+<td>Host leaves</td>
+<td>The session ends; guests keep their character</td>
+<td>The longest-connected player takes over</td>
+</tr>
+<tr>
+<td>Status</td>
+<td><strong>Built</strong> (<code>src/coop/World*.ts</code>)</td>
+<td><strong>Built</strong> (<code>src/coop</code>, over <code>src/net</code>)</td>
+</tr>
+</tbody></table></div>
+<h2 id="key-decisions">Key decisions<a class="anchor" href="#key-decisions" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Backend</td>
+<td>None. Static hosting only. Relays and STUN are public and not ours; a manual copy-paste code always works without them.</td>
+</tr>
+<tr>
+<td>Transport</td>
+<td>Raw <code>RTCPeerConnection</code>, two pre-negotiated data channels: <code>ctrl</code> (ordered, reliable) and <code>snap</code> (unordered, no retransmits, one packet).</td>
+</tr>
+<tr>
+<td>Signaling</td>
+<td>A join code (XXXX-XXXX, 40 bits) stretched into a public topic and a private key: relays see neither the code nor the offers. BroadcastChannel for tabs of one browser (<code>?net=local</code>).</td>
+</tr>
+<tr>
+<td>NAT</td>
+<td>Public STUN only. No TURN in v1: about 10–20% of pairs cannot link, and the game says so. A TURN service can be added later without changing anything else.</td>
+</tr>
+<tr>
+<td>Authority</td>
+<td>One host decides: creatures, the run, the world. Everyone moves their own player; the host checks what others ask of it (blows, the vault).</td>
+</tr>
+<tr>
+<td>Identity</td>
+<td>A random keypair per browser (<code>localStorage</code>), a chosen name, a block list. No accounts.</td>
+</tr>
+<tr>
+<td>Saves</td>
+<td>Each player saves their own character and story progress; a dimension instance is never saved; an overworld session&#39;s world is the host&#39;s save.</td>
+</tr>
+</tbody></table></div>
+<h2 id="outer-dimensions-built">Outer dimensions (built)<a class="anchor" href="#outer-dimensions-built" aria-label="Link to this section">#</a></h2>
+<p>How it plays and what travels: <a href="dimensions.html#playing-with-others">dimensions.md</a>. In short:</p>
+<ul>
+<li><strong>Entering a public rift</strong> looks on the board for an instance of that dimension with room, joins it, or opens a new one, all while the rift&#39;s passage holds at full cover (9 s at most, then alone). Private trips (the beacon&#39;s switch) never touch the network.</li>
+<li><strong>The host runs the run and every creature.</strong> Each guest gets the creatures near it as delta snapshots (20 Hz), the run&#39;s state when it changes, and the run&#39;s news. Guests&#39; blows are requests the host checks (reach, rate, strength) and applies as theirs; creatures&#39; blows on a guest are events the guest takes through its own armour.</li>
+<li><strong>Rewards by contribution.</strong> Damage to the Warden and its summons, and trials broken (shared among those present), make each player&#39;s share of the vault and of the rift&#39;s experience. A tenth of the score, or a trial broken, attunes a player: the portal closes only their own rift. The Warden returns 20 minutes after it falls.</li>
+<li><strong>Host migration.</strong> The longest-connected player&#39;s mirror becomes the run, from the last state shared; the creatures it drew become real, by the same ids. No new signaling: the mesh&#39;s links already exist.</li>
+<li><strong>Several dimensions, revisited.</strong> Each dimension is its own fixed map and its own instances. A rift opens onto the next dimension the player has not cleared; at a rift the player can retune to any dimension cleared before (to explore, read missed lore stones, or help others).</li>
+<li><strong>Later:</strong> dimension maps can be sent by a server instead of shipping in the bundle (<code>DimensionSource</code>); the instance code does not change, since peers compare the map file&#39;s hash either way.</li>
+</ul>
+<h2 id="overworld-by-invite">Overworld by invite<a class="anchor" href="#overworld-by-invite" aria-label="Link to this section">#</a></h2>
+<p>A friend visits the host&#39;s world. The host opens the Drift Beacon (<strong>B</strong>), presses <strong>Open my world</strong> and reads out the code (XXXX-XXXX); the friend types it into their beacon (<strong>Visit</strong>) and arrives, through the beacon&#39;s jump, beside the host. The host is asked first (&quot;… wants to visit your world&quot;: Let them in / Not now; no answer in 30 s is no). Nothing of it is public: there is no board for worlds.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Visitors</td>
+<td>4 at most (2 when a phone hosts: the host&#39;s machine does the work of everyone&#39;s world)</td>
+</tr>
+<tr>
+<td>Shape</td>
+<td>Star: visitors link to the host, which relays their moves to each other</td>
+</tr>
+<tr>
+<td>Saves</td>
+<td>The host saves its world as always. A visitor saves only their character into their own save (<a href="saves.html#visiting-a-friends-world">saves.md</a>), and comes home to their own world as they left it</td>
+</tr>
+<tr>
+<td>Going home</td>
+<td>The beacon&#39;s <strong>Go home</strong>; the host sending them home (<strong>Send home</strong>) or closing the world; or losing the host (after its 30 s rejoin window). The visitor&#39;s character is saved, and their own world loads with a line saying why</td>
+</tr>
+<tr>
+<td>Dying while visiting</td>
+<td>The visitor wakes beside the host, keeping everything (as dying anywhere in the overworld)</td>
+</tr>
+</tbody></table></div>
+<h3 id="the-land-is-streamed-so-every-chunk-is-the-same">The land is streamed, so every chunk is the same<a class="anchor" href="#the-land-is-streamed-so-every-chunk-is-the-same" aria-label="Link to this section">#</a></h3>
+<p>Generation from the seed is not the same everywhere: biome borders depend on which chunk loaded first, region visits on where each player went, structure placement skips around live objects, and <code>Math.sin</code>/<code>cos</code>/<code>hypot</code> differ in their last bits between browsers. So the host sends what it has, and visitors generate nothing:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>How it reaches a visitor</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Terrain</td>
+<td>The visitor&#39;s <code>NetChunkGenerator</code> (in place of the worker pool) asks the host for each chunk its <code>ChunkManager</code> schedules. The host answers with the chunk&#39;s base tiles and decorations exactly as its workers made them, raw-deflated once per chunk (about 340 bytes a chunk)</td>
+</tr>
+<tr>
+<td>Region visit, biome</td>
+<td>With each chunk: the visitor&#39;s <code>WorldManager</code> is a <strong>replica</strong> (<code>new WorldManager(seed, gen, true)</code>): it never grows biomes, rolls structures or counts region visits, and adopts the host&#39;s (<code>adoptChunk</code>)</td>
+</tr>
+<tr>
+<td>Structures</td>
+<td>Each chunk lists the host&#39;s ids of the objects over it; the visitor asks for any it lacks, and the whole object (its layout, buildings, chests opened, rift closed) comes deflated, before the chunk is composed</td>
+</tr>
+<tr>
+<td>Harvest log</td>
+<td>With each chunk, and again whenever it changes (gathered, grown back)</td>
+</tr>
+<tr>
+<td>Items on the ground</td>
+<td>With each chunk, and as they are put down and taken</td>
+</tr>
+<tr>
+<td>Clock and weather</td>
+<td>Every 5 s, and at once after the host sleeps</td>
+</tr>
+<tr>
+<td>Creatures and enemy shots</td>
+<td>Snapshots near each visitor, 20 a second, as in a dimension</td>
+</tr>
+</tbody></table></div>
+<p>The visitor composes each chunk with the same code as everywhere (base bytes, then the objects stamped over them, then the harvest log), so every chunk is the same, byte for byte (tested, and checked in real browsers by hashing every chunk on both sides). The host keeps each visitor&#39;s view in its own chunk manager (<a href="world-streaming.html#with-friends-visiting">world-streaming.md</a>), so it generates and keeps the land around every player, and a region drifts only once it has left everyone&#39;s area.</p>
+<h3 id="who-decides-what">Who decides what<a class="anchor" href="#who-decides-what" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>What the visitor does</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Moves</td>
+<td>Their own; sent 20 a second, drawn by everyone 100 ms behind</td>
+</tr>
+<tr>
+<td>Gathers (chops, mines, picks)</td>
+<td>Done at once on their side, sent to the host, which checks it is still there and within 4 tiles of them, and applies it (everyone sees it go); if not, it sends the chunk&#39;s true harvest back and the plant comes back</td>
+</tr>
+<tr>
+<td>Opens a chest (outdoors or in a room)</td>
+<td>Asks the host; it opens only if no one has yet. &quot;Someone got to it first&quot; otherwise</td>
+</tr>
+<tr>
+<td>Picks up an item</td>
+<td>Asks the host as they walk over it; it is theirs if still there and within reach</td>
+</tr>
+<tr>
+<td>Drops something, or overflows a full bag</td>
+<td>Asks the host to put it down there (or at the doorstep, if indoors or behind a rift)</td>
+</tr>
+<tr>
+<td>Strikes a creature</td>
+<td>A request the host checks (reach, 10 a second, strength), as in a dimension; a kill&#39;s experience and spoils come back to them</td>
+</tr>
+<tr>
+<td>Is struck</td>
+<td>The host&#39;s creature decides; the blow comes as an event, through the visitor&#39;s own armour</td>
+</tr>
+<tr>
+<td>Closes a rift</td>
+<td>Asks the host to close it in the world</td>
+</tr>
+<tr>
+<td>Sleeps</td>
+<td>Cannot: it is the host&#39;s world (the host&#39;s sleep moves everyone&#39;s clock)</td>
+</tr>
+</tbody></table></div>
+<p>Villagers, quests, trade and the story are each player&#39;s own: a visitor&#39;s villagers walk and talk on their machine only. World events, fires and weather are the host&#39;s.</p>
+<p><strong>Rooms.</strong> A visitor can go into any building: a room is made from its object alone (<code>Interior</code>), so it is the same for everyone. Each player says where they are (outdoors, which room and floor, or behind a rift), and players are drawn only where they are: outdoors, or in the same room on the same floor.</p>
+<p><strong>Rifts with friends.</strong> With friends in the world, a rift trip always opens a shared instance (listed on the public board only if the beacon says public). Whoever goes in tells the others the instance&#39;s code; a friend stepping through a rift into that dimension follows them in, else the trip goes on as usual. While the host is behind a rift, the overworld&#39;s creatures wait with it, so visitors outdoors meet none.</p>
+<h3 id="performance">Performance<a class="anchor" href="#performance" aria-label="Link to this section">#</a></h3>
+<p>Playing alone loads none of it (it is in the lazily loaded multiplayer chunk) and runs none of it: no world listener, no per-player areas, no extra branch that costs anything. With friends: headless Chrome, software rendering, three windows on one machine, average game work per frame (the other two windows running worlds of their own, then visiting): <strong>0.44 ms alone, about 0.8 ms hosting two visitors</strong> (who stand 30–40 tiles away, so the host keeps three areas of land and creatures), and about 0.8 ms on a visitor. Messages are reused buffers; chunks are deflated once and kept per chunk; objects&#39; layouts once per object.</p>
+<h2 id="security">Security<a class="anchor" href="#security" aria-label="Link to this section">#</a></h2>
+<p>A peer can send anything, so (details in <a href="networking.html">networking.md</a>):</p>
+<ul>
+<li><strong>Messages.</strong> Every message is decoded with bounds checks and dropped if malformed; sizes are capped (<code>snap</code> one packet, <code>ctrl</code> 64 KiB, inflated codes 16 KiB); every link has an allowance of messages and bytes, and one that keeps flooding is cut.</li>
+<li><strong>Who is who.</strong> A Hello is signed with the player&#39;s key and bound to the link, so a slot cannot be taken by someone else; the host proves its key on the link too, and its signaling replies are signed, so a stranger on a public code cannot pose as the host or turn guests away; a returning member skips the host&#39;s question only as themselves; kicked keys stay out for the session.</li>
+<li><strong>Who hosts.</strong> A claim to host counts only for the next handover and only from the member who should take over; a member cut off from the rightful successor goes on alone rather than splitting the instance.</li>
+<li><strong>The board.</strong> Notes that claim more room or a longer life than any host could are refused; one note per host, in a random order; join attempts are bounded in time.</li>
+<li><strong>Requests.</strong> The host checks every request: place, reach (from where it believes the guest is: guests move at a player&#39;s speed), rate, strength (no more than the weapon in hand), the vault once, chests and mined tiles really in the guest&#39;s room, rifts closed only by those just back from one, drops capped and given back if refused; gathering gives only once the host says yes. Guests cap what a host may do to them (damage, xp).</li>
+<li><strong>Introductions.</strong> The host relays only the mesh introductions it asked for.</li>
+<li><strong>Joining by link.</strong> A <code>?join=</code> link from elsewhere asks before connecting.</li>
+</ul>
+<p>Names are cleaned of control characters and shown as text, never HTML. Privacy: peers see each other&#39;s IP addresses, relays see board notes and encrypted signaling; private rift trips avoid all of it (see the About tab). What cannot be prevented without a server: a modified client owns its own bag, and a modified host its own world.</p>
+<h2 id="build-order">Build order<a class="anchor" href="#build-order" aria-label="Link to this section">#</a></h2>
+<ol>
+<li><del>Network core (<code>src/net</code>): codec, links, signaling, board, sessions, migration.</del> Done.</li>
+<li><del>Shared dimension instances (<code>src/coop</code>): the beacon, replication, contribution, migration.</del> Done.</li>
+<li><del>Overworld refactors: one view per player in the chunk manager, combat around every player, world change events, replica worlds, a network chunk generator.</del> Done.</li>
+<li><del>Overworld by invite: streaming, the beacon&#39;s code panel, visitors&#39; character saves, rooms, following friends behind a rift.</del> Done.</li>
+<li>Polish: blocking from the beacon, a TURN option, lag compensation for blows, guests&#39; swings seen by others, generating terrain locally behind per-chunk checksums (once biome growth is order-independent and generation uses deterministic math).</li>
+</ol>
+<h2 id="risks">Risks<a class="anchor" href="#risks" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>No TURN:</strong> some pairs never link. The beacon says so instead of spinning, and the trip goes on alone.</li>
+<li><strong>Relays are not ours:</strong> if all six are down, the board and codes do not work; the manual code always does.</li>
+<li><strong>Phones as hosts</strong> of an overworld session will struggle with several guests; a dimension host does far less (no terrain to generate or stream).</li>
+<li><strong>Griefing in public instances:</strong> a player can take part only in their own share; hosts will be able to kick and block (polish).</li>
+</ul>
+</article>
+    <nav class="pager"><a class="prev" href="dimensions.html"><small>Previous</small>Dimensions</a><a class="next" href="networking.html"><small>Next</small>Networking</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#key-decisions">Key decisions</a></li><li class="l2"><a href="#outer-dimensions-built">Outer dimensions (built)</a></li><li class="l2"><a href="#overworld-by-invite">Overworld by invite</a></li><li class="l3"><a href="#the-land-is-streamed-so-every-chunk-is-the-same">The land is streamed, so every chunk is the same</a></li><li class="l3"><a href="#who-decides-what">Who decides what</a></li><li class="l3"><a href="#performance">Performance</a></li><li class="l2"><a href="#security">Security</a></li><li class="l2"><a href="#build-order">Build order</a></li><li class="l2"><a href="#risks">Risks</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

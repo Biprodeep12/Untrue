@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html" class="current" aria-current="page">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html" class="current" aria-current="page">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Engine</p>
     <article><h1 id="architecture">Architecture</h1>
@@ -64,7 +64,7 @@
 </tr>
 <tr>
 <td><code>RiftTrip.ts</code></td>
-<td>One trip into an outer dimension: the run, the enemies it asked for, the map&#39;s fog, and the dimension as a <code>Place</code> and combat <code>Arena</code>.</td>
+<td>One trip into an outer dimension: its land, the run, the enemies it asked for and those roaming, the map&#39;s fog, and the dimension as a <code>Place</code> and combat <code>Arena</code>.</td>
 </tr>
 <tr>
 <td><code>Player.ts</code></td>
@@ -172,7 +172,15 @@
 </tr>
 <tr>
 <td><strong><code>src/dimension/</code></strong></td>
-<td>The outer dimensions behind the rifts, with no rendering: <code>DimTile.ts</code> (their tiles), <code>Dimension.ts</code> (what a dimension is, and the registry), <code>Hollow.ts</code> (The Hollow and its generator), <code>Challenges.ts</code> (the challenge state machines and <code>DimensionRun</code>). See <a href="dimensions.html">dimensions.md</a>.</td>
+<td>The outer dimensions behind the rifts, with no rendering: <code>Dimension.ts</code> (what a dimension is, and the registry), <code>DimensionData.ts</code> (the map&#39;s data format, encoding and checking), <code>DimensionSource.ts</code> (where maps come from, and the cache), <code>DimensionWorld.ts</code> (a dimension&#39;s land on the overworld&#39;s engine), <code>DimTile.ts</code> (site tiles), <code>Hollow.ts</code> (how The Hollow plays), <code>Challenges.ts</code> (the challenge state machines and <code>DimensionRun</code>), <code>Contribution.ts</code> (who did what in a run, and each player&#39;s share), <code>bake/hollowMap.ts</code> (The Hollow&#39;s baker). The baked maps are in <code>public/dimensions/</code>. See <a href="dimensions.html">dimensions.md</a>.</td>
+</tr>
+<tr>
+<td><strong><code>src/net/</code></strong></td>
+<td>Multiplayer with no server of our own: binary messages, WebRTC links, signaling over Nostr relays (or a BroadcastChannel, or copy-paste codes), the board of open instances, sessions with host migration. Engine-agnostic. See <a href="networking.html">networking.md</a>.</td>
+</tr>
+<tr>
+<td><strong><code>src/coop/</code></strong></td>
+<td>Playing a dimension with others, over <code>src/net</code>: <code>Coop</code> (find, join or open an instance), <code>InstanceLink</code> (one player&#39;s part: replication, requests, rewards, host migration), <code>runSync.ts</code> (a run on the wire), <code>interp.ts</code> (smooth motion), <code>ids.ts</code> (what things are called on the wire), <code>localRelay.ts</code> (<code>?net=local</code>). Loaded lazily, with <code>src/net</code>, as one separate file. See <a href="dimensions.html#playing-with-others">dimensions.md</a>.</td>
 </tr>
 <tr>
 <td><strong><code>src/story/</code></strong></td>
@@ -192,11 +200,11 @@
 </tr>
 <tr>
 <td><strong><code>src/rendering/</code></strong></td>
-<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Buildings.ts</code>, <code>InteriorRenderer.ts</code>, <code>DimensionRenderer.ts</code>, <code>GroundItemRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>, <code>RiftGlitch.ts</code> (the world&#39;s glitches near a rift).</td>
+<td><code>Atlas.ts</code>, <code>TileRenderer.ts</code>, <code>EntityRenderer.ts</code>, <code>Buildings.ts</code>, <code>InteriorRenderer.ts</code>, <code>SiteRenderer.ts</code> (what changes on a dimension&#39;s sites), <code>GroundItemRenderer.ts</code>, <code>Lighting.ts</code>, <code>ParticleSystem.ts</code>, <code>Effects.ts</code>, <code>RiftGlitch.ts</code> (the world&#39;s glitches near a rift).</td>
 </tr>
 <tr>
 <td><strong><code>src/ui/</code></strong></td>
-<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code> (tabs: Inventory, Crafting, Skills, Quests, Map (only inside an outer dimension), Settings, About), <code>MapView</code>, <code>DimensionMap</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>SleepOverlay</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>, <code>Hints</code> (first-time tips), <code>Fullscreen</code> (the Fullscreen API), <code>About</code> (privacy, credits, licenses), <code>Playground</code> (the story playground panel).</td>
+<td>HTML UI: <code>Hud</code>, <code>Hotbar</code>, <code>Menu</code> (tabs: Inventory, Crafting, Skills, Quests, Map (only inside an outer dimension), Settings, About), <code>MapView</code>, <code>DimensionMap</code>, <code>PauseMenu</code>, <code>Dialog</code>, <code>Vision</code>, <code>SleepOverlay</code>, <code>DebugOverlay</code>, <code>TouchStick</code>, <code>ItemIcon</code>, <code>Hints</code> (first-time tips), <code>Fullscreen</code> (the Fullscreen API), <code>About</code> (privacy, credits, licenses), <code>Playground</code> (the story playground panel), <code>Beacon</code> (the Drift Beacon&#39;s panel).</td>
 </tr>
 <tr>
 <td><strong><code>src/audio/</code></strong></td>
@@ -223,7 +231,7 @@
 </li>
 <li><code>WorldManager.update(view)</code> with the camera&#39;s view in tiles (indoors and in a dimension, a view around the place&#39;s <code>spot</code> outside, so the world there stays loaded): streaming, biome and object bookkeeping, discovery. <code>ChunkManager</code> draws at most 2 waiting chunks, nearest first.</li>
 <li>The world layer is positioned and scaled for the camera.</li>
-<li>Indoors, the room renders; in a dimension, <code>DimensionRenderer</code> culls and animates, then entities and the dimension&#39;s lighting. Outdoors, <code>TileRenderer.cull()</code> hides chunks outside the camera&#39;s view, rifts animate, the glitches run near an open rift, and buildings and ground items near the screen update.</li>
+<li>Indoors, the room renders; in a dimension, its land streams around the camera and its <code>TileRenderer</code> culls and animates, the <code>SiteRenderer</code> updates the sites in view, then the interaction prompt, entities and the dimension&#39;s lighting. Outdoors, <code>TileRenderer.cull()</code> hides chunks outside the camera&#39;s view, rifts animate, the glitches run near an open rift, and buildings and ground items near the screen update.</li>
 <li><code>updateTarget()</code>: the interaction prompt and target outline.</li>
 <li>Rendering updates: tree fading, <code>EntityRenderer.update</code>, then <code>LivingWorld.render</code> (weather particles, effects, lighting), and the music mood (biome, band, indoors or cave, what is hunting the player).</li>
 <li>Touch stick, hotbar and menu refresh.</li>
@@ -314,7 +322,7 @@
 </tr>
 <tr>
 <td><code>src/save/SaveManager.test.ts</code></td>
-<td>Save round trips and migrating older saves</td>
+<td>Save round trips, migrating older saves, and the Drift (items on the ground, looted chests and cleared lairs forgotten with their region)</td>
 </tr>
 <tr>
 <td><code>src/entities/NPC.test.ts</code></td>
@@ -322,7 +330,7 @@
 </tr>
 <tr>
 <td><code>src/systems/Survival.test.ts</code></td>
-<td>Inventory, crafting, vitals, gathering, chests that never refill</td>
+<td>Inventory, crafting, vitals, gathering, chests that stay looted until their region drifts</td>
 </tr>
 <tr>
 <td><code>src/systems/Adventurer.test.ts</code></td>
@@ -345,12 +353,12 @@
 <td>Fog of war, milestones, markers</td>
 </tr>
 <tr>
-<td><code>src/dimension/Dimension.test.ts</code>, <code>Challenges.test.ts</code>, <code>DimensionRenderer.test.ts</code></td>
-<td>The Hollow&#39;s layout, every challenge and the run, the dimension renderer&#39;s culling and pooling</td>
+<td><code>src/dimension/Dimension.test.ts</code>, <code>Challenges.test.ts</code>, <code>Contribution.test.ts</code>, <code>DimensionWorld.test.ts</code></td>
+<td>The registry (rift destinations in story order, retuning), the data format (run lengths, checking, refusals), The Hollow&#39;s map (baked as shipped, finishable, the vault guarded, the drifted fragments and the Null&#39;s marks), every challenge and the run, contribution, attunement and shared instances, the land on the engine (slicing chunks, gathering, letting go), the site renderer&#39;s culling and pooling</td>
 </tr>
 <tr>
 <td><code>src/game/RiftTrip.test.ts</code></td>
-<td>Rift structures (placement, determinism, closing), trips (stashing and restoring the overworld&#39;s fights, kills and boss phases, closing through the portal), saving inside, dying inside, the story&#39;s objectives</td>
+<td>Rift structures (placement, determinism, closing, their dimension), trips (stashing and restoring the overworld&#39;s fights, kills and boss phases, closing through the portal), roaming creatures, saving inside, dying inside, the story&#39;s objectives, clues, cleared dimensions and its save versions</td>
 </tr>
 </tbody></table></div>
 <p>See also: <a href="world-streaming.html">World streaming</a>, <a href="rendering.html">Rendering</a></p>

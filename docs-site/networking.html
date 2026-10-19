@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Networking · Untrue docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('untrue-docs-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<header class="top">
+  <button class="menu-toggle" aria-label="Open navigation">☰</button>
+  <a class="brand" href="index.html"><span class="lantern" aria-hidden="true"></span>Untrue <small>Documentation</small></a>
+  <div class="search"><input type="search" placeholder="Search the docs" aria-label="Search the docs"><div class="results" hidden></div></div>
+  <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+</header>
+<div class="shell">
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html" class="current" aria-current="page">Networking</a></li></ul></div></aside>
+  <main class="content">
+    <p class="crumb">Multiplayer</p>
+    <article><h1 id="networking">Networking</h1>
+<p>Multiplayer without a server of our own. Players link to each other directly over WebRTC data channels; the only third parties are public Nostr relays (to find each other) and public STUN servers (to learn their own address). The plan behind it is in <a href="overview-diagram.html">overview-diagram.html</a> and <a href="multiplayer-plan.html">multiplayer-plan.md</a>.</p>
+<p>Code: <code>src/net/</code>, used by <code>src/coop/</code> (shared dimension instances) and loaded lazily with it, so solo play never downloads it.</p>
+<h2 id="two-kinds-of-session">Two kinds of session<a class="anchor" href="#two-kinds-of-session" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Overworld</th>
+<th>Dimension instance</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Who</td>
+<td>Friends, by invite code</td>
+<td>Anyone; listed on the board</td>
+</tr>
+<tr>
+<td>Shape</td>
+<td>Star: guests link to the host only</td>
+<td>Mesh: everyone links to everyone</td>
+</tr>
+<tr>
+<td>Most players</td>
+<td>5 (host and 4 guests)</td>
+<td>8</td>
+</tr>
+<tr>
+<td>Host leaves</td>
+<td>The session ends for everyone</td>
+<td>The longest-connected member takes over</td>
+</tr>
+<tr>
+<td>A link drops</td>
+<td>Their slot is held 30 s; they rejoin by the same code</td>
+<td>The same; if it was the host&#39;s, a new host takes over</td>
+</tr>
+</tbody></table></div>
+<h2 id="modules">Modules<a class="anchor" href="#modules" aria-label="Link to this section">#</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>codec.ts</code></td>
+<td><code>Writer</code> (one reused, growing buffer: no allocation per message once grown) and <code>Reader</code> (every read bounds-checked; marks itself failed instead of throwing)</td>
+</tr>
+<tr>
+<td><code>protocol.ts</code></td>
+<td>Every message: type byte, shape, encode and decode. Decoders return null for anything malformed</td>
+</tr>
+<tr>
+<td><code>snapshot.ts</code></td>
+<td>Entity snapshots, delta-compressed against the receiver&#39;s last acknowledged frame, at most one packet each</td>
+</tr>
+<tr>
+<td><code>transport.ts</code></td>
+<td><code>Transport</code> (a link: ctrl and snap channels), <code>RtcTransport</code> over <code>RTCPeerConnection</code>, <code>RtcLinker</code> (makes links from session descriptions), STUN list, close reasons</td>
+</tr>
+<tr>
+<td><code>auth.ts</code></td>
+<td>Proving a key on a link (challenge, Schnorr signature bound to the link&#39;s DTLS fingerprints)</td>
+</tr>
+<tr>
+<td><code>session.ts</code></td>
+<td><code>Session</code>: membership, slots, join orders, hosts, mesh introductions, host migration, pings and the shared clock</td>
+</tr>
+<tr>
+<td><code>codes.ts</code></td>
+<td>Join codes (Crockford base32, XXXX-XXXX) and the join rate limiter</td>
+</tr>
+<tr>
+<td><code>crypto.ts</code></td>
+<td>Code keys (PBKDF2 then HKDF), AES-GCM sealing, SHA-256, base64url, raw deflate</td>
+</tr>
+<tr>
+<td><code>signaling.ts</code></td>
+<td>Join by code over a <code>Bus</code> (<code>NostrBus</code>, <code>BroadcastBus</code>, <code>MemoryHub</code>), and manual copy-paste codes</td>
+</tr>
+<tr>
+<td><code>nostr.ts</code></td>
+<td>Minimal Nostr client: signed events (NIP-01), relay pool with reconnects, event checks</td>
+</tr>
+<tr>
+<td><code>board.ts</code></td>
+<td>The board of open dimension instances on Nostr</td>
+</tr>
+<tr>
+<td><code>identity.ts</code></td>
+<td>This browser&#39;s keypair, name and block list (localStorage, every access guarded)</td>
+</tr>
+<tr>
+<td><code>join.ts</code></td>
+<td><code>joinByCode</code> (guest) and <code>hostByCode</code> (host)</td>
+</tr>
+<tr>
+<td><code>index.ts</code></td>
+<td><code>Net</code>: what the game calls; re-exports what it needs</td>
+</tr>
+<tr>
+<td><code>fake.ts</code>, <code>fakeRelay.ts</code></td>
+<td>In-memory links and relay for tests</td>
+</tr>
+</tbody></table></div>
+<h2 id="channels-and-messages">Channels and messages<a class="anchor" href="#channels-and-messages" aria-label="Link to this section">#</a></h2>
+<p>Every link has two pre-negotiated data channels (ids 0 and 1, so either side can make the offer):</p>
+<ul>
+<li><strong>ctrl</strong> (<code>CTRL</code>, 0): ordered and reliable. Joining, membership, introductions, hosts, run state, events and requests. At most 64 KiB a message.</li>
+<li><strong>snap</strong> (<code>SNAP</code>, 1): unordered, no retransmits. Pings, player state, snapshots and acks. At most 1200 bytes a message (one packet, no IP fragmentation). Dropped while 64 KiB is queued.</li>
+</ul>
+<p>Types 1–31 are the session&#39;s own; 32–63 are passed to the game (<code>session.on.message</code>).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Message</th>
+<th>Channel</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Hello</td>
+<td>ctrl</td>
+<td>Guest to host: protocol, game version, mode, dimension, map hash, key, name, signature</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Welcome</td>
+<td>ctrl</td>
+<td>Host to guest: slot, host slot, epoch, host clock, resumed, every member</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Reject</td>
+<td>ctrl</td>
+<td>A reason (<code>RejectReason</code>, with text for each in <code>REJECT_TEXT</code>)</td>
+</tr>
+<tr>
+<td>4, 5</td>
+<td>Ping, Pong</td>
+<td>any</td>
+<td>Round trips and the shared clock</td>
+</tr>
+<tr>
+<td>6, 7, 8</td>
+<td>MemberJoined, MemberLeft, MemberAway</td>
+<td>ctrl</td>
+<td>From the host only</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Intro</td>
+<td>ctrl</td>
+<td>Mesh: the host asks a member to offer a link to a newcomer, then relays the offer and answer</td>
+</tr>
+<tr>
+<td>10</td>
+<td>PeerHello</td>
+<td>ctrl</td>
+<td>First words on a direct member-to-member link</td>
+</tr>
+<tr>
+<td>11</td>
+<td>HostClaim</td>
+<td>ctrl</td>
+<td>&quot;I am the host now&quot;, with the new epoch</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Handoff</td>
+<td>ctrl</td>
+<td>A leaving host names its successor</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Bye</td>
+<td>ctrl</td>
+<td>Leaving on purpose</td>
+</tr>
+<tr>
+<td>14</td>
+<td>RunState</td>
+<td>ctrl</td>
+<td>A dimension run (below)</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Challenge</td>
+<td>ctrl</td>
+<td>Host&#39;s first words on a new link: a nonce to sign</td>
+</tr>
+<tr>
+<td>32</td>
+<td>PlayerState</td>
+<td>snap</td>
+<td>21 bytes: slot, tick, position (1/32 tile), facing and animation, health, held item, flags</td>
+</tr>
+<tr>
+<td>33</td>
+<td>Snapshot</td>
+<td>snap</td>
+<td>Entities, as a delta (below)</td>
+</tr>
+<tr>
+<td>34</td>
+<td>Ack</td>
+<td>snap</td>
+<td>Newest snapshot tick received</td>
+</tr>
+<tr>
+<td>35</td>
+<td>Event</td>
+<td>ctrl</td>
+<td>A kind, up to 16 integers, and a short text</td>
+</tr>
+<tr>
+<td>36, 37</td>
+<td>Request, Response</td>
+<td>ctrl</td>
+<td>A guest asks (hit, pick up, interact, open chest, harvest, drop, use); the host answers</td>
+</tr>
+<tr>
+<td>38</td>
+<td>World</td>
+<td>ctrl</td>
+<td>A shared overworld&#39;s own messages, with a kind byte after the type: the land, its objects, ground, clock, whereabouts and requests (<code>src/coop/worldWire.ts</code>, below)</td>
+</tr>
+</tbody></table></div>
+<p>Positions travel as whole 1/32 tiles in an i32; health as a u16 share of the maximum; items and entity kinds as u16 indices the game maps to its own ids. The protocol version (<code>PROTOCOL</code>) rises whenever any message changes shape; peers on another version are refused.</p>
+<h3 id="snapshots">Snapshots<a class="anchor" href="#snapshots" aria-label="Link to this section">#</a></h3>
+<p>The host keeps a <code>SnapshotSender</code> per receiver. Each tick the game fills its <code>frame</code> with what that receiver should see, most important first (<code>push(id, kind, x, y, dir, health, flags)</code>), and sends <code>encode(writer, tick)</code>. Each entity is written only with the fields that changed since the receiver&#39;s last acknowledged frame (position as a one-byte step on each axis when it is small); removals go first. Whatever does not fit in 1200 bytes waits: the sender records each frame exactly as the receiver will rebuild it, so leaving things out never desynchronises the two. Up to 128 entities a frame. Frames are typed-array columns reused for the whole session, and id lookups go through a stamped table: a tick allocates nothing.</p>
+<p>The receiver&#39;s <code>SnapshotReceiver.read</code> rebuilds the frame (or returns null: malformed, stale, or built on a frame it no longer has) and the game acknowledges the frame&#39;s tick with an Ack. Under loss and reordering it converges as soon as acks get through (tested with 20% loss, reordering and constant churn).</p>
+<h3 id="run-state">Run state<a class="anchor" href="#run-state" aria-label="Link to this section">#</a></h3>
+<p>A dimension instance&#39;s host shares the run with <code>setRunState</code>: trials (idle, active, done), whether the boss gate is open, the boss&#39;s health share, phase and summons, when it returns (on the shared clock), and the contribution table: per player key, a score, whether they are attuned (may close their rift through the portal) and whether they have claimed their share of the chest. <code>extra</code> (up to 1 KiB) carries anything else the game keeps per run. Every member keeps the latest, so a new host carries on from it.</p>
+<h2 id="flows">Flows<a class="anchor" href="#flows" aria-label="Link to this section">#</a></h2>
+<h3 id="joining-by-code">Joining by code<a class="anchor" href="#joining-by-code" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>The host shows a code (<code>newCode</code>, 40 bits). PBKDF2 (100 000 rounds) and HKDF turn it into a <strong>topic</strong> (published) and an <strong>AES-GCM key</strong> (never published). Relays see the topic, not the code, and guessing codes against a topic costs 100 000 hashes a guess.</li>
+<li>The guest makes an offer (<code>linker.offer</code>, ICE gathered whole, up to 3 s), seals <code>{offer, request id, name, key, time}</code> and posts it on the topic, again every 4 s until answered (the host may not be listening yet, a relay may drop it).</li>
+<li>The host opens it (stale or replayed messages are ignored), checks the rate limit (8 a 30 s, 3 per sender, at most 3 weighed at once), the room, the block list (and keys kicked this session) and <code>on.joinRequest</code>, and answers (<code>session.admit</code>) or refuses (sealed Reject). Answers and refusals are <strong>signed</strong> with the host&#39;s identity (<code>hk</code>, <code>hs</code> in the envelope): a guest who knows whom it is joining (a board note names the host; a rejoin knows the host it met) takes only that host&#39;s replies, so a stranger listening on a public code can neither answer first nor turn guests away. Offers over the rate limit are dropped without a word: answering a flood costs a signature and a post, which is what a flood wants.</li>
+<li>The link opens. The host sends a <strong>Challenge</strong>: a nonce, its own key and a signature over the nonce, the link&#39;s binding (both ends&#39; DTLS fingerprints) and that key; the guest checks it, and that it is the host expected (else <code>ConnectError(&#39;impostor&#39;)</code>). The guest&#39;s <strong>Hello</strong> carries a Schnorr signature over the nonce, the binding and its key, so a key cannot be claimed by someone who does not hold it, and a signature cannot be passed on to another link. A guest who named a key when asking (a returning member skips the host&#39;s question) must say Hello as that key. Then version, mode, dimension and map hash are checked; the host sends <strong>Welcome</strong> (and the run state), which must name as host the key proved on the link, and tells everyone else (<strong>MemberJoined</strong>).</li>
+</ol>
+<p>On Nostr, signaling posts are ephemeral (kind 25050: relays pass them on and never store them) and signed with a throwaway key, so they say nothing about who is joining.</p>
+<p><strong>Manual code</strong> (no relays at all): <code>manualCode(&#39;invite&#39;, offerSdp)</code> packs a whole session description (raw deflate, base64url, <code>UNTRUE1I.</code>); the other player answers with <code>manualCode(&#39;reply&#39;, answerSdp)</code>. <code>readManualCode</code> refuses anything that is not one, or inflates past 16 KiB.</p>
+<h3 id="the-board">The board<a class="anchor" href="#the-board" aria-label="Link to this section">#</a></h3>
+<p>A dimension host posts a note every 60 s (kind 30078, addressable by instance id, <code>t</code> tag <code>untrue-dim-&lt;id&gt;</code>): players, room, seals broken, game version, the instance&#39;s code and the host&#39;s name, expiring after 3 minutes (NIP-40). Stopping replaces it with a full note that expires at once. <code>findInstances</code> asks every relay, waits for the first to finish (plus 0.4 s for the rest, 3 s at most), and keeps live, open notes on this game version from hosts not blocked, <strong>one per host</strong> (its newest), <strong>in a random order</strong>. Notes that claim what no host could are refused (<code>parseNote</code>): room past 8, more players than room, a time more than a minute ahead, a life longer than a note&#39;s. So made-up notes cannot crowd the top, and each join attempt is bounded (<code>Coop.enter</code>: two tries of 3 s each, answer and link together, within the passage&#39;s 9 s hold). The code is public: anyone may join an instance from the board, and only the note&#39;s host may answer on it.</p>
+<h3 id="mesh-introductions">Mesh introductions<a class="anchor" href="#mesh-introductions" aria-label="Link to this section">#</a></h3>
+<p>When someone joins a dimension instance, the host asks every other member to offer them a link (Intro, kind 0). Each offer goes to the host (kind 1), which relays it to the newcomer after checking it really comes from that member and is one it asked for (one offer per introduction, then one answer back: unasked offers are dropped, so no member can make another open connections without end); the answer comes back the same way (kind 2). A member ignores an offer from someone it already has, or is already answering. The direct link then opens and both ends send PeerHello. Only the first link ever needs signaling, and the DTLS fingerprints in the relayed descriptions tie each direct link to the member the host vouched for.</p>
+<h3 id="host-migration">Host migration<a class="anchor" href="#host-migration" aria-label="Link to this section">#</a></h3>
+<p>Every member knows every member&#39;s join order. When the host&#39;s link drops, each member drops the host and picks the longest-connected member left that it can reach (lowest order, then lowest key). That member becomes host (epoch + 1, a u32), claims it over the links that already exist, says the old host left, and carries on from the last run state; the shared clock carries on too. Others wait for the claim, and pass over a successor that never claims within 5 s. A leaving host hands off first (Handoff, then Bye).</p>
+<p><strong>Claims are checked.</strong> A claim counts only for the very next handover (<code>epoch + 1</code>, not any higher) and only from the member who should take over (the one awaited, or one outranking it): no member can seize an instance by claiming it, early or with a huge epoch. While the host still answers, a member keeps only the next host&#39;s own claim (in case the host goes), and never acts on it, so one member losing only its link to a live host cannot split the instance. A rival claim for the same handover (two took over at once) counts only for a moment after it, and the lower-ranked steps down. A member that would take over while a member it cannot reach outranks it is the cut-off side: it ends its session and plays on alone rather than splitting the instance. Whoever hosts also takes over listening on the instance&#39;s code and its board note (<code>Net</code> does this on <code>roleChanged</code>).</p>
+<h3 id="floods">Floods<a class="anchor" href="#floods" aria-label="Link to this section">#</a></h3>
+<p>Every link has an allowance (<code>Session.spend</code>): 200 messages and 256 KiB a second, 600 and 1 MiB at once (a guest&#39;s first chunks come in a burst). Past it messages are dropped; a link that keeps flooding (200 strikes, fading as it behaves) is cut. Relays get a budget too: an event is checked against the subscription&#39;s filter before its signature, and at most 40 signatures a second are checked per subscription. Relay sockets open only when there is something to send or hear, and close after 20 s idle.</p>
+<h2 id="how-the-game-uses-it">How the game uses it<a class="anchor" href="#how-the-game-uses-it" aria-label="Link to this section">#</a></h2>
+<p>Dimension instances (<code>src/coop/InstanceLink.ts</code>, see <a href="dimensions.html#playing-with-others">dimensions.md</a>) and visiting a friend&#39;s overworld by code (<code>src/coop/WorldHost.ts</code>, <code>WorldGuest.ts</code>, see <a href="multiplayer-plan.html#overworld-by-invite">multiplayer-plan.md</a>) are both wired in.</p>
+<ul>
+<li><strong>Loading.</strong> <code>Game.loadCoop()</code> does <code>import(&#39;../coop&#39;)</code> the first time a public rift trip starts or the Drift Beacon lists instances or names the player. <code>src/coop</code> imports <code>src/net</code> statically, so Vite makes them one separate file (about 147 KB, 49 KB gzipped); the main bundle holds none of it, and a private trip never loads it.</li>
+<li><strong><code>Coop</code></strong> (<code>src/coop/index.ts</code>) owns one <code>Net</code> for the page. <code>GAME_VERSION</code> (<code>untrue-&lt;items&gt;.&lt;species&gt;-c1</code>) is what peers must match: the indices of items and creatures on the wire, and the game&#39;s own messages. <code>?net=local</code> gives it <code>signaling: &#39;local&#39;</code>, a BroadcastChannel relay for the board (<code>src/coop/localRelay.ts</code>) and <code>storage: null</code> (a fresh key per tab, since a key cannot meet itself).</li>
+<li><strong>Entering a public rift.</strong> <code>Coop.enter(dimension, mapFile, isPublic, prefer?)</code>: hashes the map file as loaded (<code>DimensionCache.file</code>), asks the board (2.5 s at most), tries two instances with room (the beacon&#39;s choice first, 3 s each, only their note&#39;s host may answer), else <code>hostInstance</code>. The rift&#39;s passage holds at full cover meanwhile (<code>RiftTransition.holding</code>, 9 s at most), then the trip starts with an <code>InstanceLink</code>, or alone.</li>
+<li><strong><code>InstanceLink</code></strong> (<code>src/coop/InstanceLink.ts</code>) sets <code>session.on</code> and plays one player&#39;s part:</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Sent</th>
+<th>What the other side does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>PlayerState</code> (snap)</td>
+<td>Everyone, 20 Hz, broadcast over the mesh</td>
+<td>Draws the player (smoothed, 100 ms behind); the host also moves them in the run and aims its creatures</td>
+</tr>
+<tr>
+<td><code>Snapshot</code> / <code>Ack</code> (snap)</td>
+<td>Host to each guest, 20 Hz: creatures and enemy shots within 36 tiles, the Warden first</td>
+<td>Rebuilds the frame; makes, moves and removes replicas</td>
+</tr>
+<tr>
+<td><code>RunState</code> (ctrl)</td>
+<td>Host, when the run changed (10 Hz at most, every 2 s at least)</td>
+<td>Mirror takes on every site, gate, the Warden, the vault taken; carries <code>extra</code> (<code>runSync.ts</code>)</td>
+</tr>
+<tr>
+<td><code>Event</code> (ctrl)</td>
+<td>Host: the run&#39;s news to everyone; damage, kills, shares and vault rewards to one guest</td>
+<td>Sounds and notices; a hit through armour; xp and items; attunement</td>
+</tr>
+<tr>
+<td><code>Request</code> (ctrl)</td>
+<td>Guest to host: a blow on a creature (id, strength, direction, crit, ranged), opening the vault</td>
+<td>Host checks reach (from where it believes they are), rate (10 a second, by time) and strength (at most what the weapon in their hand could strike: <code>maxBlow</code>), applies the blow as the guest&#39;s; answers the vault with a reward or why not, and shares the run state at once after a claim</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><p><strong>What a host believes</strong> (<code>src/coop/guard.ts</code>). Guests run their own players, so the host plays only what a player could do: <code>MoveGuard</code> follows a guest at a player&#39;s speed (with room for lag bursts and a dodge); a jump is believed only back to a spot held lately (a fall caught), when the game vouches for it (waking beside the host), or once held steadily for 1.5 s (a stall, a respawn). Until then they are drawn where they say, but creatures, reach and the run go by the last believable spot. A guest takes from the host no blow harder than a creature could strike (<code>MAX_DAMAGE_TAKEN</code>) and no more xp than a kill could give (<code>MAX_KILL_XP</code>).</p>
+</li>
+<li><p><strong>Host migration</strong> (<code>on.roleChanged(&#39;host&#39;)</code>): the run becomes authoritative from the last <code>RunState</code> (<code>DimensionRun.becomeAuthority</code>, tally included), replicas become creatures by the same ids (<code>RiftTrip.adopt</code>), and the new host starts sending. Others swap to a fresh <code>SnapshotReceiver</code>. Members the session drops quietly on a handover are pruned on any role change. If every link is lost, the instance carries on alone.</p>
+</li>
+<li><p><strong>Combat seams</strong> (<code>CombatSystem</code>): <code>others</code> (other players&#39; feet, nearest hunted), <code>onOtherHit</code>, <code>onOtherKill</code>, <code>strike</code> (a checked blow from another player), <code>takeHit</code> (a blow from another machine), <code>onReplicaHit</code> (a blow on a replica), and <code>Enemy.replica</code> / <code>Projectile.replica</code> (moved by the network, never thinking here).</p>
+</li>
+</ul>
+<h3 id="a-shared-overworld">A shared overworld<a class="anchor" href="#a-shared-overworld" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Opening.</strong> The beacon&#39;s &quot;Open my world&quot; calls <code>Coop.openWorld</code> (<code>Net.hostWorld</code> with room for 4 visitors, 2 on a phone) and makes a <code>WorldHost</code>. It sets the world&#39;s <code>changes</code> listener, the ground&#39;s listener and the chunk manager&#39;s <code>onReady</code>; <code>Game.tick</code> passes <code>worldHost.views</code> to <code>world.update</code>, so the host streams and simulates for everyone. The host is asked about every visitor (<code>joinRequest</code>: a dialog).</li>
+<li><strong>Visiting.</strong> The beacon&#39;s &quot;Visit&quot; saves and reloads the page with <code>?join=CODE</code>. A <code>?join=</code> link from anywhere else asks first (joining shows the host this player&#39;s network address); the beacon&#39;s own jumps are approved for the tab. <code>Game.start</code> then calls <code>Coop.joinWorld</code> before anything else, and asks the host for the world (<code>W.Hello</code> → <code>W.Info</code>: seed, where the host stands, clock, weather, whether it is a test world). The game builds a replica <code>WorldManager</code> on the guest&#39;s <code>NetChunkGenerator</code>, takes the character from its own save and the clock from the host, and spawns beside the host. <code>WorldGuest.attach</code> then hooks the world&#39;s <code>changes</code> (closed rifts go to the host), the ground&#39;s <code>reach</code> (picking up asks the host), gathering (<code>GatheringSystem.confirm</code>: the plant goes at once, what it gives only once the host says yes, so two players on one tree get one tree&#39;s wood), and combat (blows on replicas are requests). A session that ends while the game is still loading is said once it is attached; one where chunks are waited on and the host says nothing for 30 s is ended as lost.</li>
+<li><strong>Nothing lost on the way.</strong> Something put down while the host cannot be reached waits and goes once it can (back in the bag if the visit ends first); something the host will not put on its ground (bound, more than a stack, too far, too many of the guest&#39;s things lying there, too fast) is given back (<code>Give</code>). After anything is given or put down, the character is saved a second later (<code>saveSoon</code>), so closing the page cannot keep both the thing and its trace on the host.</li>
+<li><strong>Back after a drop.</strong> The host keeps an away guest&#39;s view (their land must not drift) and, when they are back, sends every chunk they hold again; the guest puts right its harvest, ground and objects there (<code>refreshChunk</code>).</li>
+<li><strong>Chunk requests never leak.</strong> The host tells a guest when a chunk it waits on was let go before it was made; the guest lets go of requests its chunk manager no longer waits on (<code>NetChunkGenerator.prune</code>, answering them as cancelled so the count of requests in flight stays right).</li>
+<li><strong>A host away from the keyboard.</strong> Indoors with a menu open, the clock and creatures still go on for guests outdoors; with the tab hidden (no frames), the game steps on a 100 ms timer while anyone plays in what this machine runs (a world with visitors, or an instance it hosts).</li>
+<li><strong>Order.</strong> World messages a guest receives are applied strictly in order, one at a time (inflating is asynchronous), so a later change is never overtaken by an earlier chunk.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>World kind</th>
+<th>From</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1 Info</td>
+<td>Host</td>
+<td>Seed, host&#39;s spot, clock, weather, test world</td>
+</tr>
+<tr>
+<td>2 View</td>
+<td>Guest</td>
+<td>What they see (centre and half-size in tiles, at most 64 × 40) and their spot; the host keeps that area (a chunk more each way). Sent when the view moves 4 tiles, or their spot 1 tile, or they change place</td>
+</tr>
+<tr>
+<td>3, 4, 5 ChunkReq, ChunkLater, Chunk</td>
+<td>Guest, host, host</td>
+<td>A chunk asked for; not yet (outside what the host keeps for them: ask again in 0.4 s); the chunk: visit, biome, deflated base terrain, object ids, harvest, ground items</td>
+</tr>
+<tr>
+<td>6, 7, 8, 9, 10 ObjectDef, ObjectNeed, ObjectForget, ObjectGone, ObjectState</td>
+<td>Host, guest, guest, host, host</td>
+<td>An object (deflated layout, buildings, chests opened, closed); asking for one; letting one go (its chunks left); one gone; chests or rift changed</td>
+</tr>
+<tr>
+<td>11 Harvest</td>
+<td>Host</td>
+<td>A chunk&#39;s harvest log, whole</td>
+</tr>
+<tr>
+<td>12, 13 GroundAdd, GroundGone</td>
+<td>Host</td>
+<td>An item put down, or taken away</td>
+</tr>
+<tr>
+<td>14 Time</td>
+<td>Host</td>
+<td>Day, minute, weather</td>
+</tr>
+<tr>
+<td>15 Where</td>
+<td>Anyone</td>
+<td>Outdoors, a room (object, building, floor) or behind a rift, and the mover&#39;s state tick (older states, reordered, belong to the old place); the host relays it</td>
+</tr>
+<tr>
+<td>16 RiftInstance</td>
+<td>Anyone</td>
+<td>Gone into a shared instance of a dimension, by its code: friends follow</td>
+</tr>
+<tr>
+<td>17 Resync, 18 Hello</td>
+<td>Guest</td>
+<td>Send creatures in full again (back from a rift); send Info</td>
+</tr>
+<tr>
+<td>20–25 HarvestReq, ChestReq, PickupReq, DropReq, CloseRiftReq, MineReq</td>
+<td>Guest</td>
+<td>Requests the host checks: place, reach, still there; a chest or a mined tile in a room must really be in the room they are in (the host builds the room to check); a rift is closed only by one who came back out of a rift by it lately; chunk and object asks are rate-limited, and objects already sent are not sent again</td>
+</tr>
+<tr>
+<td>30 ChestReply, 31 Give, 32 HarvestReply</td>
+<td>Host</td>
+<td>Whether the chest is theirs; what they picked up (or a drop given back); whether a gathering or mining was theirs</td>
+</tr>
+</tbody></table></div>
+<h2 id="limits-v1">Limits (v1)<a class="anchor" href="#limits-v1" aria-label="Link to this section">#</a></h2>
+<ul>
+<li><strong>No TURN.</strong> About 10–20% of pairs (mobile data, strict office or school networks) cannot link directly; the link times out after 15 s with words saying so (<code>CLOSE_TEXT</code>). A TURN server can be added later through <code>RtcOptions.iceServers</code> and <code>relayOnly</code>.</li>
+<li><strong>Relays are not ours.</strong> If all six are down, codes and the board do not work; the manual code always does.</li>
+<li><strong>An orphaned host.</strong> A host whose own network failed (while the rest migrated) keeps hosting alone under the same code until it notices; joins may reach it. Rare; the game can end a session whose host has had no members for a while.</li>
+<li><strong>Join codes are 40 bits.</strong> Fine against guessing over relays (100 000 hashes a guess); not against a GPU farm that recorded topics. A friend&#39;s world still asks its host about every visitor, and kicked keys stay out for the session.</li>
+<li><strong>Cheating is bounded, not prevented.</strong> There is no server: guests own their bags (a modified one can drop items it never had, capped at a stack and its share of the ground), and a modified host can do anything in its own world or instance. Strangers meet only in dimension instances, where the guards above apply.</li>
+<li><strong>One board note per <code>Net</code>.</strong> One hosted instance at a time.</li>
+<li>Board notes and signaling depend on relays honouring ephemeral kinds and NIP-40; notes are also filtered by expiry on arrival.</li>
+</ul>
+<h2 id="tests">Tests<a class="anchor" href="#tests" aria-label="Link to this section">#</a></h2>
+<p><code>npx vitest run src/net</code> (54 tests, about 4 s):</p>
+<ul>
+<li><strong>Codec and protocol:</strong> every message round-trips; every message cut short or with a byte added is refused; 20 000 random inputs and 9 500 mutated messages never throw.</li>
+<li><strong>Snapshots:</strong> full then delta, removals and new entities, the one-packet budget with catching up, convergence under 20% loss with reordering and churn, missing baselines, fuzzing.</li>
+<li><strong>Codes, crypto, signaling:</strong> code format and typing, the limiter, key derivation, sealing and tampering, deflate bombs, join by code over a hub and over BroadcastChannel, refusals, wrong codes, stale messages, manual codes.</li>
+<li><strong>Nostr and the board:</strong> signatures and tampering, the relay pool (dedupe, forgeries dropped, resubscribe after a reconnect, junk), board listing (live, open, version, dimension, blocked, stopped, expired), malformed notes, identity storage.</li>
+<li><strong>Sessions</strong> (fake links, fake timers): joining and talking, the shared clock, full / declined / blocked / wrong version / wrong map, a Hello signed with the wrong key, slots held and given back, kicks, the host leaving, mesh links through the host, migration (with run state kept and a newcomer introduced after), a successor that is gone too, handoff, and no split when one member loses only its link to a live host.</li>
+<li><strong>Security</strong> (<code>security.test.ts</code>): no one followed who claims the host while it is up, nor any far-future claim (the rightful successor takes over); a host that is not the one expected is refused (<code>impostor</code>), and a rejoin finds the host it met or none; a stranger naming a member&#39;s key to skip the host&#39;s question is refused; a kicked key stays out; unasked mesh introductions are not relayed; a flood is dropped past the allowance and the flooding link cut; only the expected host&#39;s signed answer is taken on a code where a stranger answers first and refuses.</li>
+<li><strong>End to end</strong> (<code>net.test.ts</code>): <code>Net</code> over fake links with a hub and with a fake relay: join a world by code and rejoin after a drop; find an instance on the board, join it, lose its host, and join again under the new host.</li>
+</ul>
+<h3 id="two-tab-manual-test">Two-tab manual test<a class="anchor" href="#two-tab-manual-test" aria-label="Link to this section">#</a></h3>
+<ol>
+<li><code>npm run dev</code>, then open the game in two tabs of one browser.</li>
+<li>In the console of each: <code>const net = await import(&#39;/src/net/index.ts&#39;); const n = new net.Net({ gameVersion: &#39;dev&#39;, signaling: &#39;local&#39; });</code></li>
+<li>Tab A: <code>const w = await n.hostWorld(); w.code</code>.</li>
+<li>Tab B: <code>const s = await n.joinWorld(&#39;&lt;the code&gt;&#39;); s.members()</code>.</li>
+<li>Send: <code>s.sendToHost(net.CTRL, net.writeEvent(new net.Writer(), { kind: 1, ints: [], text: &#39;hi&#39; }))</code>, with <code>w.session.on.message = (f, c, d) =&gt; console.log(net.readEvent(new net.Reader(), d))</code> set in tab A.</li>
+</ol>
+<p>This was run in headless Chrome with real <code>RTCPeerConnection</code>s (three tabs): a join by code in about 240 ms, both channels, a direct (host) path with a 1 ms round trip, a dimension mesh introduced through the host, and a handoff to the next member.</p>
+<h3 id="shared-dimension-tests">Shared dimension tests<a class="anchor" href="#shared-dimension-tests" aria-label="Link to this section">#</a></h3>
+<p><code>npx vitest run src/coop</code> (25 tests, about 20 s, fake links and a fake relay). The guards (<code>guard.test.ts</code>): a walk and a run followed, a teleport not until it holds, a jump back to a recent spot and a vouched one taken; blows capped by the weapon in hand; allowances; chunk requests let go of answered as cancelled; a visitor&#39;s quests kept in their character save. The shared overworld (<code>world.test.ts</code>): the guest&#39;s chunks are the host&#39;s byte for byte, biomes and objects included; streaming follows a guest far from the host, and the host keeps both areas; gathering on either side reaches the other, a guest is given what they gathered only once the host says yes (and nothing for a tree already gone), and a guest&#39;s gathering out of reach is put right and gives nothing; what may not be put down (bound, more than a stack, too far) is given back; a chest opens for one player only; items dropped by one are picked up by the other; the host&#39;s creatures seen, struck and striking; the clock shared; a guest sent home; players drawn only where they are (outdoors, the same room); a visit that ended while the game was loading is said once it is attached. The dimension instances: smooth motion (tracks and the tick clock); a run packed for the wire and taken on by a mirror, junk refused; run events in and out, a player&#39;s own kept home; two players who see each other, the host&#39;s creatures sent to the guest and the guest&#39;s blows landing on them (and refused out of reach); the host&#39;s creatures striking the guest through the guest&#39;s own health; the Warden settled by who fought it, the guest&#39;s share of the vault given once; and the host&#39;s tab dying, with the longest-connected guest taking over the run and the creatures by the same ids while the third keeps seeing them.</p>
+<p><strong>In the game, on one machine:</strong> <code>npm run dev</code>, then open two or three <em>windows</em> (a hidden tab gets no animation frames) of <code>http://localhost:5173/?playground&amp;net=local</code>, and press <strong>Enter the Hollow (shared)</strong> in each, a few seconds apart. The first opens an instance; the others find it on the board and join. This was run in three headless Chrome windows with real WebRTC: opening an instance took under 1 s and joining about 2.5 s from pressing E; each saw the others move; a guest&#39;s blows took a host creature from 26 to 1 health; the seals and the Warden reached every guest; shares were settled by the tally and a guest took its share of the vault; with three players the frame work was 0.69 ms on the host and 0.61 ms on a guest (0.55 ms alone); closing the host&#39;s window handed the instance to the next player, the third saw it go on.</p>
+<p><strong>After the security fixes</strong> (two headless Chrome windows, real WebRTC, <code>?join=</code> link): the link asked first (a dialog) and the visitor arrived in about 4 s; the host believed the visitor beside it once they had stood there a moment; a tree the visitor gathered went for the host and the visitor got its wood only after the host&#39;s yes; the visitor picked up the host&#39;s wood (gone from the host&#39;s ground) and dropped it back (on the host&#39;s ground); both went into the same house and saw each other&#39;s names there; closing the world sent the visitor home with the reason. Names over players are crisp at every zoom and indoors (screen-pixel font, <code>src/rendering/PixelText.ts</code>).</p>
+</article>
+    <nav class="pager"><a class="prev" href="multiplayer-plan.html"><small>Previous</small>Multiplayer plan</a></nav>
+  </main>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#two-kinds-of-session">Two kinds of session</a></li><li class="l2"><a href="#modules">Modules</a></li><li class="l2"><a href="#channels-and-messages">Channels and messages</a></li><li class="l3"><a href="#snapshots">Snapshots</a></li><li class="l3"><a href="#run-state">Run state</a></li><li class="l2"><a href="#flows">Flows</a></li><li class="l3"><a href="#joining-by-code">Joining by code</a></li><li class="l3"><a href="#the-board">The board</a></li><li class="l3"><a href="#mesh-introductions">Mesh introductions</a></li><li class="l3"><a href="#host-migration">Host migration</a></li><li class="l3"><a href="#floods">Floods</a></li><li class="l2"><a href="#how-the-game-uses-it">How the game uses it</a></li><li class="l3"><a href="#a-shared-overworld">A shared overworld</a></li><li class="l2"><a href="#limits-v1">Limits (v1)</a></li><li class="l2"><a href="#tests">Tests</a></li><li class="l3"><a href="#two-tab-manual-test">Two-tab manual test</a></li><li class="l3"><a href="#shared-dimension-tests">Shared dimension tests</a></li></ul></nav>
+</div>
+<script src="search-index.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

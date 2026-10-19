@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CHUNK_SIZE } from '../config';
+import { bakeHollow } from '../dimension/bake/hollowMap';
 import type { DimEvent } from '../dimension/Challenges';
+import { LOCAL } from '../dimension/Contribution';
+import { decodeDimension } from '../dimension/DimensionData';
+import { DimensionWorld } from '../dimension/DimensionWorld';
 import { HOLLOW, HOLLOW_REWARDS, RIFT_SHARD } from '../dimension/Hollow';
 import { Enemy } from '../entities/Enemy';
 import { SPECIES } from '../entities/Species';
@@ -20,6 +24,8 @@ import { WorldEvents } from '../systems/WorldEvents';
 import { SyncGenerator } from '../world/SyncGenerator';
 import { WorldManager } from '../world/WorldManager';
 import { riftDoorstep, riftTile, RiftTrip } from './RiftTrip';
+
+const LAYOUT = decodeDimension(bakeHollow());
 
 function view(px: number, py: number) {
   return { minX: px - 15, minY: py - 9, maxX: px + 15, maxY: py + 9, playerX: px, playerY: py, dirX: 0, dirY: 0 };
@@ -52,12 +58,11 @@ function withRift(x = 300, y = 300) {
 /** A trip into the rift; `seen` collects every event the game is told of. */
 function tripInto(s: ReturnType<typeof withRift>) {
   const seen: DimEvent[] = [];
-  const trip = new RiftTrip(HOLLOW, 99, s.rift, riftDoorstep(s.rift), 0, s.combat, {
+  const trip = new RiftTrip(HOLLOW, new DimensionWorld(LAYOUT, 99), 99, s.rift, riftDoorstep(s.rift), 0, s.combat, {
     event: (e) => {
       seen.push(e);
       if (e.type === 'closed') s.world.closeRift(s.rift);
     },
-    drop: (stack) => s.world.ground.drop(stack, trip.outside.x, trip.outside.y),
   });
   return { trip, seen };
 }
@@ -99,6 +104,11 @@ describe('rift structures', () => {
     expect(roll(found!.cx, found!.cy, 1)[0]?.id).not.toBe(found!.p.id);
   });
 
+  it('open onto a dimension by id', () => {
+    const s = withRift();
+    expect(s.rift.dimension).toBe('hollow');
+  });
+
   it('stay closed while their object lives, and show a scar', () => {
     const s = withRift();
     const t = riftTile(s.rift);
@@ -125,10 +135,9 @@ describe('trips into a rift', () => {
     expect(s.combat.enemies).toEqual([]);
     expect(s.combat.projectiles).toEqual([]);
 
-    // Walking into the combat chamber wakes its first wave.
-    const room = trip.run.layout.chambers[1];
-    trip.run.skipTo(1);
-    for (let k = 0; k < 3; k++) trip.update(1 / 60, room.center.x, room.center.y);
+    // Walking into the Glitch Nest wakes its first wave.
+    const room = trip.layout.sites.find((x) => x.kind === 'combat')!;
+    for (let k = 0; k < 3; k++) trip.update(1 / 60, room.center.x, room.center.y + 2);
     const spawns = seen.filter((e) => e.type === 'spawn');
     expect(spawns.length).toBeGreaterThan(0);
     expect(s.combat.enemies.length).toBe(spawns.length);
@@ -136,8 +145,13 @@ describe('trips into a rift', () => {
     for (let k = 0; k < 200; k++) s.combat.update(1 / 60, body(room.center.x, room.center.y));
     expect(s.combat.enemies.every((e) => e.species === SPECIES.glitchling || e.species === SPECIES.shardWisp)).toBe(true);
     expect(s.combat.enemies).not.toContain(wolf);
-    // The void blocks walkers.
+    // The void is a wall, for walkers and the player alike: nobody falls.
     expect(trip.blocksEnemies(-1, -1)).toBe(true);
+    expect(trip.blocksEnemies(2, 2)).toBe(true);
+    expect(trip.isSolidAt(2, 2)).toBe(true);
+    expect(trip.isHole(2, 2)).toBe(false);
+    // Fliers still cross it.
+    expect(trip.blocksFlyers(2, 2)).toBe(false);
     // An overworld ambush while away waits in the overworld.
     s.combat.spawnGroup(SPECIES.bandit, 305, 305, 2);
     expect(s.combat.enemies.some((e) => e.species === SPECIES.bandit)).toBe(false);
@@ -156,9 +170,9 @@ describe('trips into a rift', () => {
     const s = withRift();
     const { trip, seen } = tripInto(s);
     trip.begin();
-    const boss = trip.run.layout.chambers.findIndex((c) => c.kind === 'boss');
+    const boss = trip.layout.sites.findIndex((c) => c.kind === 'boss');
     trip.run.skipTo(boss);
-    const c = trip.run.layout.chambers[boss].center;
+    const c = trip.layout.sites[boss].center;
     trip.update(1 / 60, c.x, c.y + 3);
     const warden = s.combat.enemies.find((e) => e.species === SPECIES.riftWarden)!;
     expect(warden).toBeTruthy();
@@ -174,13 +188,16 @@ describe('trips into a rift', () => {
     expect(s.combat.enemies).not.toContain(warden);
     trip.update(1 / 60, c.x, c.y + 3);
     expect(trip.portalOpen).toBe(true);
+    // Its blows were the player's: the whole share, and the portal answers them.
+    expect(trip.run.contribution.score(LOCAL)).toBeGreaterThan(0);
+    expect(trip.run.share(LOCAL)).toMatchObject({ share: 1, attuned: true, xp: HOLLOW.closeXp });
   });
 
   it('close the rift through the portal, after the vault pays out', () => {
     const s = withRift();
     const { trip, seen } = tripInto(s);
     trip.begin();
-    const vault = trip.run.layout.chambers.length - 1;
+    const vault = trip.layout.sites.findIndex((c) => c.kind === 'vault');
     trip.run.skipTo(vault);
     const w = trip.run.layout.w;
     const p = trip.run.layout.portal;
@@ -210,6 +227,50 @@ describe('trips into a rift', () => {
   });
 });
 
+describe('roaming creatures', () => {
+  it('come and go near the player, a few at a time, and rest once killed', () => {
+    const s = withRift();
+    const { trip } = tripInto(s);
+    trip.begin();
+    const zone = LAYOUT.zones[0];
+    // Somewhere open in the middle of the zone.
+    let px = 0;
+    let py = 0;
+    for (let k = 0; k < 400 && !px; k++) {
+      const x = zone.rect.x + 10 + (k % 20) * 3;
+      const y = zone.rect.y + 10 + Math.floor(k / 20) * 3;
+      if (!trip.blocksEnemies(x, y)) [px, py] = [x + 0.5, y + 0.9];
+    }
+    for (let k = 0; k < 20; k++) trip.update(0.5, px, py);
+    const roamers = s.combat.enemies.length;
+    expect(roamers).toBeGreaterThan(0);
+    expect(roamers).toBeLessThanOrEqual(LAYOUT.zones.reduce((n, z) => n + z.cap, 0));
+    for (const e of s.combat.enemies) {
+      expect(trip.blocksEnemies(Math.floor(e.x), Math.floor(e.y))).toBe(false);
+      expect(Math.hypot(e.x - px, e.y - py)).toBeGreaterThanOrEqual(13);
+    }
+    // A kill: that zone rests for a while.
+    const first = s.combat.enemies[0];
+    s.combat.remove(first);
+    trip.killed(first);
+    // Far away, they leave.
+    for (let k = 0; k < 4; k++) trip.update(0.5, LAYOUT.arrival.x, LAYOUT.arrival.y);
+    expect(s.combat.enemies.every((e) => Math.hypot(e.x - LAYOUT.arrival.x, e.y - LAYOUT.arrival.y) < 48)).toBe(true);
+  });
+
+  it('name where the player is: a site, else the region', () => {
+    const s = withRift();
+    const { trip } = tripInto(s);
+    const nest = LAYOUT.sites.find((x) => x.kind === 'combat')!;
+    expect(trip.placeAt(nest.center.x, nest.center.y)).toBe('Glitch Nest');
+    expect(trip.placeAt(LAYOUT.arrival.x, LAYOUT.arrival.y)).toBe('Shattered Shore');
+    expect(trip.placeAt(-10, -10)).toBe('');
+    const stone = LAYOUT.clues[0];
+    expect(trip.clue(stone.x, stone.y)).toBe(stone);
+    expect(trip.clue(stone.x + 1, stone.y)).toBeUndefined();
+  });
+});
+
 describe('dying behind a rift', () => {
   it('loses the bag and the hotbar, but keeps what is worn', () => {
     const inv = new Inventory();
@@ -232,19 +293,44 @@ describe('the rift story', () => {
     expect(story.objective(at, null, null)).toEqual({ text: 'Find a rift', angle: null });
     expect(story.objective(at, { x: 100, y: 0 }, null)).toEqual({ text: 'Find a rift', angle: 0 });
     expect(story.objective(at, { x: 0, y: 5 }, null).text).toBe('Enter the rift');
-    const run = { name: 'The Hollow', chambersDone: 1, chambers: 4, portalOpen: false };
+    const run = { name: 'The Hollow', layout: { id: 'hollow', clues: [{ id: 'a' }, { id: 'b' }], plot: null }, at: { x: 0, y: 0 }, trialsDone: 1, trials: 3, bossOpen: false, portalOpen: false, goalAngle: () => 1 };
     story.onEnter();
-    expect(story.objective(at, null, run).text).toBe('Survive The Hollow: 1/4 chambers');
-    expect(story.objective(at, null, { ...run, chambersDone: 4, portalOpen: true }).text).toBe('Close the rift: step through the portal');
-    story.onClosed();
+    expect(story.objective(at, null, run)).toEqual({ text: 'Break the seals: 1/3 trials', angle: 1 });
+    expect(story.objective(at, null, { ...run, trialsDone: 3, bossOpen: true }).text).toBe('Face the Rift Warden');
+    expect(story.objective(at, null, { ...run, trialsDone: 3, bossOpen: true, portalOpen: true }).text).toBe('Close the rift: step through the portal');
+    story.onClosed('hollow');
     expect(shown.length).toBe(1);
-    story.onClosed();
+    story.onClosed('hollow');
     expect(shown.length).toBe(1);
     expect(story.objective(at, { x: 0, y: 5 }, null).text).toBe('Rifts closed: 2');
 
+    // Lore stones: read once for the count, again as often as wished.
+    expect(story.clueLine(run).text).toBe('Lore stones read: 0/2');
+    expect(story.readClue('hollow', { id: 'a', title: 'A', pages: ['…'] })).toBe(true);
+    expect(story.readClue('hollow', { id: 'a', title: 'A', pages: ['…'] })).toBe(false);
+    expect(shown.filter((t) => t === 'A').length).toBe(2);
+    expect(story.clueLine(run).text).toBe('Lore stones read: 1/2');
+    expect(story.hasRead('hollow', 'a')).toBe(true);
+    expect(story.hasRead('elsewhere', 'a')).toBe(false);
+    shown.length = 1;
+
     const again = new RiftStory(() => {});
     again.load(JSON.parse(JSON.stringify(story.save())));
-    expect([again.closed, again.entered]).toEqual([2, true]);
+    expect([again.closed, again.entered, [...again.cleared]]).toEqual([2, true, ['hollow']]);
+    expect(again.hasRead('hollow', 'a')).toBe(true);
+    expect(again.save().lore).toEqual({ hollow: ['a'] });
+    // Version 1 saves (before the clues) have read none; a closed rift then
+    // could only have been into The Hollow. Junk is dropped.
+    const v1 = new RiftStory(() => {});
+    v1.load({ version: 1, closed: 3, entered: true });
+    expect([v1.closed, v1.save().lore, [...v1.cleared]]).toEqual([3, {}, ['hollow']]);
+    v1.load({ version: 2, closed: 0, entered: true, clues: ['hollow:a', 7, 'x'.repeat(200), null, 'nocolon'] });
+    expect([v1.save().lore, [...v1.cleared]]).toEqual([{ hollow: ['a'] }, []]);
+    // Version 3 keeps cleared dimensions and lore per dimension; junk is dropped.
+    v1.load({ version: 3, closed: 2, entered: true, cleared: ['hollow', 'deep', 5, ''], lore: { hollow: ['a', 'b', 9], deep: ['c'], [`${'x'.repeat(50)}`]: ['d'] } });
+    expect([...v1.cleared]).toEqual(['hollow', 'deep']);
+    expect(v1.save().lore).toEqual({ hollow: ['a', 'b'], deep: ['c'] });
+    expect([v1.hasRead('deep', 'c'), v1.cluesRead('hollow', [{ id: 'a' }, { id: 'z' }])]).toEqual([true, 1]);
     // Saves from before the rifts start at the beginning, without the intro.
     const old = new RiftStory((v) => shown.push(v.title));
     old.load(undefined);

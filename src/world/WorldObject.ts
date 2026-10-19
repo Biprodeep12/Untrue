@@ -21,6 +21,8 @@ export class WorldObject {
   emptyChests = false;
   /** A rift the player closed: its tear shows as a scar while the object lives. */
   closed = false;
+  /** A rift: the id of the outer dimension it opens onto. */
+  dimension = '';
 
   constructor(
     readonly id: string,

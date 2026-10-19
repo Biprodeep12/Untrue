@@ -57,6 +57,21 @@ const pick = (item: ItemDef, min: number, max: number, extra?: [ItemDef, number]
   },
 });
 
+const crystal: Harvest = {
+  seconds: 5,
+  tool: 'pickaxe',
+  minTier: 2,
+  action: 'Mine',
+  verb: 'Mining',
+  drops: (rng, _tier, band) => {
+    const crystals = 1 + (rng.chance(0.15 * band) ? 1 : 0);
+    return rng.chance(0.06 + 0.03 * band) ? [[Items.crystal, crystals], [Items.gem, 1]] : [[Items.crystal, crystals]];
+  },
+};
+
+/** True if a decoration can be gathered, mined or broken at all. */
+export const canHarvest = (deco: number): boolean => HARVESTS[deco] !== undefined;
+
 const HARVESTS: Partial<Record<number, Harvest>> = {
   [Deco.Oak]: tree,
   [Deco.OakAutumn]: tree,
@@ -85,17 +100,13 @@ const HARVESTS: Partial<Record<number, Harvest>> = {
       return [[ore, rng.int(1, 2)]];
     },
   },
-  [Deco.Crystal]: {
-    seconds: 5,
-    tool: 'pickaxe',
-    minTier: 2,
-    action: 'Mine',
-    verb: 'Mining',
-    drops: (rng, _tier, band) => {
-      const crystals = 1 + (rng.chance(0.15 * band) ? 1 : 0);
-      return rng.chance(0.06 + 0.03 * band) ? [[Items.crystal, crystals], [Items.gem, 1]] : [[Items.crystal, crystals]];
-    },
-  },
+  [Deco.Crystal]: crystal,
+  // The outer dimensions' land gives what the overworld's does.
+  [Deco.HollowTree]: tree,
+  [Deco.AshTree]: tree,
+  [Deco.ShardGrass]: pick(Items.herb, 1, 1),
+  [Deco.GlowCap]: pick(Items.mushroom, 1, 2),
+  [Deco.RiftCrystal]: crystal,
   [Deco.Barrel]: { seconds: 0.8, minTier: 0, action: 'Break', verb: 'Breaking', drops: () => [] },
   [Deco.Treasure]: { seconds: 1.6, minTier: 0, action: 'Dig', verb: 'Digging', drops: (rng) => [[Items.coin, rng.int(10, 40)], ...rollChest(rng, 2)] },
   [Deco.Meteorite]: {
@@ -163,6 +174,13 @@ export class GatheringSystem {
   ground: Ground;
   /** For the Forager skill. */
   progression?: Progression;
+  /** Visiting a friend's world: a chest is theirs to open, so the host is
+   *  asked first; `open` runs if it says yes (false: it cannot be asked). */
+  claim?: (object: WorldObject, index: number, open: () => void) => boolean;
+  /** Visiting a friend's world: what was gathered there is theirs to give, so
+   *  the host is asked; `give` runs if it says yes (two players on one tree
+   *  get one tree's wood). The plant goes at once either way. */
+  confirm?: (ground: Ground, gx: number, gy: number, deco: number, give: () => void) => void;
 
   constructor(
     private readonly world: WorldManager,
@@ -181,10 +199,14 @@ export class GatheringSystem {
   begin(i: Interaction): void {
     switch (i.kind) {
       case 'chest': {
-        const rng = streamRng(Stream.Loot, this.world.seed, hashString(i.object.id), i.index);
-        this.world.openChest(i.object, i.index);
-        this.onChest?.(i.gx, i.gy);
-        this.give(rollChest(rng, difficultyBand(i.gx, i.gy)), 'The chest is empty');
+        const open = () => {
+          const rng = streamRng(Stream.Loot, this.world.seed, hashString(i.object.id), i.index);
+          this.world.openChest(i.object, i.index);
+          this.onChest?.(i.gx, i.gy);
+          this.give(rollChest(rng, difficultyBand(i.gx, i.gy)), 'The chest is empty');
+        };
+        if (!this.claim) open();
+        else if (!this.claim(i.object, i.index, open)) this.notify('The chest will not open');
         break;
       }
       case 'empty-chest':
@@ -228,7 +250,9 @@ export class GatheringSystem {
     if (plant && drops.length && rng.chance(forager)) drops[0] = [drops[0][0], drops[0][1] + 1];
     this.ground.harvest(c.gx, c.gy);
     this.onGathered?.(c.deco, c.gx, c.gy);
-    this.give(drops, c.deco === Deco.Barrel ? 'Nothing inside' : undefined);
+    const give = () => this.give(drops, c.deco === Deco.Barrel ? 'Nothing inside' : undefined);
+    if (this.confirm) this.confirm(this.ground, c.gx, c.gy, c.deco, give);
+    else give();
   }
 
   /** Puts drops in the bag, with notes for what fit and what did not. */

@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html" class="current" aria-current="page">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html" class="current" aria-current="page">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Engine</p>
     <article><h1 id="world-streaming">World streaming</h1>
@@ -81,6 +81,15 @@
 </tr>
 </tbody></table></div>
 <p>The render area grows and shrinks with the screen size and zoom, so the player never sees a chunk appear at the edge. The cache area always covers the render area. A cache margin of at least 1 is required: structures can reach one chunk out from their anchor, so every object that touches the render area has its anchor chunk inside the cache area and is rolled before it is drawn.</p>
+<h3 id="with-friends-visiting">With friends visiting<a class="anchor" href="#with-friends-visiting" aria-label="Link to this section">#</a></h3>
+<p>A host whose world friends are visiting (<a href="multiplayer-plan.html#overworld-by-invite">multiplayer-plan.md</a>) passes each guest&#39;s view too: <code>update(view, others)</code>. Each guest&#39;s view gets its own render, cache and simulation areas, worked out the same way (in place, no allocation per frame). Then:</p>
+<ul>
+<li><strong>The cache is the union</strong> of everyone&#39;s. A chunk is disposed, and a region&#39;s visit rises, only once it has left every player&#39;s cache: a region drifts only when no one is near it, whoever walked away first. Objects live while any player&#39;s cache holds one of their chunks.</li>
+<li><strong>Simulation is a set of areas</strong> (<code>simRects</code>, this player&#39;s first): a chunk is <code>simulated</code> if it is in anyone&#39;s. Combat spawns, despawns, wakes guards and rolls legends around every guest outdoors too (<code>CombatSystem.others</code>).</li>
+<li><strong>Generation</strong> covers this player&#39;s render area and predicted strip first, then each guest&#39;s render area (nearest its middle first), then chunks a guest asked for (<code>demand</code>, refused outside that guest&#39;s cache area).</li>
+<li><strong>Only this player&#39;s render area is drawn.</strong> A chunk that becomes ready calls <code>onReady</code>, so the host can serve it to whoever asked.</li>
+</ul>
+<p>Without guests, <code>others</code> is empty and nothing of this runs.</p>
 <h2 id="lifecycle">Lifecycle<a class="anchor" href="#lifecycle" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -144,7 +153,7 @@
 </article>
     <nav class="pager"><a class="prev" href="architecture.html"><small>Previous</small>Architecture</a><a class="next" href="world-generation.html"><small>Next</small>World generation</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#chunks">Chunks</a></li><li class="l2"><a href="#areas">Areas</a></li><li class="l2"><a href="#lifecycle">Lifecycle</a></li><li class="l2"><a href="#the-generation-queue">The generation queue</a></li><li class="l2"><a href="#stale-results">Stale results</a></li><li class="l2"><a href="#pooling">Pooling</a></li><li class="l2"><a href="#composition">Composition</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#chunks">Chunks</a></li><li class="l2"><a href="#areas">Areas</a></li><li class="l3"><a href="#with-friends-visiting">With friends visiting</a></li><li class="l2"><a href="#lifecycle">Lifecycle</a></li><li class="l2"><a href="#the-generation-queue">The generation queue</a></li><li class="l2"><a href="#stale-results">Stale results</a></li><li class="l2"><a href="#pooling">Pooling</a></li><li class="l2"><a href="#composition">Composition</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

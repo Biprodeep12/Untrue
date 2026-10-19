@@ -42,7 +42,7 @@ Music is generated one beat at a time, scheduled slightly ahead so timing stays 
 - **Melody:** a plucked note on about half the beats (fewer at night). The voice follows the land: a triangle in the forest, a soft square in the desert, a long sine in the snow.
 - **Drone:** from band 2 out, a low sine two octaves under the root every 8 beats.
 - **Danger:** a low pulse every other beat while enemies are chasing or attacking the player.
-- **Outer dimensions** (`MusicMood.dimension`, from the dimension's `mood.music`): their own music (`riftBeat`). Beats are slower (1.05 s); a low detuned drone every 8 beats, and sparse long sine notes from a scale of close, unresolved steps (0, 1, 3, 6, 7, 10 semitones). The danger pulse plays as in the overworld.
+- **Outer dimensions** (`MusicMood.dimension`, from the dimension's `mood.music`): their own music (`riftBeat`). Beats are slower (1.05 s); a low detuned drone every 8 beats, and sparse long sine notes from a scale of close, unresolved steps (0, 1, 3, 6, 7, 10 semitones). The Drowned Archive's is lower (root 110 Hz) and mournful (0, 2, 3, 7, 8, 10). The danger pulse plays as in the overworld.
 
 ## Ambience
 
@@ -58,7 +58,7 @@ The land has its own sounds, rolled twice a second (`AudioSystem.ambience`):
 | Snow | A lower gust of wind now and then |
 | Mines | Water dripping, and now and then a low drone |
 | Near an open rift | Its hum: two close low tones beating against each other, with a crackle beside it; louder and more often the nearer the rift (`MusicMood.rift`, 0 to 1 within 12 tiles, 0 elsewhere) |
-| Inside an outer dimension | Glassy chimes now and then, nothing else |
+| Inside an outer dimension | Glassy chimes now and then (The Hollow), water dripping in the stacks (The Drowned Archive), nothing else |
 
 Ambient sounds are skipped while 26 or more voices sound (`MAX_VOICES` less 6), so they never crowd out the sound effects.
 

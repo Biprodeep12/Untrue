@@ -85,5 +85,9 @@ export class ObjectManager {
     const kind = this.byKind.get(o.kind);
     kind?.delete(o);
     if (kind?.size === 0) this.byKind.delete(o.kind);
+    this.onRemove?.(o);
   }
+
+  /** An object went (its last chunk left, or it was taken away). */
+  onRemove?: (o: WorldObject) => void;
 }

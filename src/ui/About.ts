@@ -9,8 +9,9 @@ export function aboutView(): HTMLElement {
     <h4>Privacy</h4>
     <ul>
       <li>Your saves and settings stay on this device, in the browser's storage. Clearing site data deletes them.</li>
-      <li>No accounts, no tracking, no analytics, no ads. Nothing you do in the game is sent anywhere.</li>
+      <li>No accounts, no tracking, no analytics, no ads. Playing alone, nothing you do in the game is sent anywhere.</li>
       <li>Everything the game needs, fonts included, comes from the game's own site. Like any website, its host keeps standard server logs, such as IP addresses.</li>
+      <li>Meeting others behind a rift (public rift trips, the Drift Beacon's default) links your browser straight to theirs, so they can see your IP address, and uses public relays to find them: the relays see the name you chose and a join code, nothing else. Set rift trips to private on the beacon to go alone.</li>
     </ul>
     <h4>Credits</h4>
     <ul>
@@ -20,6 +21,7 @@ export function aboutView(): HTMLElement {
     <ul>
       <li><b>Pixi.js</b> and its dependencies: MIT, ISC and BSD-3-Clause licenses.</li>
       <li><b>Pixelify Sans</b> font: SIL Open Font License 1.1.</li>
+      <li><b>@noble/curves</b> and <b>@noble/hashes</b> (signing for meeting others): MIT license.</li>
     </ul>
     <button class="btn about-licenses">Show license texts</button>
     <pre class="about-notices" hidden></pre>`;

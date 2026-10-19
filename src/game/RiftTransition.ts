@@ -46,6 +46,9 @@ export class RiftTransition {
   kind: RiftPassage | null = null;
   /** Shorter, and only fades: the system asked for reduced motion. */
   reduced = false;
+  /** Holds the passage at full cover before the switch (finding others
+   *  behind the rift); the game lets go when ready, or after a while. */
+  holding = false;
   /** Seconds since it started. */
   private t = 0;
   private timing: PassageTiming = TIMINGS.enter;
@@ -67,6 +70,7 @@ export class RiftTransition {
     this.t = 0;
     this.switched = false;
     this.collapsed = false;
+    this.holding = false;
     return true;
   }
 
@@ -99,6 +103,7 @@ export class RiftTransition {
 
   /** Ends a passage under way at once, firing whatever hooks are left. */
   finish(): void {
+    this.holding = false;
     if (this.kind) this.update(Infinity);
   }
 
@@ -108,6 +113,11 @@ export class RiftTransition {
     if (!kind) return;
     this.t += dt;
     const { pull, reveal, collapse } = this.timing;
+    // Held: the screen stays covered, the switch waits.
+    if (this.holding && !this.switched && this.t >= pull) {
+      this.t = pull;
+      return;
+    }
     if (!this.switched && this.t >= pull) {
       this.switched = true;
       this.hooks.switch(kind);

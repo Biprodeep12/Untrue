@@ -83,7 +83,7 @@ export function buy(inv: Inventory, offer: Offer): TradeResult {
 export function sell(inv: Inventory, item: ItemDef, count = 1): TradeResult {
   const price = SELL_PRICES.get(item);
   const n = Math.min(count, inv.count(item));
-  if (!price || n <= 0) return 'none';
+  if (!price || n <= 0 || item.bound) return 'none';
   const sold = inv.tryChange(() => inv.remove(item, n) && inv.add(Items.coin, price * n) === 0);
   return sold ? 'ok' : 'full';
 }

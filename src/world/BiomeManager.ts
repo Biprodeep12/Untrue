@@ -37,6 +37,30 @@ export class BiomeManager {
     return this.owner.get(key);
   }
 
+  /** A guest takes the host's record for a chunk (it never grows biomes
+   *  itself: borders depend on what loaded first, which differs by player). */
+  adopt(key: number, id: number, type: BiomeType, variant: number, seed: number): BiomeRecord {
+    const had = this.owner.get(key);
+    if (had?.id === id) return had;
+    if (had) this.release(key);
+    let record = this.records.get(id);
+    if (!record) this.records.set(id, (record = { id, type, variant, seed, chunks: [], activeChunks: 0 }));
+    this.owner.set(key, record);
+    record.chunks.push(key);
+    record.activeChunks++;
+    return record;
+  }
+
+  /** A guest's chunk left: it lets go of the host's record for it. */
+  release(key: number): void {
+    const b = this.owner.get(key);
+    if (!b) return;
+    this.owner.delete(key);
+    const i = b.chunks.indexOf(key);
+    if (i >= 0) b.chunks.splice(i, 1);
+    if (--b.activeChunks <= 0) this.records.delete(b.id);
+  }
+
   chunkEntered(key: number): void {
     const b = this.owner.get(key);
     if (b) b.activeChunks++;

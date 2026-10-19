@@ -116,8 +116,20 @@ export class Interior implements Place {
 
   /** Something on this tile was mined or gathered; it stays gone. */
   harvest(x: number, y: number): void {
-    this.object.opened.add(MINED_BASE + this.slot * 1000 + this.at(x, y));
+    this.object.opened.add(this.minedId(x, y));
     this.changed = true;
+  }
+
+  /** A mined tile's id in the object's opened set. */
+  minedId(x: number, y: number): number {
+    return MINED_BASE + this.slot * 1000 + this.at(x, y);
+  }
+
+  /** The tile in this room whose chest or mined id (in the object's opened set) is `id`, if any. */
+  tileOf(id: number): { x: number; y: number; deco: number } | null {
+    const local = id - (id >= MINED_BASE ? MINED_BASE : CHEST_BASE) - this.slot * 1000;
+    if (id < CHEST_BASE || local < 0 || local >= this.w * this.h) return null;
+    return { x: local % this.w, y: Math.floor(local / this.w), deco: this.decos[local] };
   }
 
   /** Seeds what mining a tile gives. */

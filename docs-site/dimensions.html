@@ -17,18 +17,74 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html" class="current" aria-current="page">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html" class="current" aria-current="page">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Story</p>
     <article><h1 id="dimensions">Dimensions</h1>
-<p>The outer dimensions behind the rifts: finite spaces of challenges, entered from a rift in the overworld and left through a portal that closes the rift behind the player. Only one exists so far, <strong>The Hollow</strong>, but dimensions come from a registry so more can be added.</p>
-<p>Code: <code>src/dimension/</code> (the dimensions themselves, with no rendering), <code>src/game/RiftTrip.ts</code> (one trip into one), <code>src/rendering/DimensionRenderer.ts</code>, <code>src/ui/DimensionMap.ts</code>, and the dimension parts of <code>src/game/Game.ts</code>.</p>
+<p>The outer dimensions behind the rifts. Each is an <strong>open world with a fixed map</strong>: the same engine as the overworld (chunk streaming, culling, tiles, trees, gathering, lighting, creatures), but its land is the same for everyone and never forgets. Landmarks on the map hold its challenges, lore stones hold clues to the main story, and each world has a <strong>plot</strong> of its own: someone who lives there, something they lost, and what it means (<a href="#plots">below</a>). Players from any world can meet in them (<a href="#playing-with-others">below</a>). Two exist, in story order: <strong>The Hollow</strong> and <strong>The Drowned Archive</strong>; rifts carry the id of the dimension they open onto.</p>
+<p>Code: <code>src/dimension/</code> (the data format and its source, the land on the engine, the challenges; no rendering), <code>src/dimension/bake/</code> (the bakers of fixed maps), <code>src/game/RiftTrip.ts</code> (one trip into one), <code>src/rendering/SiteRenderer.ts</code>, <code>src/rendering/ArchiveArt.ts</code>, <code>src/ui/DimensionMap.ts</code>, and the dimension parts of <code>src/game/Game.ts</code>.</p>
+<h2 id="maps-as-data">Maps as data<a class="anchor" href="#maps-as-data" aria-label="Link to this section">#</a></h2>
+<p>A dimension&#39;s map is a data file: <code>public/dimensions/&lt;id&gt;.json</code>, shipped with the game today and, later, sent by a server. The format (<code>src/dimension/DimensionData.ts</code>, <code>format: 2</code>) is one JSON document:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code>, <code>name</code></td>
+<td>The dimension&#39;s id (must be one this version of the game knows how to play, see <a href="#under-the-hood">the registry</a>) and name</td>
+</tr>
+<tr>
+<td><code>width</code>, <code>height</code></td>
+<td>In tiles, whole chunks (32), at most 512</td>
+</tr>
+<tr>
+<td><code>mood</code></td>
+<td><code>darkness</code> (0–1) and <code>tint</code> of its light at every hour, and its <code>music</code> (<code>rift</code> or <code>archive</code>)</td>
+</tr>
+<tr>
+<td><code>tiles</code>, <code>decos</code></td>
+<td>The land: one byte per tile each (world <code>Tile</code> and <code>Deco</code> ids), run-length encoded as [count 1–255, value] pairs, then base64</td>
+</tr>
+<tr>
+<td><code>regions</code>, <code>regionMap</code></td>
+<td>Region names, and one byte per chunk naming its region (encoded alike)</td>
+</tr>
+<tr>
+<td><code>rift</code>, <code>portal</code>, <code>chest</code></td>
+<td>[x, y] tiles: the rift home (its tile carries the tear, <code>Deco.Rift</code>), the way out, the vault&#39;s chest</td>
+</tr>
+<tr>
+<td><code>sites</code></td>
+<td>The challenges&#39; landmarks: kind, name, rect, way in, centre, gate tiles, spawn spots; per kind the path&#39;s slabs and pads, plates, mural stones and how the order is given (<code>hint</code>), a tide hall&#39;s valves and flooded floor, the far side</td>
+</tr>
+<tr>
+<td><code>clues</code></td>
+<td>Lore stones (<code>Deco.LoreStone</code> on their tile): id, title and pages of text</td>
+</tr>
+<tr>
+<td><code>spawns</code></td>
+<td>Where creatures roam: a rect, species ids, and how many at once</td>
+</tr>
+<tr>
+<td><code>plot</code></td>
+<td>The world&#39;s own story (optional): its resident (name, tile, look), what the relics make whole, the relics (<code>Deco.Relic</code> on their tiles), what the resident says, the visions and the reward</td>
+</tr>
+</tbody></table></div>
+<p><strong>Checked as untrusted.</strong> <code>decodeDimension</code> checks everything before use and refuses a bad file whole, with a reason: the format and id; sizes against the caps (at most 16 sites, since a shared run packs gates in a 16-bit mask, and at most 600 path slabs, since their timers travel in every shared run state); run lengths against the map; every tile and decoration id; every coordinate and rect inside the map; that no tile is claimed twice; that the rift has its tear and ground below it; that there is exactly one boss; that the portal and the chest are inside a vault; that the portal, chest, gates, plates, valves and flooded floor stand on open ground, and so do every site&#39;s way in, spawn spots, pads and the boss&#39;s spot; that the mural&#39;s glyphs all have plates; that clues stand on lore stones and relics on relics; that the resident&#39;s look is one the game has; that spawn zones name only creatures met in that dimension (never its boss); and string lengths and list sizes. The Hollow&#39;s file is 31 KB, the Archive&#39;s 33 KB.</p>
+<p><strong>Where maps come from.</strong> The game asks a <code>DimensionSource</code> (<code>src/dimension/DimensionSource.ts</code>) for a dimension by id. Today that is <code>LocalDimensionSource</code>: it fetches the shipped file from the same origin (the CSP&#39;s <code>connect-src &#39;self&#39;</code> allows it), gives up a fetch that takes over 10 s, refuses anything over 4 MB (before reading it, when the size is sent), parses and decodes it. <code>DimensionCache</code> keeps each decoded map, so it loads once; a map that could not be reached is tried again after 5 s, not sooner, and one that was refused (bad data) is not asked for again this session. <strong>A server-backed source is later work:</strong> it only has to implement <code>load(id)</code> the same way, and its answers are checked just the same.</p>
+<p><strong>Loading early.</strong> When the player comes within 40 tiles of an open rift, the map behind it starts loading (and so do the maps of every world cleared, for the chooser), so stepping through never waits. If it is not ready when the player presses E, the rift says &quot;The rift is still settling. Try again in a moment.&quot;; if it failed, &quot;The rift won&#39;t open: what lies beyond can&#39;t be reached right now.&quot; (the reason goes to the console), and the player stays in the overworld.</p>
+<h2 id="baking-a-fixed-map">Baking a fixed map<a class="anchor" href="#baking-a-fixed-map" aria-label="Link to this section">#</a></h2>
+<p>A fixed map is made once by a baker and committed: <code>npm run bake</code> (<code>scripts/bake-dimensions.mjs</code>, which loads the TypeScript bakers through Vite) writes <code>public/dimensions/&lt;id&gt;.json</code> for every world, after checking that the game would accept it. The bakers (<code>src/dimension/bake/hollowMap.ts</code>, <code>archiveMap.ts</code>) build each map from a fixed seed around hand-placed landmarks, so baking again gives the same file byte for byte (tests check the shipped files against fresh bakes). A bake fails rather than write a map that cannot be finished: from the arrival every site, pad, plate, valve, spawn spot, far side, lore stone, relic, the resident and the vault must be reachable, and the vault must not be reachable with the boss&#39;s gate shut.</p>
 <h2 id="entering-and-leaving">Entering and leaving<a class="anchor" href="#entering-and-leaving" aria-label="Link to this section">#</a></h2>
-<p>Facing a rift&#39;s tear in the overworld shows <strong>E Enter the rift</strong> (<a href="objects-and-structures.html#rifts">objects-and-structures.md</a>). Pressing E:</p>
+<p>Facing a rift&#39;s tear in the overworld shows <strong>E Enter the rift</strong> (<a href="objects-and-structures.html#rifts">objects-and-structures.md</a>). Each rift object carries <code>dimension</code>, the id of the dimension it opens onto, rolled when it appears: rifts lead to the first world in story order the player has not cleared, sometimes back to one already cleared, never ahead (<code>dimensionForRift</code>; <a href="story.html#where-rifts-lead">story.md</a>). So every rift opens onto The Hollow until it is cleared; after that they lean to The Drowned Archive. Once the player has cleared a world, E first asks where to tune the rift: where it opens, or any world cleared (<code>retuneChoices</code>; number keys, click or tap). Pressing E (and choosing, if asked) pulls the player into the tear in a short passage (about 1.3 s; <a href="rendering.html#passing-through-a-rift">rendering.md</a>): input is locked and the world waits, and under the passage&#39;s cover the game:</p>
 <ol>
-<li>Seeds the space from the rift: <code>hash(worldSeed, hashString(rift.id))</code>, so the same rift always leads to the same layout, and <code>pickDimension(seed)</code> chooses which dimension (always The Hollow for now).</li>
-<li>Makes a <code>RiftTrip</code> and moves the fight there (<code>CombatSystem.enterArena</code>): the overworld&#39;s enemies and shots are stashed, untouched, until the player is back.</li>
-<li>Hides the overworld&#39;s sprites and opens the <code>DimensionRenderer</code>, then puts the player on the arrival platform, below the rift they came in by.</li>
+<li>Seeds what is random inside from the rift: <code>hash(worldSeed, hashString(rift.id))</code> (the vault&#39;s rewards, the roaming creatures). The land itself is the map&#39;s.</li>
+<li>Makes the dimension&#39;s land (<code>DimensionWorld</code>) and a <code>RiftTrip</code>, and moves the fight there (<code>CombatSystem.enterArena</code>): the overworld&#39;s enemies and shots are stashed, untouched, until the player is back.</li>
+<li>Keeps what the player carried in (for saving, <a href="#saving">below</a>), stands the world&#39;s resident where it waits, and takes the relics this player already found off the land.</li>
+<li>Hides the overworld&#39;s sprites, opens the <code>SiteRenderer</code>, puts the player below the rift home, and draws the land around them at once. Entering takes about 10 ms.</li>
 </ol>
 <p>There are three ways out, all back to the doorstep below the rift in the overworld:</p>
 <div class="table-wrap"><table>
@@ -40,13 +96,13 @@
 </tr>
 </thead>
 <tbody><tr>
-<td>Step through the portal in the vault (it wakes once the boss falls)</td>
-<td>Closed: it shows a scar while its region stands, and +150 XP</td>
+<td>Step through the portal in the vault (it wakes once the boss falls; it takes only an attuned player, <a href="#contribution-and-attunement">below</a>)</td>
+<td>Closed: it shows a scar while its region stands, the player&#39;s share of the experience, and the world counts as cleared</td>
 <td>Done</td>
 </tr>
 <tr>
-<td>Step back onto the arrival rift</td>
-<td>Still open</td>
+<td>Face the rift home and press E: <strong>E Step back through the rift</strong></td>
+<td>Still open, unless the boss has fallen and the player is attuned: then it seals behind them, as the portal would (&quot;With its Warden gone, the rift seals behind you.&quot;)</td>
 <td>Lost: entering again starts over</td>
 </tr>
 <tr>
@@ -55,133 +111,273 @@
 <td>Lost, and so is everything carried (<a href="#dying">below</a>)</td>
 </tr>
 </tbody></table></div>
-<p>Leaving restores the overworld exactly: the trip&#39;s enemies go, the overworld&#39;s come back as they were, the overworld renders again (chunks re-culled, buildings rescanned from their cached art, ground items redrawn), and the dimension&#39;s meshes and sprites go back to their pools.</p>
-<p><strong>While inside</strong>, the overworld goes on as it does for a player indoors (<a href="buildings-and-interiors.html#entering">buildings-and-interiors.md</a>): the clock, hunger, thirst and villagers&#39; days run (<code>LivingWorld.updateIndoors</code>), the world keeps streaming around the rift outside, and world events can still fire there (an ambush waits in the stash). Nothing of the overworld&#39;s combat runs: no wild spawning, despawning by distance, guard triggers or legend rolls. There is no weather; hazards, ground items and gathering are the overworld&#39;s and stay there. Only by-hand recipes can be crafted, nothing can be dropped, and what does not fit in the bag is left outside the rift.</p>
+<p>A blow that kills the player the same moment they step into the portal or the rift home counts first: they die, as anywhere inside. Every way out is a passage too. Closing waits for the player to be out: then the tear collapses behind them, and only then come the experience and the story&#39;s beat (the world&#39;s closing vision, the first time it is cleared). Leaving restores the overworld exactly; the dimension&#39;s chunks go back to their pool (shared by every trip) and its site sprites to theirs.</p>
+<p><strong>While inside</strong>, the overworld goes on as it does for a player indoors (<a href="buildings-and-interiors.html#entering">buildings-and-interiors.md</a>): the clock, hunger, thirst and villagers&#39; days run, the world keeps streaming around the rift outside, and world events can still fire there. Nothing of the overworld&#39;s combat runs. There is no weather. Only by-hand recipes can be crafted. What does not fit in the bag (a kill&#39;s drops, the vault, a plot&#39;s reward) is left on the ground where the player stands <strong>inside</strong>, to pick up by walking over it, and is lost with the trip: nothing found behind a rift is banked outside it.</p>
+<h2 id="the-land">The land<a class="anchor" href="#the-land" aria-label="Link to this section">#</a></h2>
+<p><code>DimensionWorld</code> (<code>src/dimension/DimensionWorld.ts</code>) is the dimension&#39;s land on the overworld&#39;s engine: a <code>ChunkManager</code> fed by <code>FixedGenerator</code>, which slices chunks out of the map at once (off the map is void), drawn by the game&#39;s second <code>TileRenderer</code> into its own ground layer. There are no regions, no forgetting and no rolled structures; the map&#39;s edge is void all round.</p>
+<ul>
+<li><strong>Collision</strong> reads the map&#39;s arrays directly (<code>isSolidAt</code>, <code>isVoidAt</code>, <code>tileAt</code>, <code>decoAt</code>), so it works anywhere on the map, loaded or not, in O(1) without allocating. Off the map is solid.</li>
+<li><strong>Nobody falls.</strong> The void (<code>Tile.Void</code>, and <code>Tile.VoidCliff</code> under the land&#39;s edge) is a wall for the player and for walking creatures, all round every island and along every causeway. Only a hazard path&#39;s slabs bridge it (<a href="#challenges">below</a>). Fliers and shots still cross it.</li>
+<li><strong>Gathering</strong> works as outdoors (<code>GatheringSystem</code> points at the land): trees give wood, shard grass herbs, glow caps mushrooms, rift crystals crystals, stones stone. What is gathered is gone for this trip; the next trip finds the map as it was made.</li>
+</ul>
 <h2 id="the-hollow">The Hollow<a class="anchor" href="#the-hollow" aria-label="Link to this section">#</a></h2>
-<p>A chain of stone chambers floating in a violet void, 96 × 96 tiles (<code>src/dimension/Hollow.ts</code>). Six chambers are laid end to end by a backtracking search from a random start, each joined to the last by a short walled corridor with a three-tile door into the next:</p>
+<p>256 × 256 tiles of violet moss, ash and shard sand adrift in a starry void, tied together by ruined causeways. Light is the dimension&#39;s own at every hour (darkness 0.55, tinted violet). The HUD&#39;s location names the site the player stands in, else the region.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>Chamber</th>
-<th>Size (tiles, walls included)</th>
-<th>Challenge</th>
+<th>Region</th>
+<th>Where</th>
+<th>What is there</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Arrival</td>
-<td>11 × 11</td>
-<td>None: the rift home, rune tiles and four crystals</td>
+<td>Shattered Shore</td>
+<td>South</td>
+<td>The arrival, below the rift home on a ring of flagstones</td>
 </tr>
 <tr>
-<td>Glitch nest</td>
-<td>17–19 × 15–17</td>
-<td>Waves</td>
+<td>Ruined Causeway</td>
+<td>The middle</td>
+<td>A ruined plaza where the roads meet</td>
 </tr>
 <tr>
-<td>Crumbling path</td>
-<td>21–23 square</td>
-<td>Hazard path</td>
+<td>Ash Fields</td>
+<td>West</td>
+<td>Ash trees, stones; the Glitch Nest; the Ember Watch, a ruined watch post with bones round its dead fire</td>
 </tr>
 <tr>
-<td>Glyph hall</td>
-<td>15–17 × 13–15</td>
-<td>Glyph puzzle</td>
+<td>Glyphwood</td>
+<td>North-west</td>
+<td>A dense violet wood; the Glyph Hall; a broken causeway out to the Quiet Islet</td>
 </tr>
 <tr>
-<td>Warden&#39;s arena</td>
-<td>21–23 × 19–21</td>
-<td>Boss</td>
+<td>Crystal Reach</td>
+<td>East</td>
+<td>Rift crystals and shard sand; the Sunken Shrine (a rune ring and a worn statue); the ledge of the Crumbling Path</td>
 </tr>
 <tr>
-<td>Vault</td>
-<td>11 × 9</td>
-<td>None: the portal home and the vault&#39;s chest</td>
+<td>The Far Shelf</td>
+<td>Beyond the chasm, east</td>
+<td>Crystals; a lore stone</td>
+</tr>
+<tr>
+<td>Warden&#39;s Rise</td>
+<td>North</td>
+<td>The Warden&#39;s arena on its plateau, the vault behind it; the ground round it pocked with the Null&#39;s marks, where Null Shades roam</td>
+</tr>
+<tr>
+<td>A Drifted Wood</td>
+<td>Off the shore, west</td>
+<td>Overworld forest that drifted here</td>
+</tr>
+<tr>
+<td>The Lost Hamlet</td>
+<td>Off the shore, east</td>
+<td>A drifted village&#39;s ruins, a well, a field gone to seed, graves, and an empty bell frame where Isolde waits</td>
+</tr>
+<tr>
+<td>The Quiet Islet</td>
+<td>Far north-west</td>
+<td>A secret, at the end of the broken causeway: the seventh stone and a piece of the bell</td>
 </tr>
 </tbody></table></div>
-<p>The HUD&#39;s location names the chamber the player stands in (<code>RiftTrip.chamberAt</code>). Light comes from crystals, the rift, safe pads and the portal; the space&#39;s darkness is 0.55 at every hour, tinted violet. Its music and sounds are in <a href="audio.html">audio.md</a>.</p>
-<p><strong>Doors.</strong> The door into a chamber stays sealed until the chamber before it is done. The waves and the boss also seal the door behind the player while they fight, and open it again when they are won (or reset).</p>
+<p><strong>Drifted fragments.</strong> A Drifted Wood and The Lost Hamlet are made of the overworld&#39;s own tiles and decorations: places the world let go of, come to rest here (<a href="story.html#the-canon">story.md</a>). <strong>The Null&#39;s marks</strong> (<code>Tile.NullMark</code>): small, perfectly round absences in the moss round the Warden&#39;s plateau.</p>
+<p><strong>The sites</strong> (trials in any order): the <strong>Glitch Nest</strong> (waves), <strong>The Crumbling Path</strong> (a hazard path across the chasm to the Far Shelf), the <strong>Glyph Hall</strong> (a glyph puzzle, its order lit on the mural), <strong>Warden&#39;s Arena</strong> (the Rift Warden; sealed until the three trials are done) and <strong>The Vault</strong> (the portal home and the chest, reached only through the arena). Each trial done breaks a seal: &quot;A seal breaks. 2 still bind the Warden&#39;s gate.&quot;</p>
+<p><strong>Creatures:</strong> Glitchlings, Shard Wisps (fliers) and Null Shades (glitchlings the Null has hollowed out: slower, tougher, and their touch slows). <strong>Waves:</strong> 4 Glitchlings; 3 Glitchlings and 2 Shard Wisps; 3 Glitchlings and 3 Shard Wisps. <strong>The Rift Warden:</strong> below 66% &quot;The Warden tears the air open.&quot; (3 Glitchlings); below 33% &quot;The Warden flickers with fury.&quot; (2 Shard Wisps; attacks ×0.55 cooldown, moves ×1.35); at most 6 summons. Closing is worth 150 XP. Its music is the <code>rift</code> mood (<a href="audio.html">audio.md</a>).</p>
+<h2 id="the-drowned-archive">The Drowned Archive<a class="anchor" href="#the-drowned-archive" aria-label="Link to this section">#</a></h2>
+<p>The second world: the library where the keepers of the old network wrote down every place the world let go of, adrift in the void and half drowned in black ink-water. 256 × 256 tiles of cold marble (<code>Tile.ArchiveFloor</code>, <code>ArchiveWet</code>), worn carpet (<code>ArchiveCarpet</code>), shelves to the ceiling as its walls (<code>BookWall</code>, with their fronts, <code>BookWallFace</code>), ankle-deep shallows to wade (<code>Shallows</code>) and pools of ink too deep to (<code>InkWater</code>, solid). Darkness 0.5 at every hour, tinted deep teal, lit by reading lamps, lecterns and lore stones; its music is the <code>archive</code> mood, a low, mournful minor, with water dripping in the stacks (<a href="audio.html">audio.md</a>).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Region</th>
+<th>Where</th>
+<th>What is there</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>The Lower Stacks</td>
+<td>South</td>
+<td>The arrival in a ring of marble, rows of shelves either side</td>
+</tr>
+<tr>
+<td>The Reading Room</td>
+<td>The middle</td>
+<td>A great walled hall, carpet down its middle, ink pools in its corners, lamps; the Great Lectern, where Ondine waits by the empty Ledger</td>
+</tr>
+<tr>
+<td>The Flooded Stacks</td>
+<td>West</td>
+<td>Long shelves standing in the shallows; the Scriptorium; an index page</td>
+</tr>
+<tr>
+<td>The Cipher Wing</td>
+<td>North-west</td>
+<td>The Cipher Gallery, and the catalogue stone by its door</td>
+</tr>
+<tr>
+<td>The Sluice Wing</td>
+<td>East</td>
+<td>The Sluice Hall</td>
+</tr>
+<tr>
+<td>The Map Room</td>
+<td>Past the Sluice Hall</td>
+<td>A round room of charts; an index page</td>
+</tr>
+<tr>
+<td>The Lost Carrel</td>
+<td>North-east</td>
+<td>A secret: a reading nook up a narrow board-walk off the east bridge; an index page and the last keeper&#39;s note</td>
+</tr>
+<tr>
+<td>The Atrium</td>
+<td>North</td>
+<td>The Archivist&#39;s hall, sealed until the three trials are done; the vault behind it</td>
+</tr>
+<tr>
+<td>The Ink Sea</td>
+<td>Round the edges</td>
+<td>Drifts of floor in the void</td>
+</tr>
+</tbody></table></div>
+<p><strong>The sites:</strong> <strong>The Scriptorium</strong> (waves: 5 Drowned Pages; 3 Drowned Pages and 2 Ink Wraiths; 3 Ink Wraiths and 2 Null Shades; 4 Drowned Pages, 2 Ink Wraiths and a Null Shade), <strong>The Sluice Hall</strong> (a tide hall, <a href="#challenges">below</a>), <strong>The Cipher Gallery</strong> (a glyph puzzle whose order is <strong>written</strong>: the mural stays dark, and the catalogue stone outside spells the order out, &quot;first the moon, then the star, …&quot;), <strong>The Atrium</strong> (the Archivist) and <strong>The Vault</strong>.</p>
+<p><strong>Creatures:</strong> Drowned Pages (torn pages that swim through the air in shoals: fast, frail), Ink Wraiths (spilt ink that learned to want: fliers that spit, and slow what they hit), Null Shades. <strong>The Archivist</strong> (900 health): below 70% &quot;The Archivist tears pages from itself.&quot; (4 Drowned Pages); below 40% &quot;Ink pours from the Archivist.&quot; (3 Ink Wraiths; cooldown ×0.7, speed ×1.2); below 15% &quot;The Archivist forgets itself.&quot; (2 Null Shades; ×0.5, ×1.4); at most 7 summons. Closing is worth 260 XP; the vault is richer than the Hollow&#39;s (<code>ARCHIVE_REWARDS</code>: 4–7 Rift Shards, 40–80 coins, crystals, gems, star metal, spirit essence).</p>
 <h2 id="challenges">Challenges<a class="anchor" href="#challenges" aria-label="Link to this section">#</a></h2>
-<p><code>src/dimension/Challenges.ts</code>. Each challenge chamber has a state machine (idle, active, done); <code>DimensionRun</code> sequences them. Per frame the game calls <code>run.update(dt, px, py)</code> with the player&#39;s feet and acts on the events it reports (<code>takeEvents</code>); nothing in a run allocates per frame.</p>
-<p><strong>Waves (Glitch nest).</strong> Walking two tiles into the chamber seals it: &quot;The doors seal. Something crawls out of the cracks…&quot;. Three waves come out of spawn spots around the walls, away from the player: 4 Glitchlings; 3 Glitchlings and 2 Shard Wisps; 3 Glitchlings and 3 Shard Wisps. The next wave arrives 1.5 s after the last one falls; after the third the doors open.</p>
-<p><strong>Hazard path (Crumbling path).</strong> The room is void, with a ledge at each door and a winding path of floating slabs between them, with a 2 × 2 safe pad at each bend:</p>
+<p><code>src/dimension/Challenges.ts</code>. Each challenge site has a state machine (idle, active, done); <code>DimensionRun</code> keeps them. Per frame the game calls <code>run.update(dt, px, py)</code> with the player&#39;s feet and acts on the events it reports (<code>takeEvents</code>); nothing in a run allocates per frame.</p>
+<p><strong>Waves.</strong> Walking two tiles into the site seals its gate: &quot;The gate seals. Something crawls out of the cracks…&quot;. The waves come out of spawn spots around the walls, away from the players; the next arrives 1.5 s after the last falls; after the last the gate opens.</p>
+<p><strong>Slips, not falls.</strong> When the ground goes from under the player (a slab gives way or glitches out under them, or the water rises over them) they are thrown back to the site&#39;s last safe spot, hurt (<code>slip</code>: 8 in The Hollow, 10 in the Archive): &quot;The ground gives way! You scramble back to safe footing…&quot; or &quot;The water knocks you off your feet and drags you back…&quot;.</p>
+<p><strong>Hazard path (The Crumbling Path).</strong> A chasm with a ledge on this side and the Far Shelf beyond, crossed on a winding path of floating slabs with a safe pad at each bend. A slab that is gone is a gap nobody can step into, and the void beside the path is a wall, so it is a race, not a fall:</p>
 <ul>
-<li>Crumbling slabs crack when stepped on, fall 0.55 s later, and come back 5 s after that.</li>
-<li>Glitching slabs blink on a cycle: there for 2 s (flickering for the last 0.5), gone for 1.3 s. Each run of them has a safe step before it to wait on.</li>
-<li>Walking onto the void, a fallen slab or a glitched-out one is a fall: 15 damage, and the player is put back on the last safe pad touched (a fall also puts every slab back, so the way is open again).</li>
-<li>Reaching the far ledge finishes it: &quot;Solid ground again.&quot;</li>
+<li>Crumbling slabs crack when stepped on, give way 0.55 s later (blocking the way), and come back 5 s after that. Keep moving: still standing on one when it goes is a slip back to the last pad.</li>
+<li>Glitching slabs blink on a cycle: there for 2 s (flickering for the last 0.5), gone for 1.3 s. Each run of them has two fixed stepping stones before it to wait on.</li>
+<li>A slip puts every slab back, so the way is open again.</li>
+<li>Reaching the Far Shelf finishes it: &quot;Solid ground again. Behind you, the path settles and holds.&quot;</li>
 </ul>
-<p><strong>Glyph puzzle (Glyph hall).</strong> Four or five of six glyphs are carved on mural stones along a wall without a door; the same glyphs are on pressure plates scattered over the floor. The stones light up one after another in the order to press the plates (0.7 s each, then a pause of two beats), and stay lit as each is done. A wrong plate springs them all back up (&quot;Wrong order&quot;). The last right one opens the door.</p>
-<p><strong>Boss (Warden&#39;s arena).</strong> Walking three tiles into the arena seals it and wakes <strong>The Rift Warden</strong> in the centre of its rune circle. Its health drives two phases:</p>
+<p><strong>Tide hall (The Sluice Hall).</strong> A long hall: a dry ledge, three bands of flooded floor with shelves standing in them (so the dry way winds), and the far side. A sluice valve is set in the floor at the ledge and at the end of each band (<code>DimTile.Valve</code>); the floor the water covers is <code>DimTile.Flood</code>, each tile with its band&#39;s depth (in the layout&#39;s <code>phase</code>). The water stands at 3:</p>
+<ul>
+<li>Stepping onto the next valve in turn lowers it a stage (&quot;The valve turns. The water drains a stage.&quot;), uncovering the next band down to the next valve. A valve out of turn does nothing.</li>
+<li>The water holds low only 7 s (<code>tideHold</code>), then rises a stage again (&quot;The water surges back up a stage!&quot;), the band about to go under showing the water creeping over it for the last 2.5 s (<code>tideWarn</code>). Rising over someone is a slip back to the ledge. Each valve after the first stands in the band before it and goes under with it, so nobody is ever left on an island.</li>
+<li>Reaching the far side finishes it, and the hall drains for good.</li>
+</ul>
+<p>Flooded floor and drowned valves block walkers; fliers cross them. On a mirror (<a href="#playing-with-others">below</a>) the water level and the hold travel with the run.</p>
+<p><strong>Glyph puzzle (Glyph Hall, The Cipher Gallery).</strong> Five of six glyphs (ring, triangle, cross, diamond, moon, star) are carved on mural stones along the north wall; the same glyphs are on pressure plates scattered over the floor, pressed by stepping on them. In the Glyph Hall the stones light up one after another in the order to press the plates (0.7 s each, then two beats&#39; pause); in the Cipher Gallery (<code>hint: &#39;text&#39;</code>) they stay dark, and the order is written on the catalogue stone outside. Done plates stay lit. A wrong plate springs them all back up (&quot;Wrong order&quot;). Only the site&#39;s own plates count.</p>
+<p><strong>Boss.</strong> Walking three tiles into the arena seals it and wakes the boss in its ring. Its health drives its phases, each summoning adds and quickening it; when it falls, its summons fade, the gate opens and the portal wakes.</p>
+<h2 id="plots">Plots<a class="anchor" href="#plots" aria-label="Link to this section">#</a></h2>
+<p>Each world has a short story of its own, told by someone who lives there. Its progress is each player&#39;s own, kept in the story save (<a href="saves.html">saves.md</a>); it works alone and in shared instances alike (nothing of it travels: each player meets the resident, finds the relics and restores for themselves).</p>
+<ul>
+<li><strong>The resident</strong> stands where it waits, drawn faint (a spirit: <code>Npc</code> with role <code>spirit</code>, its own look). It turns to the player when near, shows <strong>!</strong> before they have met and <strong>✓</strong> once every relic is found. <strong>E Talk to …</strong> within 1.8 tiles: their words page by page (&quot;…&quot; goes on). What they say follows the player&#39;s progress: first meeting (the plot is set out), while relics are out there (&quot;The bell is in pieces still: 1 of 3 found.&quot;), once all are found (ready; the last page offers <strong>Give back the pieces</strong>), after restoring, and once the world is cleared.</li>
+<li><strong>The relics</strong> (<code>Deco.Relic</code>, a glowing piece on a plinth) lie in the world&#39;s corners: <strong>E Take the …</strong> (&quot;Found the bell lip (2/3)&quot;). A relic found is gone from the land for that player on every later trip.</li>
+<li><strong>Restoring</strong> shows the world&#39;s vision and gives its reward (experience and items; what does not fit stays on the ground inside).</li>
+<li><strong>The closing vision</strong>: the first time a world is cleared, its own vision shows as the rift seals.</li>
+<li>The tracker shows the plot&#39;s line inside its world: &quot;Someone waits here: seek out Isolde&quot; (with an arrow), &quot;Restore the hamlet&#39;s bell: 1/3 pieces&quot;, &quot;Bring the pieces back to Isolde&quot; (with an arrow); nothing once restored.</li>
+</ul>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>Below</th>
-<th>What happens</th>
+<th>World</th>
+<th>Resident</th>
+<th>Relics (where)</th>
+<th>Restored</th>
+<th>Reward</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>66%</td>
-<td>&quot;The Warden tears the air open.&quot; 3 Glitchlings join it</td>
+<td>The Hollow</td>
+<td>Isolde, the Lost Hamlet&#39;s bell-ringer, by the empty bell frame</td>
+<td>Bell crown (the Ember Watch), bell lip (the Far Shelf, past the Crumbling Path), bell clapper (the Quiet Islet)</td>
+<td><em>The Bell Rings</em>: the Warden, for a heartbeat, remembers being her father, and who came up the road before the hum</td>
+<td>120 XP, 2 Rift Shards, 40 coins</td>
 </tr>
 <tr>
-<td>33%</td>
-<td>&quot;The Warden flickers with fury.&quot; 2 Shard Wisps join it, and it attacks faster (cooldown ×0.55) and moves faster (×1.35)</td>
+<td>The Drowned Archive</td>
+<td>Ondine, the last keeper, by the Great Lectern</td>
+<td>Index of the Drowned (the Flooded Stacks), Index of the Kept (the Map Room, past the Sluice Hall), Index of the Null (the Lost Carrel)</td>
+<td><em>The Ledger Opens</em>: the newest entry in the Ledger of the Drift is in the player&#39;s own hand</td>
+<td>200 XP, 3 Rift Shards, a gemstone</td>
 </tr>
 </tbody></table></div>
-<p>At most 6 summons live at once. The phases&#39; multipliers go on that one enemy (<code>Enemy.speedScale</code>, <code>cooldownScale</code>), never on its species. When it falls, its summons fade, the doors open and the portal wakes: &quot;The way home opens.&quot;</p>
-<p><strong>The creatures</strong> (stats in <a href="combat.html#enemies">combat.md</a>) are as tough as the land around the rift: their difficulty band is the rift&#39;s, so rifts far from home are harder. All three are weak to spirit damage. Glitchlings swarm fast; Shard Wisps float over the void (walls still stop them) and shoot shards. A walker knocked off an edge falls and dies; the Warden keeps its footing.</p>
+<p>The plots&#39; text is in each map&#39;s data, like its lore (<a href="story.html#outer-worlds">story.md</a>).</p>
+<h2 id="contribution-and-attunement">Contribution and attunement<a class="anchor" href="#contribution-and-attunement" aria-label="Link to this section">#</a></h2>
+<p>A run is one <strong>instance</strong> of its dimension, built to hold several players: a host feeds it each player&#39;s position (<code>join</code>, <code>move</code>, <code>leave</code>) and hits (<code>damage</code>) by player id; alone, the player is <code>LOCAL</code> and has everything. <code>Contribution</code> (<code>src/dimension/Contribution.ts</code>) keeps the tally:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scores</th>
+<th>How much</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Damage dealt to the boss or one of its summons</td>
+<td>Point for point (only what was really taken)</td>
+</tr>
+<tr>
+<td>Breaking a trial</td>
+<td>100, split among the players who took part: in a shared instance, those who spent at least 4 s inside its site while it was under way, and, for waves, struck one of its creatures. Standing beside a site does not count. Alone, the player</td>
+</tr>
+</tbody></table></div>
+<p>Nothing else counts: roamers, lore stones, plots and gathering are each player&#39;s own. When the boss falls the shares are <strong>settled</strong> (<code>DimensionRun.share(player)</code>):</p>
+<ul>
+<li><strong>The vault</strong>, rolled once from the run&#39;s seed, goes by share: each item&#39;s count times the share, rounded down; what rounding leaves goes to the top scorer. Each player opens their own share of the chest.</li>
+<li><strong>Experience</strong> for closing the rift (<code>DimensionDef.closeXp</code>) goes by share, with a floor of a quarter for every attuned player.</li>
+<li><strong>Attunement</strong>: a player with a tenth of the score, or who broke a trial, is attuned. The portal takes only attuned players home (and closes <em>their</em> rift); to anyone else: &quot;The portal does not answer you.&quot;</li>
+<li>With no score at all (a run skipped through in the playground), everyone in it shares alike.</li>
+</ul>
+<p>Alone, the player has the whole score: the whole vault, all the experience, always attuned.</p>
+<p><strong>Shared instances</strong> (<code>run.shared</code>, set by a host; never alone): the boss returns 20 minutes after it falls (<code>WARDEN_RETURN</code>): its arena resets, the portal falls dark, the vault fills again and the tally starts over, kept to the players still there. A wave or boss fight with nobody left inside its site (they died, or went home) resets after 5 s, opening its gate, so no instance is ever locked.</p>
+<p><strong>Roaming creatures</strong> roam the land from the map&#39;s spawn zones, as tough as the land around the rift (its difficulty band). Once a second, each zone within 40 tiles of a player with room under its cap gets one, 13–30 tiles from the players (out of sight), never within 14 tiles of the rift home, on open ground, outside the sites. Those more than 48 tiles from everyone leave. A zone rests 20 s after one of its creatures is killed.</p>
+<h2 id="playing-with-others">Playing with others<a class="anchor" href="#playing-with-others" aria-label="Link to this section">#</a></h2>
+<p>Behind a rift, other players can be met: a dimension&#39;s <strong>instances</strong> are open to anyone (the overworld is by invitation; see <a href="networking.html">networking.md</a>). Everyone in an instance stands on the same fixed map (peers compare the map file&#39;s hash), so only the run, the creatures and the players travel. Code: <code>src/coop/</code> (loaded the first time it is needed; solo play never downloads it) over <code>src/net/</code>.</p>
+<p><strong>The Drift Beacon.</strong> Every player carries one (new worlds start with it; older saves are given one on load). It is bound to the player: it cannot be dropped or sold, and is not lost on dying behind a rift. <strong>B</strong> (or the touch <strong>Beacon</strong> button, or using it from the hotbar) opens its panel: rift trips public or private (kept in Settings, <code>publicRifts</code>), who is in the instance and its code, the open instances of the dimension ahead (&quot;Hana&#39;s The Hollow · 2 of 8 · seals 1 of 3&quot;), the player&#39;s name, and sharing the overworld by code.</p>
+<p><strong>Entering a public rift.</strong> At full cover the passage holds while the beacon looks on the board for an instance of that dimension with room and joins it, or opens a new one and posts it. The hold lasts at most 9 s: if no one answers in time, the trip goes on alone. A private trip never waits.</p>
+<p><strong>Who runs what.</strong> One player, the <strong>host</strong>, runs the instance: the run (trials, gates, the water, the boss and its phases, the tally, the vault), every creature and every enemy shot. Every player runs their own player: movement, slips (on the host&#39;s slabs and water, as the host last said; their own steps crack a slab at once), checkpoints, the map&#39;s fog, lore stones, their plot, their bag and their vitals.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>What</th>
+<th>How it travels</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Each player&#39;s state</td>
+<td>To everyone, 20 times a second, unreliable (<code>PlayerState</code>, 21 bytes)</td>
+</tr>
+<tr>
+<td>Creatures and enemy shots near each guest</td>
+<td>Host to that guest, 20 times a second, as a delta (<code>Snapshot</code>, at most one packet)</td>
+</tr>
+<tr>
+<td>The run: every site&#39;s state (a tide hall&#39;s level and hold among them), gates, the boss, the tally, the vault taken</td>
+<td>Host to everyone when it changes (at most 10 a second; at least every 2 s), reliable (<code>RunState</code>); a vault taken is shared at once</td>
+</tr>
+<tr>
+<td>The run&#39;s news: a gate, a wave, a plate or valve, a phase, a notice</td>
+<td>Host to everyone, reliable (<code>Event</code>)</td>
+</tr>
+<tr>
+<td>A guest&#39;s blow on a creature</td>
+<td>Guest to host (<code>Request</code>): checked for reach, rate and strength, then applied</td>
+</tr>
+<tr>
+<td>A creature&#39;s blow on a guest</td>
+<td>Host to that guest (<code>Event</code>), through the guest&#39;s own armour</td>
+</tr>
+</tbody></table></div>
+<p><strong>Shares.</strong> When the boss falls the host settles the tally and tells each guest their share, experience and whether they are attuned; a guest who joins (or comes back) after that is told when they arrive. A guest opening the vault asks the host, who gives their share once. A guest stepping into the portal before taking their share asks for it and waits a moment (3 s at most) for the answer before going, so it is not lost on the way out. The portal closes only the stepping player&#39;s own rift.</p>
+<p><strong>Coming and going.</strong> A player who dies is thrown out to their own rift (losing what they carried, as alone); one who leaves goes home; the instance carries on. When the <strong>host</strong> goes, the longest-connected player takes over: their mirror of the run becomes the run, from the last state the host shared, the tally included; the creatures they were drawing become real by the same ids, and keep their boss&#39;s phase quickening. Creatures the old host ran that never reached the new one are forgotten: a wave carries on without them, a boss nobody runs waits in its arena again.</p>
+<h2 id="clues">Clues<a class="anchor" href="#clues" aria-label="Link to this section">#</a></h2>
+<p>Lore stones stand across the land, numbered so they read in order: seven in The Hollow, six in the Archive, each a clue to the main story (<a href="story.html">story.md</a>). Facing one shows <strong>E Read the stone</strong>; reading it shows its text as a vision. The first read of each is worth 20 XP; the story keeps which were read, per world, and the tracker counts them inside: &quot;Lore stones read: 2/7&quot;.</p>
 <h2 id="rewards">Rewards<a class="anchor" href="#rewards" aria-label="Link to this section">#</a></h2>
-<p>The vault&#39;s chest opens with E once the boss has fallen (it opens by itself if the player steps through the portal first). It is rolled once from the run&#39;s seed (<code>HOLLOW_REWARDS</code>):</p>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Item</th>
-<th>Count</th>
-<th>Chance</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Rift Shard</td>
-<td>3–5</td>
-<td>Always</td>
-</tr>
-<tr>
-<td>Coin</td>
-<td>20–45</td>
-<td>Always</td>
-</tr>
-<tr>
-<td>Crystal</td>
-<td>1–2</td>
-<td>60%</td>
-</tr>
-<tr>
-<td>Gemstone</td>
-<td>1</td>
-<td>30%</td>
-</tr>
-<tr>
-<td>Star Metal</td>
-<td>1</td>
-<td>25%</td>
-</tr>
-</tbody></table></div>
-<p>Rift Shards are found nowhere else. They forge a <strong>Rift Blade</strong> (an Iron Sword, 4 shards and a Crystal at an anvil: 24 spirit damage, reach 1.7), make a <strong>Rift Tonic</strong> by hand (1 shard, 2 Herbs: +45 health, +10 thirst, cures poison) or 10 arrows (1 shard, 2 Wood), and sell for 30 coins (<a href="survival.html#crafting">survival.md</a>). Closing the rift is worth 150 XP, and the Warden counts as a trophy.</p>
+<p>The vault&#39;s chest opens with E once the boss has fallen (it opens by itself if the player steps through the portal first), and gives the player their share of what it holds. It is rolled once from the trip&#39;s seed (<code>HOLLOW_REWARDS</code>, <code>ARCHIVE_REWARDS</code>). Rift Shards are found nowhere else; they forge a <strong>Rift Blade</strong>, make a <strong>Rift Tonic</strong> or arrows, and sell for 30 coins (<a href="survival.html#crafting">survival.md</a>). Closing is worth the player&#39;s share of the world&#39;s experience, and its boss counts as a trophy.</p>
 <h2 id="dying">Dying<a class="anchor" href="#dying" aria-label="Link to this section">#</a></h2>
-<p>Dying inside an outer dimension, from a blow or a fall, <strong>loses every item in the bag and the hotbar</strong> (<code>Inventory.clearCarried</code>). Worn equipment (head, chest, legs, feet and the off hand) is kept. The rift throws the player back out onto its doorstep in the overworld, revived as after any collapse, with an alert: &quot;The rift took everything you carried.&quot; The rift stays open; the run is gone. Dying in the overworld is unchanged: the player wakes at their waking spot and keeps everything.</p>
+<p>Dying inside an outer dimension <strong>loses every item in the bag and the hotbar</strong> (<code>Inventory.clearCarried</code>), but what is bound to the player (the Drift Beacon). Worn equipment is kept. The rift throws the player back out onto its doorstep, revived, with an alert: &quot;The rift took everything you carried.&quot; The rift stays open; the run is gone.</p>
 <h2 id="the-map">The map<a class="anchor" href="#the-map" aria-label="Link to this section">#</a></h2>
-<p>Maps only work inside an outer dimension: there the Map tab shows and <strong>M</strong> opens it (<a href="exploration.html#the-map">exploration.md</a>). <code>DimensionMap</code> (<code>src/ui/DimensionMap.ts</code>) shows:</p>
-<ul>
-<li>the tiles the player has seen (within 6 tiles of where they have stood), coloured by kind; the void stays dark,</li>
-<li>each chamber the player has seen into, by name, with a tick once done,</li>
-<li>the rift home (pink), the portal (pale cyan once open, dark before), and the player (white).</li>
-</ul>
-<p>It frames what has been seen so far, at a whole number of pixels per tile. Fog is one byte per tile (<code>RiftTrip.seen</code>), updated only when the player reaches a new tile, with a version number that rises only when something new is seen. The seen tiles are painted one pixel each into a small canvas only when that version changed, and the map is drawn when the tab opens (the menu pauses the game), never per frame.</p>
+<p>Maps only work inside an outer dimension: there the Map tab shows and <strong>M</strong> opens it (<a href="exploration.html#the-map">exploration.md</a>). <code>DimensionMap</code> shows the fixed map under a fog that lifts as the player walks: the land seen (coloured by ground, water, shelves, trees, crystals and relics), site tiles, each site seen into (ticked once done), the lore stones seen (bright once read), the rift home, the portal and the player. Fog is one byte per tile, painted into a small canvas only when more is seen; the map is drawn when the tab opens, never per frame.</p>
 <h2 id="saving">Saving<a class="anchor" href="#saving" aria-label="Link to this section">#</a></h2>
-<p>Saving inside records the doorstep outside the rift as the player&#39;s position, as indoors: a reload starts outside the rift, and the run&#39;s progress is gone. Nothing of a trip is saved. See <a href="saves.html">saves.md</a>.</p>
+<p>Saving inside records the doorstep outside the rift as the player&#39;s position (and saving during a passage is refused): a reload starts outside the rift, and the run&#39;s progress is gone. <strong>What the save keeps of the bag</strong> is what the player carried in: what was found inside is the rift&#39;s until the player is out, so leaving the page is no way to bank it. And if the player is in danger when the save is made (health under half, or something hunting them within 10 tiles), the save keeps nothing carried but what is bound to them, as dying would: closing the page is no way out of a fight. The story keeps the lore stones read, the plots&#39; progress and, once a rift is closed, the world cleared. See <a href="saves.html">saves.md</a>.</p>
 <h2 id="under-the-hood">Under the hood<a class="anchor" href="#under-the-hood" aria-label="Link to this section">#</a></h2>
-<p><strong>The registry.</strong> <code>DIMENSIONS</code> in <code>src/dimension/Dimension.ts</code> lists every dimension (<code>DimensionDef</code>): its id and name, its mood (darkness, tint, music, palette), size, generator, the creatures met inside, waves, boss and phases, hazard tuning and rewards. <code>pickDimension(seed)</code> chooses one for a rift. A new dimension is a new <code>DimensionDef</code> with its own generator; the challenges, the run, the renderer and the map work on any layout.</p>
-<p><strong>The ground.</strong> A trip is a <code>Place</code> (<code>src/game/Place.ts</code>) and a combat <code>Arena</code>, so the game asks it, not &quot;are we in a dimension?&quot;, for:</p>
+<p><strong>The registry.</strong> <code>DIMENSIONS</code> in <code>src/dimension/Dimension.ts</code> lists how each world plays (<code>DimensionDef</code>), in story order (<code>HOLLOW</code> in <code>Hollow.ts</code>, <code>ARCHIVE</code> in <code>Archive.ts</code>): its id and name, the creatures met inside, the waves, the boss and its phases, the hazards&#39; tuning (slabs, glitches, slips, tides), the rewards and the experience for closing. Its map and its plot come as data with the same id. A new world is a new <code>DimensionDef</code> plus a map (baked now, sent by a server later); the land, the challenges, the run, the plots, the renderers and the map work on any map.</p>
+<p><strong>Performance.</strong> Measured in a headless browser (software rendering), the game&#39;s frame work averages about 0.41 ms walking through The Hollow and 0.32 ms in The Drowned Archive, against about 0.27 ms in the overworld on the same machine. Per frame: the land streams and culls as the overworld does; the run steps its few challenges (a tide hall is a counter and a timer: its water is drawn per tile only for blocks in view); roamers are looked at once a second; the resident is one pooled sprite; relics are decorations; the site renderer touches only blocks in view; the fog updates only on a new tile.</p>
+<p><strong>The ground.</strong> A trip is a <code>Place</code> and a combat <code>Arena</code>, so the game asks it for:</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -191,36 +387,35 @@
 </thead>
 <tbody><tr>
 <td>The player&#39;s collision (<code>isSolidAt</code>)</td>
-<td>Walls, props and sealed doors; the void is open (walking onto it is a fall)</td>
+<td>The land&#39;s walls, rocks, trees and the void (except under a path&#39;s slabs), sealed gates, mural stones and the chest, slabs that are gone, flooded floor and drowned valves</td>
 </tr>
 <tr>
 <td>Walking enemies (<code>blocksEnemies</code>)</td>
-<td>The same, plus the void and every gap in the path</td>
+<td>The same</td>
 </tr>
 <tr>
-<td>Fliers (<code>blocksFlyers</code>)</td>
-<td>Walls, props and sealed doors</td>
+<td>Fliers and shots (<code>blocksFlyers</code>, <code>blocksShots</code>)</td>
+<td>Walls, rocks and trees, gates and stones; they cross the void, gaps and water</td>
 </tr>
 <tr>
-<td>Knockback and shots (<code>isSolid</code>, <code>blocksShots</code>)</td>
-<td>Walls, props and sealed doors; shots fly over the void</td>
+<td>Ground gone from under someone (<code>isHole</code>)</td>
+<td>Slabs given way or glitched out, flooded floor and drowned valves (the void never)</td>
 </tr>
 <tr>
-<td>Falls (<code>isHole</code>)</td>
-<td>The void, fallen slabs and glitched-out ones</td>
+<td>What does not fit in the bag (<code>drop</code>)</td>
+<td>Left on the trip&#39;s own ground, where it fell, lost with the trip</td>
 </tr>
 <tr>
 <td>The player&#39;s spot in the overworld (<code>spot</code>)</td>
-<td>The rift&#39;s doorstep: saving, streaming, the HUD, the clock and overflow go by it</td>
+<td>The rift&#39;s doorstep: saving, the overworld&#39;s streaming, the clock</td>
 </tr>
 </tbody></table></div>
-<p><strong>Events.</strong> <code>RiftTrip.update</code> steps the run, reveals the map around the player, reports the boss&#39;s health share, and handles its own events: <code>spawn</code> (a new <code>Enemy</code> at the rift&#39;s band, provoked, added to combat and mapped id ↔ enemy), <code>despawn</code> (removed without a kill), <code>bossPhase</code> (the boss&#39;s multipliers). Every event then goes to <code>Game.tripEvent</code>: <code>fell</code> hurts the player and moves them to the safe spot, <code>door</code> and <code>plate</code> play sounds, <code>notice</code> and <code>wave</code> show notes, <code>reward</code> puts the items in the bag (overflow outside the rift), <code>closed</code> and <code>leave</code> take the player home. Kills come back the other way: <code>CombatSystem</code> tells its arena (<code>Arena.killed</code>), and the trip tells the run (<code>enemyKilled</code>).</p>
-<p><strong>Rendering.</strong> See <a href="rendering.html#outer-dimensions">rendering.md</a>. Nothing of a dimension runs or is drawn in the overworld, and nothing of the overworld&#39;s combat, glitches or decorations runs or is drawn in a dimension.</p>
-<p>See also: <a href="story.html">story.md</a> · <a href="combat.html">combat.md</a> · <a href="exploration.html">exploration.md</a> · <a href="saves.html">saves.md</a></p>
+<p><strong>Events.</strong> <code>RiftTrip.update</code> steps the run, reveals the map around the player, keeps the roamers, reports the boss&#39;s health share, and handles its own events (<code>spawn</code>, <code>despawn</code>, <code>bossPhase</code>). Every event then goes to <code>Game.tripEvent</code>: <code>slip</code> hurts the player and moves them back, <code>door</code> and <code>plate</code> play sounds, <code>notice</code> and <code>wave</code> show notes, <code>reward</code> puts the local player&#39;s share in the bag, <code>closed</code> and <code>leave</code> take the player home.</p>
+<p><strong>Rendering.</strong> See <a href="rendering.html#outer-dimensions">rendering.md</a>. The tide hall&#39;s water is the site renderer&#39;s flat overlay (<code>flood</code> frames: rising, flooded), its valves flat site tiles (<code>valve</code>); the Archive&#39;s tiles and props are painted by <code>ArchiveArt.ts</code>.</p>
 </article>
-    <nav class="pager"><a class="prev" href="story.html"><small>Previous</small>Story</a></nav>
+    <nav class="pager"><a class="prev" href="story.html"><small>Previous</small>Story</a><a class="next" href="multiplayer-plan.html"><small>Next</small>Multiplayer plan</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#entering-and-leaving">Entering and leaving</a></li><li class="l2"><a href="#the-hollow">The Hollow</a></li><li class="l2"><a href="#challenges">Challenges</a></li><li class="l2"><a href="#rewards">Rewards</a></li><li class="l2"><a href="#dying">Dying</a></li><li class="l2"><a href="#the-map">The map</a></li><li class="l2"><a href="#saving">Saving</a></li><li class="l2"><a href="#under-the-hood">Under the hood</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#maps-as-data">Maps as data</a></li><li class="l2"><a href="#baking-a-fixed-map">Baking a fixed map</a></li><li class="l2"><a href="#entering-and-leaving">Entering and leaving</a></li><li class="l2"><a href="#the-land">The land</a></li><li class="l2"><a href="#the-hollow">The Hollow</a></li><li class="l2"><a href="#the-drowned-archive">The Drowned Archive</a></li><li class="l2"><a href="#challenges">Challenges</a></li><li class="l2"><a href="#plots">Plots</a></li><li class="l2"><a href="#contribution-and-attunement">Contribution and attunement</a></li><li class="l2"><a href="#playing-with-others">Playing with others</a></li><li class="l2"><a href="#clues">Clues</a></li><li class="l2"><a href="#rewards">Rewards</a></li><li class="l2"><a href="#dying">Dying</a></li><li class="l2"><a href="#the-map">The map</a></li><li class="l2"><a href="#saving">Saving</a></li><li class="l2"><a href="#under-the-hood">Under the hood</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

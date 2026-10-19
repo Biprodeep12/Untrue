@@ -27,7 +27,15 @@ export const GLOWING: Partial<Record<number, [number, number, number?]>> = {
   [Deco.Moonwell]: [6, 0],
   [Deco.Rift]: [5, 1.1, 0xb07aff],
   [Deco.RiftScar]: [1.5, 0.3, 0x9ff8f2],
+  // The outer dimensions.
+  [Deco.RiftCrystal]: [3, 0.5, 0x5af0e8],
+  [Deco.GlowCap]: [1.6, 0.35, 0x5af0e8],
+  [Deco.LoreStone]: [2.5, 0.6, 0xb07aff],
+  [Deco.Relic]: [2.5, 0.8, 0xffe28a],
+  [Deco.Lectern]: [2, 0.5, 0x8ae8ff],
 };
+/** Decorations at least this tall, in pixels, fade as the player walks behind them. */
+const TALL = 24;
 /** Rifts' ground decals sort below everything standing. */
 const GROUND_Z = -1e9;
 /** Facade variant without a window; the rest glow at night. */
@@ -36,6 +44,8 @@ const BLANK_FACADE = 3;
 const WALL_FACES: Partial<Record<number, number>> = {
   [Tile.StoneWall]: Tile.StoneWallFace,
   [Tile.WoodWall]: Tile.WoodWallFace,
+  [Tile.RuinWall]: Tile.RuinWallFace,
+  [Tile.BookWall]: Tile.BookWallFace,
 };
 
 /** Pulls UVs in slightly so neighbouring atlas cells never bleed when zoomed out. */
@@ -47,6 +57,8 @@ const CHUNK_PX = CHUNK_SIZE * TILE_SIZE;
 interface Drawn {
   mesh: Mesh<MeshGeometry>;
   sprites: Sprite[];
+  /** The tall ones (trees and the like), which fade as the player walks behind. */
+  tall: Sprite[];
   lights: Light[];
   /** Rifts' halos and ground decals: shown and pooled with the chunk, but
    *  never faded, jolted or reused as decorations. */
@@ -125,11 +137,15 @@ export class TileRenderer implements ChunkListener {
       for (let dx = -1; dx <= 1; dx++) {
         const d = this.drawn.get(chunkKey(cx + dx, cy + dy));
         if (!d) continue;
-        for (const s of d.sprites) {
-          if (s.zIndex <= py || s.height < 24) continue;
-          const half = s.width / 2;
+        // Only the tall ones, by their texture's size (a sprite's own size is
+        // worked out from its bounds on every read); decorations are unscaled.
+        for (const s of d.tall) {
+          if (s.zIndex <= py) continue;
+          const tex = s.texture;
+          if (py <= s.y - tex.height || py - 20 >= s.y) continue;
+          const half = tex.width / 2;
           // The player's body, from feet to head, overlaps the sprite.
-          if (px > s.x - half && px < s.x + half && py > s.y - s.height && py - 20 < s.y) {
+          if (px > s.x - half && px < s.x + half) {
             s.alpha = 0.45;
             this.faded.push(s);
           }
@@ -242,7 +258,7 @@ export class TileRenderer implements ChunkListener {
     this.writeUVs(mesh, chunk);
     mesh.position.set(chunk.cx * CHUNK_SIZE * TILE_SIZE, chunk.cy * CHUNK_SIZE * TILE_SIZE);
     this.ground.addChild(mesh);
-    const d: Drawn = { mesh, sprites: [], lights: [], fx: [], inView: true, cx: chunk.cx, cy: chunk.cy };
+    const d: Drawn = { mesh, sprites: [], tall: [], lights: [], fx: [], inView: true, cx: chunk.cx, cy: chunk.cy };
     d.inView = this.overlaps(d);
     mesh.visible = d.inView;
     this.addDecos(d, chunk);
@@ -360,6 +376,7 @@ export class TileRenderer implements ChunkListener {
       s.zIndex = y;
       if (d.inView) this.entities.addChild(s);
       d.sprites.push(s);
+      if (s.texture.height >= TALL) d.tall.push(s);
       if (deco === Deco.Rift) {
         s.texture = this.riftTextures[Math.floor(this.riftTime * RIFT_FPS) % RIFT_FRAMES];
         this.rifts.push(s);
@@ -401,6 +418,7 @@ export class TileRenderer implements ChunkListener {
       this.spritePool.push(s);
     }
     d.sprites.length = 0;
+    d.tall.length = 0;
     for (const s of d.fx) {
       if (d.inView) this.entities.removeChild(s);
       const h = this.halos.indexOf(s);

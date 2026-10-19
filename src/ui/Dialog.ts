@@ -19,6 +19,8 @@ export interface Sellable {
 export class Dialog {
   isOpen = false;
   private readonly root: HTMLElement;
+  /** The choices of the conversation shown, for picking by number. */
+  private options: readonly DialogOption[] = [];
 
   constructor(
     parent: HTMLElement,
@@ -39,6 +41,13 @@ export class Dialog {
     row.className = 'dialog-options';
     for (const o of [...options, { label: 'Goodbye', action: () => this.close() }]) row.appendChild(this.button(o));
     this.root.replaceChildren(head, row);
+    this.options = options;
+  }
+
+  /** Picks the `n`th choice (from 0) of the conversation shown, as a click would. */
+  choose(n: number): void {
+    const o = this.options[n];
+    if (this.isOpen && o && !o.disabled) o.action();
   }
 
   trade(name: string, coins: number, offers: Offer[], sellables: Sellable[], buy: (o: Offer) => void, sell: (item: ItemDef, count: number) => void): void {
@@ -74,10 +83,12 @@ export class Dialog {
     done.className = 'dialog-options';
     done.appendChild(this.button({ label: 'Done', action: () => this.close() }));
     this.root.replaceChildren(head, cols, done);
+    this.options = [];
   }
 
   close(): void {
     this.isOpen = false;
+    this.options = [];
     this.root.classList.remove('open');
   }
 

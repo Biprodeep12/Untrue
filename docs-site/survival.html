@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html" class="current" aria-current="page">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html" class="current" aria-current="page">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Gameplay</p>
     <article><h1 id="survival">Survival</h1>
@@ -215,7 +215,7 @@
 </tr>
 </thead>
 <tbody><tr>
-<td>Oak, autumn oak, pine, snowy pine, palm</td>
+<td>Oak, autumn oak, pine, snowy pine, palm; in the outer dimensions, violet and ash trees</td>
 <td>4 s</td>
 <td>axe</td>
 <td>0</td>
@@ -250,6 +250,20 @@
 <td>Mushroom ×1</td>
 </tr>
 <tr>
+<td>Glow caps (outer dimensions)</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Mushroom ×1–2</td>
+</tr>
+<tr>
+<td>Shard grass (outer dimensions)</td>
+<td>0.7 s</td>
+<td>–</td>
+<td>0</td>
+<td>Herb ×1</td>
+</tr>
+<tr>
 <td>Garden vegetables (villages)</td>
 <td>0.7 s</td>
 <td>–</td>
@@ -278,7 +292,7 @@
 <td>1–2 of: Gold Ore (12% + 5% per band, with tier 2 or more), Coal (the next 40%, plus the gold share below tier 2), else Iron Ore</td>
 </tr>
 <tr>
-<td>Crystal</td>
+<td>Crystal; rift crystal (outer dimensions)</td>
 <td>5 s</td>
 <td>pickaxe</td>
 <td>2</td>
@@ -307,7 +321,7 @@
 </tr>
 </tbody></table></div>
 <p>Below the minimum tier the prompt reads &quot;Needs a pickaxe&quot; or &quot;Needs an iron pickaxe&quot;. Tiers run from stone (1) through iron (2) to starforged (3).</p>
-<p>Rare finds get likelier further out: the band is the difficulty band where the rock stands. In a mine it is the band of the mine&#39;s door outside (<code>GatheringSystem.bandAt</code>).</p>
+<p>Rare finds get likelier further out: the band is the difficulty band where the rock stands. In a mine it is the band of the mine&#39;s door outside, and in an outer dimension the band of its rift (<code>GatheringSystem.bandAt</code>). There, what is gathered is gone for that trip only (<a href="dimensions.html#the-land">dimensions.md</a>).</p>
 <p>Drops are seeded by the tile and the region&#39;s visit counter, so the same plant gives the same drop until its region regenerates. Gathered decorations are removed through <code>WorldManager.harvest()</code>. They stay gone until the region regenerates, except plants that regrow (<a href="living-world.html#regrowth">living-world.md</a>).</p>
 <p>If the bag is full, what does not fit is left on the ground at the player&#39;s feet (outside the door, if indoors) and a notice says so. The same goes for enemy drops (where the enemy fell), quest rewards and the village defence reward.</p>
 <h3 id="drinking">Drinking<a class="anchor" href="#drinking" aria-label="Link to this section">#</a></h3>
@@ -763,6 +777,12 @@
 <td>99</td>
 <td>+45 health, +10 thirst, cures poison</td>
 </tr>
+<tr>
+<td>Drift Beacon</td>
+<td>Rare</td>
+<td>1</td>
+<td>Every player carries one; use it (or press B) to choose who you meet behind the rifts. Bound: never dropped, sold or lost on dying; see <a href="dimensions.html#playing-with-others">dimensions.md</a></td>
+</tr>
 </tbody></table></div>
 <p>Every rare material now has a use in a recipe. Sell prices come from <code>SELL_PRICES</code> in <code>src/systems/TradeSystem.ts</code>. Items without a price can&#39;t be sold.</p>
 <h2 id="inventory-and-hotbar">Inventory and hotbar<a class="anchor" href="#inventory-and-hotbar" aria-label="Link to this section">#</a></h2>
@@ -1156,7 +1176,7 @@
 </tr>
 </tbody></table></div>
 <p>Chest contents are seeded by the chest&#39;s object id and layout index, so a chest always holds the same loot.</p>
-<p><strong>Chests never refill.</strong> Opening one marks its object&#39;s anchor in <code>WorldManager.lootedAnchors</code>. Every chest that later regenerates from that anchor starts open and empty (<code>emptyChests</code>). An open chest shows as <code>ChestOpen</code> and answers &quot;Already looted&quot;.</p>
+<p><strong>Chests stay looted while their region stands.</strong> Opening one marks its object&#39;s anchor, which holds the region&#39;s visit, in <code>WorldManager.lootedAnchors</code>. A chest regenerated from that anchor before the region drifts starts open and empty (<code>emptyChests</code>); once the region drifts, a structure rolled there has full chests (<a href="saves.html#the-drift">saves.md</a>). An open chest shows as <code>ChestOpen</code> and answers &quot;Already looted&quot;.</p>
 <h3 id="barrels">Barrels<a class="anchor" href="#barrels" aria-label="Link to this section">#</a></h3>
 <p>Breaking a barrel gives nothing 35% of the time. Otherwise it gives one roll: Common (85%) or Uncommon (15%).</p>
 <h3 id="buried-treasure">Buried treasure<a class="anchor" href="#buried-treasure" aria-label="Link to this section">#</a></h3>

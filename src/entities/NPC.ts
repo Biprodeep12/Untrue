@@ -4,7 +4,8 @@
 import { PLAYER_HALF_W } from '../config';
 import { Dir } from '../rendering/Atlas';
 
-export type NpcRole = 'villager' | 'trader' | 'merchant' | 'lost';
+/** `spirit`: an outer world's resident, drawn faint, standing where it waits. */
+export type NpcRole = 'villager' | 'trader' | 'merchant' | 'lost' | 'spirit';
 
 /** Villagers head indoors from this hour, and come out again at MORNING_HOUR. */
 export const BEDTIME_HOUR = 20;

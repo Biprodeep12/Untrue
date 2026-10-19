@@ -2,16 +2,17 @@
 // so tests can drive it with a synchronous generator.
 
 import { CHUNK_SIZE } from '../config';
-import { chunkKey, keyX, keyY, tileToChunk } from '../coords';
-import { hash, Stream } from '../generation/Random';
+import { dimensionForRift } from '../dimension/Dimension';
+import { chunkKey, keyX, keyY, regionKey, tileToChunk } from '../coords';
+import { hash, hashString, Stream } from '../generation/Random';
 import { rollAnchor } from '../generation/StructureGenerator';
 import { TerrainFields, type ChunkRequest } from '../generation/TerrainGenerator';
-import { Deco, isSolid, paletteOf } from '../generation/Tiles';
+import { Deco, isSolid, paletteOf, type BiomeType } from '../generation/Tiles';
 import { BiomeManager, type BiomeRecord } from './BiomeManager';
 import { ChunkManager, type ChunkGenerator, type View } from './ChunkManager';
 import { ObjectManager } from './ObjectManager';
 import { GroundItems } from './GroundItems';
-import { RegionTracker } from './Regions';
+import { driftKey, parseDriftKey, RegionTracker } from './Regions';
 import { WorldObject } from './WorldObject';
 
 /** Plants that grow back, after this many in-game minutes, while their region
@@ -29,32 +30,61 @@ interface Cut {
   at: number;
 }
 
+/** What changes in a world: a host tells its guests, a guest asks its host.
+ *  Nobody listens alone, so it costs nothing then. */
+export interface WorldChanges {
+  objectAdded?(o: WorldObject): void;
+  objectRemoved?(o: WorldObject): void;
+  /** A chest opened, a rift closed. */
+  objectChanged?(o: WorldObject): void;
+  /** A decoration was gathered (or burned) on this tile. */
+  harvested?(gx: number, gy: number, deco: number): void;
+  /** A chunk's harvest log changed by itself: plants grew back. */
+  regrown?(key: number): void;
+}
+
+/** A guest's copy of what the host gathered in one chunk: flat triples of
+ *  cell, decoration and minute. */
+export type HarvestCells = readonly number[];
+
 export class WorldManager {
   readonly fields: TerrainFields;
   readonly biomes: BiomeManager;
   readonly objects = new ObjectManager();
   readonly regions = new RegionTracker();
   readonly chunks: ChunkManager;
-  /** Anchors whose chests the player has looted: chests never refill there. */
+  /** Anchors whose chests the player has looted, per region visit
+   *  (`driftKey`): they stay empty until their region drifts. */
   readonly lootedAnchors = new Set<string>();
-  /** Dungeons, arenas and legendary spots the player has cleared: they stay
-   *  cleared. Closed rifts are kept by object id instead, which changes when
-   *  their region regenerates, so a new rift may open there. */
+  /** Dungeons, arenas and legendary spots the player has cleared, per region
+   *  visit, and closed rifts by object id (which holds the visit too): they
+   *  stay cleared until their region drifts, then something new may be there. */
   readonly clearedAnchors = new Set<string>();
   /** Decorations the player removed, per chunk, valid for one region visit. */
   private readonly harvested = new Map<number, { visit: number; cells: Map<number, Cut> }>();
   /** Items dropped on the ground. */
   readonly ground = new GroundItems();
+  /** The dimension a new rift opens onto, by its object id; the game leans
+   *  it by the player's story (`dimensionForRift`). */
+  riftDestination: (riftId: string) => string = (id) => dimensionForRift(hash(this.seed, hashString(id)));
   /** In-game minutes since the world began; set by the game clock. */
   now: () => number = () => 0;
   onDiscover?: (o: WorldObject) => void;
+  /** Hears every change (a host's guests, or a guest's host); null alone. */
+  changes: WorldChanges | null = null;
 
+  /** `replica`: a guest's copy of a host's world. It never rolls biomes,
+   *  structures or region visits, or lets plants grow back: the host's come
+   *  with each chunk (`adoptChunk`, `adoptObject`, `setHarvest`). */
   constructor(
     readonly seed: number,
     generator: ChunkGenerator,
+    readonly replica = false,
   ) {
     this.fields = new TerrainFields(seed);
     this.biomes = new BiomeManager(this.fields);
+    this.regions.replica = replica;
+    this.objects.onRemove = (o) => this.changes?.objectRemoved?.(o);
     this.chunks = new ChunkManager(generator, {
       cacheEnter: (keys) => this.cacheEnter(keys),
       cacheLeave: (keys) => this.cacheLeave(keys),
@@ -68,10 +98,19 @@ export class WorldManager {
         for (const [i, c] of cut.cells) if (!this.regrown(c)) chunk.decos[i] = 0;
       },
     });
+    // A guest's ground is the host's: only the host lets it drift.
+    if (!replica) this.ground.drift = this.driftClock;
   }
 
-  update(view: View): void {
-    this.chunks.update(view);
+  /** Region of a spot and its visit, for what lies on the ground. */
+  private readonly driftClock = {
+    region: (x: number, y: number) => regionKey(tileToChunk(Math.floor(x)), tileToChunk(Math.floor(y))),
+    visit: (region: number) => this.regions.visitOf(region),
+  };
+
+  /** `others`: guests' views, when this world is shared (see `ChunkManager`). */
+  update(view: View, others?: readonly View[]): void {
+    this.chunks.update(view, others);
     this.discover(Math.floor(view.playerX), Math.floor(view.playerY));
   }
 
@@ -116,10 +155,53 @@ export class WorldManager {
     cut.cells.set((gy - cy * CHUNK_SIZE) * CHUNK_SIZE + (gx - cx * CHUNK_SIZE), { deco, at: this.now() });
     const chunk = this.chunks.get(cx, cy);
     if (chunk) this.chunks.refresh(chunk);
+    this.changes?.harvested?.(gx, gy, deco);
+  }
+
+  /** A chunk's harvest log as cells for the wire: flat triples of cell,
+   *  decoration, minute; empty if nothing was gathered there this visit. */
+  harvestOf(key: number): number[] {
+    const cut = this.harvested.get(key);
+    if (!cut || cut.visit !== this.regions.visit(keyX(key), keyY(key))) return [];
+    const out: number[] = [];
+    for (const [i, c] of cut.cells) out.push(i, c.deco, c.at);
+    return out;
+  }
+
+  /** A guest takes the host's harvest log for a chunk, and redraws it. */
+  setHarvest(key: number, cells: HarvestCells): void {
+    const visit = this.regions.visit(keyX(key), keyY(key));
+    if (!cells.length) this.harvested.delete(key);
+    else {
+      const map = new Map<number, Cut>();
+      for (let i = 0; i + 2 < cells.length; i += 3) map.set(cells[i], { deco: cells[i + 1], at: cells[i + 2] });
+      this.harvested.set(key, { visit, cells: map });
+    }
+    const chunk = this.chunks.chunks.get(key);
+    if (chunk) this.chunks.refresh(chunk);
+  }
+
+  /** A guest takes what the host says of a chunk: its region's visit and its
+   *  biome. Before the chunk's terrain is composed. */
+  adoptChunk(cx: number, cy: number, visit: number, biome: { id: number; type: number; variant: number; seed: number } | null): void {
+    this.regions.setVisit(regionKey(cx, cy), visit);
+    if (biome) this.biomes.adopt(chunkKey(cx, cy), biome.id, biome.type as BiomeType, biome.variant, biome.seed);
+  }
+
+  /** A guest takes one of the host's objects, and redraws what it covers. If
+   *  none of its chunks is still loaded here, it is let go at once. */
+  adoptObject(o: WorldObject): void {
+    const old = this.objects.objects.get(o.id);
+    if (old) this.objects.remove(old);
+    this.objects.add(o, this.chunks.isCached);
+    if (o.activeChunks <= 0) this.objects.remove(o);
+    this.refreshObject(o);
   }
 
   /** Lets plants whose time has come grow back. Call once per in-game hour. */
   regrow(): void {
+    // A guest's plants grow back when the host says so.
+    if (this.replica) return;
     for (const [key, cut] of this.harvested) {
       let grew = false;
       for (const [i, c] of cut.cells) {
@@ -129,8 +211,10 @@ export class WorldManager {
       }
       // Everything grew back: nothing left to remember or save.
       if (cut.cells.size === 0) this.harvested.delete(key);
-      const chunk = grew ? this.chunks.chunks.get(key) : undefined;
+      if (!grew) continue;
+      const chunk = this.chunks.chunks.get(key);
       if (chunk) this.chunks.refresh(chunk);
+      this.changes?.regrown?.(key);
     }
   }
 
@@ -168,6 +252,7 @@ export class WorldManager {
     object.opened.add(index);
     if (object.anchor) this.lootedAnchors.add(object.anchor);
     this.refreshObject(object);
+    this.changes?.objectChanged?.(object);
   }
 
   /** Closes a rift for as long as its object lives (and its id is rolled again). */
@@ -175,6 +260,7 @@ export class WorldManager {
     o.closed = true;
     this.clearedAnchors.add(o.id);
     this.refreshObject(o);
+    this.changes?.objectChanged?.(o);
   }
 
   /** The nearest open rift among the live objects, if any. */
@@ -208,8 +294,10 @@ export class WorldManager {
 
   /** Registers an object and redraws any loaded chunk it covers. */
   addObject(o: WorldObject): void {
+    if (o.kind === 'rift' && !o.dimension) o.dimension = this.riftDestination(o.id);
     this.objects.add(o, this.chunks.isCached);
     this.refreshObject(o);
+    this.changes?.objectAdded?.(o);
   }
 
   /** Re-stamps the loaded chunks under an object, e.g. after its layout changed. */
@@ -227,6 +315,8 @@ export class WorldManager {
       this.biomes.chunkEntered(key);
       this.objects.chunkEntered(key);
     }
+    // A guest's biomes and structures are the host's, and come with its chunks.
+    if (this.replica) return;
     // Biomes before anchors: structure rolls depend on the anchor's biome.
     for (const key of keys) {
       const cx = keyX(key);
@@ -237,15 +327,34 @@ export class WorldManager {
   }
 
   private cacheLeave(keys: number[]): void {
+    let drifted = false;
     for (const key of keys) {
       this.objects.chunkLeft(key);
-      this.biomes.chunkLeft(key);
-      this.regions.leave(keyX(key), keyY(key));
+      if (this.replica) {
+        this.biomes.release(key);
+        this.harvested.delete(key);
+      } else this.biomes.chunkLeft(key);
+      if (this.regions.leave(keyX(key), keyY(key))) drifted = true;
     }
-    // Harvest records from a region that has regenerated no longer apply.
+    if (!drifted) return;
+    // A region drifted: its harvest records no longer apply, and what lay on
+    // its ground is gone with it.
     for (const [key, cut] of this.harvested) {
       if (cut.visit !== this.regions.visit(keyX(key), keyY(key))) this.harvested.delete(key);
     }
+    this.ground.sweep();
+  }
+
+  /** What the world remembers of places, without what has drifted: looted
+   *  chests and cleared lairs of past visits, and events no longer standing.
+   *  For saving; costs a pass over the keys, never per frame. */
+  liveMemory(keys: ReadonlySet<string>): string[] {
+    const out: string[] = [];
+    for (const key of keys) {
+      const at = parseDriftKey(key);
+      if (at ? this.regions.visit(at.cx, at.cy) === at.visit : this.objects.objects.has(key)) out.push(key);
+    }
+    return out;
   }
 
   /** Rolls the structures anchored in a chunk that just entered the cache radius. */
@@ -267,8 +376,10 @@ export class WorldManager {
       if (this.objects.collides(p.x, p.y, w, h, 2)) continue;
       if (p.def.spacing && this.objects.crowded(p.def.kind, p.x + w / 2, p.y + h / 2, p.def.spacing)) continue;
       const o = new WorldObject(p.id, p.def.kind, p.def.name, p.x, p.y, p.layout);
-      o.anchor = p.anchor;
-      o.emptyChests = this.lootedAnchors.has(p.anchor);
+      // Remembered for this visit of the region only: once it drifts, a fresh
+      // roll here has fresh chests and lairs.
+      o.anchor = driftKey(p.anchor, this.regions.visit(cx, cy));
+      o.emptyChests = this.lootedAnchors.has(o.anchor);
       o.closed = this.clearedAnchors.has(p.id);
       // Redraws only chunks at the cache edge, outside the render area.
       this.addObject(o);

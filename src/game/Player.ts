@@ -124,6 +124,16 @@ export class Player {
     return this.dodgeTime > 0 || this.hurtTime > 0;
   }
 
+  /** The walk frame shown, 0–3 (what others in a shared dimension see). */
+  get walkFrame(): number {
+    return this.frame;
+  }
+
+  /** Seconds left on the hurt blink. */
+  get hurtFlash(): number {
+    return this.hurtTime;
+  }
+
   place(x: number, y: number): void {
     this.x = x;
     this.y = y;

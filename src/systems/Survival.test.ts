@@ -141,8 +141,8 @@ describe('gathering', () => {
   });
 });
 
-describe('chests never refill', () => {
-  it('loots once, and the same anchor regenerates empty', () => {
+describe('chests stay looted until their region drifts', () => {
+  it('loots once; the region drifts, and what stands there then is new', () => {
     const world = new WorldManager(1234, new SyncGenerator());
     const inv = new Inventory();
     const vitals = new Vitals();
@@ -162,22 +162,30 @@ describe('chests never refill', () => {
 
     const anchor = chest.object.anchor;
     expect(world.lootedAnchors.has(anchor)).toBe(true);
+    // Stepping away within the active area keeps it looted.
+    world.update(view(x - 40, 0));
+    world.update(view(x - 64, 0));
+    expect(world.tileAt(gx, gy)!.deco).toBe(Deco.ChestOpen);
+    // Far enough for the region to drift: whatever is rolled there now has full chests.
     world.update(view(x + 30000, 0));
     world.update(view(x - 64, 0));
+    const base = anchor.slice(0, anchor.indexOf('#'));
     for (const o of world.objects.objects.values()) {
-      if (o.anchor === anchor) expect(o.emptyChests).toBe(true);
+      if (!o.anchor.startsWith(`${base}#`)) continue;
+      expect(o.anchor).not.toBe(anchor);
+      expect(o.emptyChests).toBe(false);
     }
   });
 
   it('remembers looted anchors and opened chests in the save', () => {
     const world = new WorldManager(1234, new SyncGenerator());
-    world.lootedAnchors.add('3,4/structure');
+    world.lootedAnchors.add('3,4/structure#0');
     const inv = new Inventory();
     inv.add(Items.berries, 5);
     const data = snapshot(world, { x: 0, y: 0, inventory: inv.save(), vitals: new Vitals().save(), progression: null });
     const fresh = new WorldManager(1234, new SyncGenerator());
     restore(fresh, data);
-    expect(fresh.lootedAnchors.has('3,4/structure')).toBe(true);
+    expect(fresh.lootedAnchors.has('3,4/structure#0')).toBe(true);
     const back = new Inventory();
     back.load(data.player.inventory);
     expect(back.count(Items.berries)).toBe(5);

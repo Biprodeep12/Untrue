@@ -134,7 +134,9 @@ Everything else stays gone until its region fully unloads and regenerates.
 
 They're removed if their quest ends, or if the player gets 120 tiles away before finding them.
 
-Press E within 1.8 tiles to talk. The NPC you talk to stops and turns to face you (and you turn to them) until the conversation or trade closes, then waits 2 seconds before going on; everyone else carries on as before.
+Press E within 1.8 tiles to talk. The NPC you talk to stops and turns to face you (and you turn to them) until the conversation or trade closes, then waits 2 seconds before going on; everyone else carries on as before. A conversation's choices can be picked by number (1–8) as well as clicked or tapped.
+
+Villagers without a quest to offer say one thing a day each (`VILLAGER_TALK`): the weather, a tip, or what they make of the Drift (old and ordinary: a grandmother's drifted town, saying goodbye to places before leaving them) and of the Fracture (new and frightening: an orchard gone with people still in it, things crawling out of rifts, the hum). See [story.md](story.md#villagers).
 
 | Symbol over an NPC | Meaning |
 | --- | --- |

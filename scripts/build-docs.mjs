@@ -42,6 +42,13 @@ const GROUPS = [
       ['docs/dimensions.md', 'dimensions'],
     ],
   },
+  {
+    name: 'Multiplayer',
+    pages: [
+      ['docs/multiplayer-plan.md', 'multiplayer-plan'],
+      ['docs/networking.md', 'networking'],
+    ],
+  },
 ];
 
 const pages = GROUPS.flatMap((g) => g.pages.map(([file, slug]) => ({ file, slug, group: g.name })));
@@ -179,4 +186,6 @@ const index = pages.map((p) => ({ slug: p.slug, title: p.title, group: p.group, 
 writeFileSync(join(out, 'search-index.js'), `window.DOCS_INDEX = ${JSON.stringify(index)};\n`);
 writeFileSync(join(out, 'style.css'), readFileSync(join(root, 'scripts', 'docs-assets', 'style.css'), 'utf8'));
 writeFileSync(join(out, 'site.js'), readFileSync(join(root, 'scripts', 'docs-assets', 'site.js'), 'utf8'));
+// The architecture, infrastructure and story overview: a page of its own, linked from the docs.
+writeFileSync(join(out, 'overview-diagram.html'), readFileSync(join(root, 'docs', 'overview-diagram.html'), 'utf8'));
 console.log(`Built ${pages.length} pages into docs-site/`);

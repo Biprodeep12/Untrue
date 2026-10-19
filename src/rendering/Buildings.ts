@@ -893,7 +893,8 @@ export class BuildingRenderer {
   private readonly art = new Map<string, Art>();
   private readonly shown = new Map<string, { sprite: Sprite; art: Art }>();
   private readonly live = new Set<string>();
-  private scannedRect = '';
+  /** The render area last scanned (x1 < x0: none). */
+  private readonly scanned = { x0: 0, y0: 0, x1: -1, y1: -1 };
   private rescanIn = 0;
 
   constructor(
@@ -906,15 +907,24 @@ export class BuildingRenderer {
     // Which buildings are shown only changes with the render area (or the odd
     // object coming and going): rescan then, and every half second; otherwise
     // only fade the ones the player walks behind.
-    const rect = render ? `${render.x0},${render.y0},${render.x1},${render.y1}` : '';
-    if (rect === this.scannedRect && --this.rescanIn > 0) {
+    // Compared as numbers: a string made every frame would be garbage every frame.
+    const same = render ? this.scanned.x0 === render.x0 && this.scanned.y0 === render.y0 && this.scanned.x1 === render.x1 && this.scanned.y1 === render.y1 : this.scanned.x1 < this.scanned.x0;
+    if (same && --this.rescanIn > 0) {
       for (const { sprite, art } of this.shown.values()) {
         const behind = px > sprite.x && px < sprite.x + art.width && py < sprite.y && py > sprite.y - art.height;
         sprite.alpha = behind ? 0.5 : 1;
       }
       return;
     }
-    this.scannedRect = rect;
+    if (render) {
+      this.scanned.x0 = render.x0;
+      this.scanned.y0 = render.y0;
+      this.scanned.x1 = render.x1;
+      this.scanned.y1 = render.y1;
+    } else {
+      this.scanned.x0 = 0;
+      this.scanned.x1 = -1;
+    }
     this.rescanIn = RESCAN_FRAMES;
     const live = this.live;
     live.clear();

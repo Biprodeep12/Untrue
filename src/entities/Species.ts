@@ -235,6 +235,37 @@ export const SPECIES = {
     drops: [[Items.crystal, 2, 3, 1], [Items.gem, 1, 1, 1], [Items.starMetal, 1, 2, 1]],
     ranged: { kind: 'shard', range: 8, speed: 8 }, boss: true, weak: ['spirit'], resist: ['venom'],
   }),
+  /** A glitchling the Null has hollowed out: slower, tougher, and its touch slows. */
+  nullShade: s({
+    id: 'null-shade', name: 'Null Shade', biomes: [], spawnWeight: 0,
+    hp: 46, damage: 10, speed: 3.6, aggroRange: 12, attackRange: 1, attackCooldown: 1.3, xp: 24,
+    drops: [[Items.spiritEssence, 1, 1, 0.5]], inflicts: { kind: 'slow', seconds: 2 },
+    weak: ['spirit'], resist: ['venom', 'frost'], art: 'glitchling', tint: 0x30283c, size: 1.15,
+  }),
+  // The Drowned Archive's creatures.
+  /** A torn page that swims through the air in a shoal. */
+  drownedPage: s({
+    id: 'drowned-page', name: 'Drowned Page', biomes: [], spawnWeight: 0,
+    hp: 18, damage: 6, speed: 5.6, aggroRange: 13, attackRange: 0.9, attackCooldown: 0.8, xp: 12,
+    drops: [[Items.spiritEssence, 1, 1, 0.2]], weak: ['spirit'], resist: ['venom'],
+    art: 'glitchling', tint: 0xe8dcc0, size: 0.85,
+  }),
+  /** Spilt ink that learned to want: floats over water, and spits. */
+  inkWraith: s({
+    id: 'ink-wraith', name: 'Ink Wraith', biomes: [], spawnWeight: 0,
+    hp: 30, damage: 10, speed: 3, aggroRange: 14, attackRange: 0.8, attackCooldown: 1.7, xp: 22,
+    drops: [[Items.spiritEssence, 1, 1, 0.35], [Items.crystal, 1, 1, 0.1]],
+    ranged: { kind: 'shard', range: 7, speed: 7 }, flying: true, inflicts: { kind: 'slow', seconds: 1.5 },
+    weak: ['spirit'], resist: ['frost', 'venom'], art: 'shard-wisp', tint: 0x2a3a6a,
+  }),
+  /** The archive's last reader, read hollow by the Null. */
+  archivist: s({
+    id: 'archivist', name: 'The Archivist', biomes: [], spawnWeight: 0,
+    hp: 900, damage: 28, speed: 2.6, aggroRange: 18, attackRange: 1.8, attackCooldown: 1.4, xp: 650,
+    drops: [[Items.crystal, 2, 4, 1], [Items.gem, 1, 2, 1], [Items.starMetal, 1, 2, 1]],
+    ranged: { kind: 'shard', range: 9, speed: 8 }, boss: true, weak: ['spirit'], resist: ['venom', 'frost'],
+    art: 'rift-warden', tint: 0x6ab0c8, size: 1.15,
+  }),
 } as const;
 
 export const SPECIES_LIST: readonly Species[] = Object.values(SPECIES);

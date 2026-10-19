@@ -22,6 +22,8 @@ body {
   overflow: hidden;
   background: #1d1a17;
   font-family: 'Pixelify Sans', ui-monospace, monospace;
+  /* The pixel font's "fi" ligature reads as an "A": letters stay apart. */
+  font-variant-ligatures: none;
   color: var(--ink);
 }
 
@@ -872,6 +874,7 @@ body {
 
 .dim-key-rift { background: #ff6ab8; }
 .dim-key-portal { background: #9ff8f2; }
+.dim-key-stone { background: #d8b0ff; }
 .dim-key-you { background: #fff; }
 
 .map-marker {
@@ -1203,7 +1206,7 @@ body {
     right: calc(12px + env(safe-area-inset-right));
     grid-template-columns: repeat(3, 54px);
     grid-template-areas:
-      '. pause full'
+      'beacon pause full'
       '. act bag'
       'block dodge attack';
   }
@@ -1223,10 +1226,12 @@ body {
   .touch-btn.attack { grid-area: attack; }
   .touch-btn.full { grid-area: full; }
   .touch-btn.pause { grid-area: pause; }
+  .touch-btn.beacon { grid-area: beacon; }
 
-  /* Pause and full screen: small, above the action buttons. */
+  /* Pause, full screen and the beacon: small, above the action buttons. */
   .touch-btn.full,
-  .touch-btn.pause {
+  .touch-btn.pause,
+  .touch-btn.beacon {
     height: 34px;
     border-radius: 17px;
     font-size: 12px;
@@ -1611,4 +1616,74 @@ body {
   .intro-sub {
     animation: none;
   }
+}
+
+/* The Drift Beacon's panel. */
+.beacon-panel {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.beacon-panel h2 {
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+.beacon-panel h3 {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+
+.beacon-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.beacon-row input {
+  flex: 1;
+  min-width: 120px;
+  font: inherit;
+  padding: 4px 6px;
+  border: 2px solid var(--wood-dark);
+  border-radius: 3px;
+  background: #fff8e6;
+}
+
+.beacon-row input:disabled,
+.beacon-row .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.beacon-here,
+.beacon-soon {
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.beacon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.beacon-instance {
+  text-align: left;
+}
+
+.beacon-guest {
+  flex: 1;
+  font-size: 13px;
+}
+
+.beacon-error {
+  color: #a0301e;
+}
+
+.beacon-instance.chosen {
+  background: var(--wood-light);
+  font-weight: 600;
 }

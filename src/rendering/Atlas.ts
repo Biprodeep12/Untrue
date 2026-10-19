@@ -13,6 +13,7 @@
 import { Rng } from '../generation/Random';
 import { Deco, DECO_COUNT, PALETTE_COUNT, Tile, TILE_COUNT } from '../generation/Tiles';
 import { ARMOR_SETS, ITEM_LIST, Items } from '../items/Items';
+import { archiveCarpet, archiveFloor, archiveWet, bellFrame, bookPile, bookWallFace, bookWallTop, floodOverlay, inkWater, lectern, relic, shallows, valvePlate } from './ArchiveArt';
 import { HALO_H, HALO_W, paintHalo, paintRiftGround, paintScar, paintScorch, paintTear, SCORCH_H, SCORCH_W, TEAR_FRAMES, TEAR_H, TEAR_W } from './RiftArt';
 
 export const ATLAS_W = 256;
@@ -48,6 +49,12 @@ const DECO_SIZES: Partial<Record<number, [number, number]>> = {
   [Deco.Footprint]: [1, 1],
   [Deco.Rift]: [32, 48],
   [Deco.RiftScar]: [16, 16],
+  [Deco.HollowTree]: [32, 48],
+  [Deco.AshTree]: [24, 40],
+  [Deco.ShardGrass]: [16, 16],
+  [Deco.GlowCap]: [16, 16],
+  [Deco.BellFrame]: [32, 40],
+  [Deco.BookPile]: [16, 16],
 };
 
 export interface Frame {
@@ -126,6 +133,10 @@ export const OUTFITS: Record<string, Outfit> = {
   'villager-d': { skin: 0xeab890, hair: 0xe8e4dc, shirt: 0xeadcc0, pants: 0x6a6a72, hairStyle: 'bald', beard: 'full', vest: 0x8a5a34 },
   'villager-e': { skin: 0x8a5634, hair: 0x1e1612, shirt: 0xe89038, pants: 0x3e5a8a, hairStyle: 'curly', belt: 0x5a3a24 },
   'villager-f': { skin: 0xf4cca8, hair: 0xd8702e, shirt: 0x4aa898, pants: 0x5a6a3a, hairStyle: 'ponytail', freckles: true, vest: 0xf0e6d0 },
+  // The outer worlds' residents, drawn faint (see EntityRenderer): the Lost
+  // Hamlet's bell-ringer, and the Drowned Archive's last keeper.
+  'hamlet-ghost': { skin: 0xdcd6ea, hair: 0xb8b0d0, shirt: 0xc8c0dc, pants: 0x9a90b8, hairStyle: 'long', skirt: true, shoes: 0x8a80a8, scarf: 0x7a6aa8 },
+  keeper: { skin: 0xc8dce4, hair: 0x9ab0c0, shirt: 0x2e5a6a, pants: 0x1e3a48, hairStyle: 'bun', coat: true, belt: 0xc8a050, hat: 'hood', hatColor: 0x2a4a5a, shoes: 0x1a2a34 },
 };
 const OUTFIT_NAMES = Object.keys(OUTFITS);
 export const ITEM_Y = PLAYER_Y + OUTFIT_NAMES.length * 32;
@@ -569,6 +580,57 @@ function paintShared(p: Painter, id: number, rng: Rng, variant: number): void {
       // Scorched earth; the rift's ground decal covers it (RiftArt).
       paintRiftGround(p, rng, variant);
       break;
+    case Tile.HollowMoss:
+    case Tile.HollowMossDark:
+    case Tile.Ash:
+    case Tile.ShardSand:
+      hollowGround(p, id, rng, variant);
+      break;
+    case Tile.Void:
+      dimVoid(p, variant, rng);
+      break;
+    case Tile.VoidCliff:
+      voidCliff(p, variant, rng);
+      break;
+    case Tile.RuinFloor:
+      dimFloor(p, variant, rng);
+      break;
+    case Tile.RuinWall:
+      dimWallTop(p, variant, rng);
+      break;
+    case Tile.RuinWallFace:
+      dimWallFace(p, variant, rng);
+      break;
+    case Tile.RunePad:
+      dimCheckpoint(p, variant & 1, rng);
+      break;
+    case Tile.Rune:
+      dimRune(p, variant & 1, rng);
+      break;
+    case Tile.NullMark:
+      nullMark(p, variant, rng);
+      break;
+    case Tile.ArchiveFloor:
+      archiveFloor(p, variant, rng);
+      break;
+    case Tile.ArchiveWet:
+      archiveWet(p, variant, rng);
+      break;
+    case Tile.ArchiveCarpet:
+      archiveCarpet(p, variant, rng);
+      break;
+    case Tile.BookWall:
+      bookWallTop(p, variant, rng);
+      break;
+    case Tile.BookWallFace:
+      bookWallFace(p, variant, rng);
+      break;
+    case Tile.InkWater:
+      inkWater(p, variant, rng);
+      break;
+    case Tile.Shallows:
+      shallows(p, variant, rng);
+      break;
     case Tile.Cave:
       p.rect(0, 0, 16, 16, 0x6c645b);
       p.ellipse(7.5, 9, 7, 6, 0x1c1714);
@@ -822,6 +884,11 @@ function paintPlant(p: Painter, id: number, rng: Rng): boolean {
     case Deco.Flowers: flowers(p, rng); return true;
     case Deco.Mushroom: mushrooms(p); return true;
     case Deco.DeadBush: deadBush(p); return true;
+    case Deco.HollowTree: hollowTree(p, rng); return true;
+    case Deco.AshTree: ashTree(p, rng); return true;
+    case Deco.ShardGrass: shardGrass(p, rng); return true;
+    case Deco.GlowCap: glowCaps(p); return true;
+    case Deco.BookPile: bookPile(p, rng); return true;
   }
   return false;
 }
@@ -1317,6 +1384,24 @@ function paintDeco(p: Painter, id: number, rng: Rng): void {
       // A closed rift: a healed seam over cooled ash (RiftArt).
       paintScar(p);
       break;
+    case Deco.RiftCrystal:
+      dimCrystal(p);
+      break;
+    case Deco.RuinPillar:
+      dimPillar(p);
+      break;
+    case Deco.LoreStone:
+      loreStone(p);
+      break;
+    case Deco.Relic:
+      relic(p);
+      break;
+    case Deco.BellFrame:
+      bellFrame(p);
+      break;
+    case Deco.Lectern:
+      lectern(p);
+      break;
     case Deco.ChestOpen:
       p.shadow(8, 30, 6, 1.5);
       p.rect(2, 21, 12, 9, 0x8a5a2b);
@@ -1474,6 +1559,18 @@ function paintItem(p: Painter, icon: number): void {
       p.set(7, 5, 0xffffff);
       p.set(4, 8, 0xff6ab8, 220);
       p.set(11, 10, 0xb07aff, 220);
+      break;
+    case Items.driftBeacon.icon:
+      // A brass dial with a violet needle and a glowing core.
+      p.ellipse(8, 8.5, 5.5, 5.5, 0x8a6a2a);
+      p.ellipse(8, 8.5, 4.5, 4.5, 0xd8b050);
+      p.ellipse(8, 8.5, 3.2, 3.2, 0x2a1840);
+      p.rect(7, 2, 2, 2, 0xd8b050);
+      p.rect(8, 6, 1, 3, 0xb07aff);
+      p.rect(9, 5, 1, 1, 0xb07aff);
+      p.set(8, 9, 0x9ff8f2);
+      p.set(5, 7, 0xfff0c0);
+      p.set(11, 10, 0x6a4a1a);
       break;
     case Items.riftTonic.icon:
       p.rect(7, 2, 2, 3, 0xc9c0b0);
@@ -2341,18 +2438,140 @@ function dimRune(p: Painter, v: number, rng: Rng): void {
 }
 
 /** Dimension tile looks: key, cells (variants or frames), painter. */
+/** Only the tiles of a dimension's challenges that change as they are played;
+ *  its ground (void, ruins, rune pads) is ordinary world tiles. */
 const DIM_TILES: Array<[string, number, (p: Painter, v: number, rng: Rng) => void]> = [
-  ['void', 4, dimVoid],
-  ['floor', 4, dimFloor],
-  ['wall-top', 4, dimWallTop],
-  ['wall-face', 4, dimWallFace],
   ['crumble', 3, dimCrumble],
   ['glitch', 3, dimGlitch],
   ['plate-up', GLYPHS.length, (p, g, rng) => dimPlate(p, g, rng, false)],
   ['plate-down', GLYPHS.length, (p, g, rng) => dimPlate(p, g, rng, true)],
-  ['checkpoint', 2, dimCheckpoint],
-  ['rune', 2, dimRune],
+  // A sluice hall's floor: dry (empty), rising, flooded.
+  ['flood', 3, floodOverlay],
+  ['valve', 2, valvePlate],
 ];
+
+// The Hollow's land -------------------------------------------------------------
+
+const HOLLOW_GROUND: Record<number, { base: RGB; light: RGB; dark: RGB }> = {
+  [Tile.HollowMoss]: { base: 0x56467a, light: 0x6e5c96, dark: 0x42365e },
+  [Tile.HollowMossDark]: { base: 0x483a68, light: 0x5c4c80, dark: 0x382c52 },
+  [Tile.Ash]: { base: 0x68626e, light: 0x7e7884, dark: 0x524c5a },
+  [Tile.ShardSand]: { base: 0x9a8cb8, light: 0xb8acd4, dark: 0x8070a0 },
+};
+
+/** Violet moss, ash or shard sand, glinting here and there. */
+function hollowGround(p: Painter, id: number, rng: Rng, v: number): void {
+  const g = HOLLOW_GROUND[id];
+  p.rect(0, 0, 16, 16, g.base);
+  p.speckle(rng, 12, g.dark);
+  if (id === Tile.Ash) {
+    p.speckle(rng, 6, g.light);
+    // Embers, still warm.
+    if (v === 1 || v === 3) p.set(rng.int(2, 13), rng.int(2, 13), 0xff8a5a);
+    return;
+  }
+  for (let k = 0; k < 4; k++) {
+    const x = rng.int(1, 14);
+    const y = rng.int(2, 14);
+    p.set(x, y, g.light);
+    if (id !== Tile.ShardSand) {
+      p.set(x - 1, y - 1, g.light);
+      p.set(x + 1, y - 1, g.light);
+    }
+  }
+  if (v >= 2) p.set(rng.int(1, 14), rng.int(1, 14), id === Tile.ShardSand ? RIFT.cyanLt : RIFT.cyan);
+}
+
+/** Moss with a hole in it that is not a hole: a perfectly round patch of
+ *  nothing, rimmed faintly pale, as if the ground were cut out of the world. */
+function nullMark(p: Painter, v: number, rng: Rng): void {
+  hollowGround(p, Tile.HollowMossDark, rng, v);
+  const r = v & 1 ? 2.6 : 3.6;
+  const cx = 7.5 + (v === 2 ? -2 : v === 3 ? 2 : 0);
+  const cy = 8.5 + (v === 2 ? 1 : v === 3 ? -1 : 0);
+  p.ellipse(cx, cy, r + 0.9, r + 0.9, 0xb8b0d0, 120);
+  p.ellipse(cx, cy, r, r, 0x020104);
+}
+
+/** The void just below land: the land's rocky underside hangs into it, ragged. */
+function voidCliff(p: Painter, v: number, rng: Rng): void {
+  dimVoid(p, v, rng);
+  for (let x = 0; x < 16; x++) {
+    const depth = 5 + ((x * 7 + v * 3) % 4) - (x % 5 === 0 ? 2 : 0);
+    for (let y = 0; y < depth; y++) p.set(x, y, y < 1 ? 0x5a4a6e : y < depth - 2 ? shade(0x3a2e4e, 1 - y * 0.04) : 0x261c36);
+  }
+  p.set(rng.int(1, 14), rng.int(9, 14), RIFT.violetDk);
+}
+
+function hollowTrunk(p: Painter, cx: number, top: number, bottom: number, bark: RGB): void {
+  for (let y = top; y <= bottom; y++) {
+    // A slow twist: the trunk leans one way, then the other.
+    const lean = Math.round(Math.sin((y - top) / 5) * 1.5);
+    const w = y > bottom - 3 ? 3 + (y - (bottom - 3)) : 2;
+    p.rect(cx - w + lean, y, w * 2, 1, bark);
+    p.set(cx - w + lean, y, shade(bark, 1.3));
+    p.set(cx + w - 1 + lean, y, shade(bark, 0.7));
+  }
+}
+
+const HOLLOW_LEAVES: Leaves = { dark: 0x3a2a7a, base: 0x5a3aa8, light: 0x7a5ad0, highlight: 0xa890f0, outline: 0x1a1030 };
+
+function hollowTree(p: Painter, rng: Rng): void {
+  p.ellipse(16, 45, 10, 2.5, 0x000000, 60);
+  hollowTrunk(p, 16, 22, 45, 0x3e2e52);
+  for (const [x, y, r] of [[16, 20, 7], [9, 17, 6], [23, 16, 6], [15, 11, 9], [10, 7, 5], [21, 6, 5]]) foliage(p, x, y, r, HOLLOW_LEAVES, rng);
+  flecks(p, rng, 24, 3, 2, 29, 26, HOLLOW_LEAVES.dark);
+  // Leaves that glow like the rifts.
+  flecks(p, rng, 10, 4, 2, 28, 24, RIFT.cyan);
+  flecks(p, rng, 4, 4, 2, 28, 24, RIFT.cyanLt);
+  p.outline(HOLLOW_LEAVES.outline);
+}
+
+function ashTree(p: Painter, rng: Rng): void {
+  p.ellipse(12, 37, 7, 2, 0x000000, 60);
+  hollowTrunk(p, 12, 12, 37, 0x6a6470);
+  const bark = 0x5a5460;
+  for (const [x0, y0, dx, n] of [[12, 22, -1, 7], [12, 18, 1, 8], [12, 14, -1, 5], [12, 12, 1, 6], [11, 26, 1, 5]]) {
+    for (let k = 0; k < n; k++) p.set(x0 + dx * k, y0 - Math.floor(k * 0.7), k % 3 ? bark : 0x7e7884);
+  }
+  for (let k = 0; k < 5; k++) p.set(rng.int(4, 20), rng.int(6, 20), 0x8a8494);
+  p.outline(0x2a2430);
+}
+
+function shardGrass(p: Painter, rng: Rng): void {
+  for (const [x, h] of [[3, 7], [6, 10], [8, 6], [10, 11], [13, 8]]) {
+    for (let k = 0; k < h; k++) p.set(x + (k > h / 2 ? 1 : 0), 15 - k, k > h - 3 ? RIFT.cyanLt : k > h - 5 ? RIFT.cyan : 0x4a3a7a);
+  }
+  p.set(rng.int(2, 13), rng.int(4, 8), 0xffffff, 200);
+}
+
+function glowCaps(p: Painter): void {
+  p.ellipse(8, 15, 7, 1.5, 0x000000, 60);
+  p.rect(4, 10, 3, 5, 0xd8d0e8);
+  p.ellipse(5.5, 9, 4, 2.5, RIFT.cyanDk);
+  p.ellipse(5, 8.5, 2.5, 1.2, RIFT.cyan);
+  p.set(4, 8, RIFT.cyanLt);
+  p.rect(11, 11, 2, 4, 0xd8d0e8);
+  p.ellipse(12, 10.5, 3, 2, RIFT.violetDk);
+  p.ellipse(11.5, 10, 2, 1, RIFT.violet);
+  p.outline(0x1a1030);
+}
+
+/** A standing stone carved with glowing script: a clue. */
+function loreStone(p: Painter): void {
+  p.shadow(8, 30, 6, 1.5);
+  p.rect(4, 9, 8, 21, RIFT.stone);
+  p.rect(5, 7, 6, 2, RIFT.stone);
+  p.rect(6, 6, 4, 1, RIFT.stone);
+  p.rect(4, 9, 2, 21, RIFT.stoneLt);
+  p.rect(11, 9, 1, 21, RIFT.stoneDk);
+  p.rect(3, 28, 10, 2, RIFT.stoneDk);
+  for (let y = 11; y < 26; y += 3) {
+    for (let x = 6; x < 11; x++) if ((x * 3 + y) % 4) p.set(x, y, RIFT.violet, 230);
+  }
+  p.set(7, 13, 0xffffff);
+  p.outline(RIFT.ink);
+}
 
 // Dimension props ---------------------------------------------------------------
 
@@ -2478,8 +2697,6 @@ function dimStele(p: Painter, g: number, s: number): void {
 
 /** Dimension props, drawn standing on their tile: key, size, painter. */
 const DIM_PROP_FRAMES: Array<[string, number, number, (p: Painter) => void]> = [
-  ['pillar', 16, 32, dimPillar],
-  ['crystal', 16, 32, dimCrystal],
   ...[0, 1].map((f): [string, number, number, (p: Painter) => void] => [`gate:${f}`, 16, 32, (p) => dimGate(p, f)]),
   ...[0, 1, 2].map((s): [string, number, number, (p: Painter) => void] => [`chest:${s}`, 16, 24, (p) => dimChest(p, s)]),
   ...[0, 1, 2, 3].map((f): [string, number, number, (p: Painter) => void] => [`portal:${f}`, 32, 48, (p) => dimPortal(p, f)]),

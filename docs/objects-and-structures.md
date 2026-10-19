@@ -102,7 +102,7 @@ Villages, castles and nomad camps hold an anvil, a crafting station. Camps and n
 
 Tears in the air onto an outer dimension, the heart of the [story](story.md). `rift()` builds a 7 × 7 layout: decorations cleared, a plus of five scorched tiles (`Tile.RiftGround`) and the tear (`Deco.Rift`, solid) in the middle. The renderer lays a scorched decal over it that fades raggedly into the ground around, so no square edge shows ([rendering.md](rendering.md#rifts-and-their-glitches)). The definition is `RIFT` in `StructureGenerator.ts` (kind `rift`, flat ground, spacing 160, mirror only); it is rolled on its own rather than through the tiers, so rifts grow commoner with distance however many other structures there are. A world event can also tear one open near the player ("A rift tears open nearby.", see [living-world.md](living-world.md)).
 
-Like every structure a rift is temporary. Its object id (which includes the region's visit) seeds the dimension behind it, so the same rift always leads to the same space. Facing the tear, E enters it ([dimensions.md](dimensions.md)).
+Like every structure a rift is temporary. Each rift carries the id of the outer dimension it opens onto (`WorldObject.dimension`, set by `WorldManager.addObject` through `riftDestination`, which the game points at `dimensionForRift`: leaning toward the next dimension the player has not cleared, [story.md](story.md#where-rifts-lead); The Hollow for every rift for now); the dimension's map is fixed, the same for every rift onto it, and the rift's object id (which includes the region's visit) seeds only what is random inside (the vault's rewards, the roaming creatures). Within 40 tiles of an open rift the map behind it starts loading. Facing the tear, E enters it ([dimensions.md](dimensions.md)).
 
 **Closed rifts.** Closing a rift calls `WorldManager.closeRift`: the object is marked `closed`, so it stamps a faint scar (`Deco.RiftScar`, not solid) instead of the tear, and its id goes into `clearedAnchors`, so a re-roll of the same object (its chunks came back before its region regenerated) is closed too. Since the id changes with the region's visit, a regenerated region may open a new rift in the same place. `WorldManager.nearestRift` finds the nearest open rift among live objects (through `ObjectManager.ofKind`) for the story's arrow and the glitches around it.
 
@@ -120,9 +120,13 @@ Like every structure a rift is temporary. Its object id (which includes the regi
 
 ## Chests, cleared places and harvesting
 
-**Chests never refill.** Opening a chest marks it opened on its object and adds the object's anchor key to `WorldManager.lootedAnchors`. If the region later regenerates and a new structure rolls at the same anchor, every chest in it starts open and empty. Chest loot is seeded by the object id and chest position.
+Everything the world remembers of a place lasts as long as its region's visit: the Drift takes it with the land ([saves.md](saves.md#the-drift)).
 
-**Cleared places stay cleared.** Dungeons, boss arenas and legendary creatures record a key in `WorldManager.clearedAnchors` when their guards fall, and never wake again. Closed rifts are recorded by object id instead, so they stay closed only while their region stands (above).
+**Chests stay looted while their region stands.** An object's `anchor` is its anchor chunk and roll slot plus the region's visit (`cx,cy/slot#visit`, `driftKey`). Opening a chest marks it opened on its object and adds that key to `WorldManager.lootedAnchors`, so a re-roll of the same object (its chunks came back before its region drifted) has empty chests. Once the region drifts, the key no longer matches and a structure rolled there has full chests. Chest loot is seeded by the object id and chest position.
+
+**Cleared places stay cleared while their region stands.** Dungeons and boss arenas record their `anchor` in `WorldManager.clearedAnchors` when their guards fall, and legendary creatures `legend@cx,cy#visit`; closed rifts record their object id, which holds the visit too (above). Once the region drifts they may wake again.
+
+**Items on the ground** are kept with their region and its visit at the drop, and go when it drifts (`GroundItems.sweep`, run only when a region's visit rises).
 
 **Harvest log.** Gathering a decoration records the cell, its decoration and the in-game minute, per chunk, tagged with the region's visit counter. Composition removes those decorations while the record's visit matches. When the region regenerates, the record no longer applies and is deleted. Bushes and flowers grow back after 1,440 in-game minutes and mushrooms after 2,160 (`REGROW_MINUTES`), checked once per in-game hour by `WorldManager.regrow()`.
 

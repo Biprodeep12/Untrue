@@ -18,6 +18,9 @@ export interface SettingsValues {
   flashes: boolean;
   /** HUD and menu size, 0.8 to 1.5. */
   uiScale: number;
+  /** Rift trips meet others in public instances (the Drift Beacon's switch);
+   *  off, the player goes behind the rifts alone. */
+  publicRifts: boolean;
   /** Main keys the player changed. */
   keys: Partial<Record<Action, string>>;
 }
@@ -35,6 +38,7 @@ const DEFAULTS: SettingsValues = {
   particles: true,
   flashes: !reducedMotion,
   uiScale: 1,
+  publicRifts: true,
   keys: {},
 };
 

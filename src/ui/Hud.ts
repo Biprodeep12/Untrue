@@ -39,6 +39,7 @@ export class Hud {
   onAttack?: () => void;
   onDodge?: () => void;
   onPause?: () => void;
+  onBeacon?: () => void;
   /** The touch Block button is held down. */
   blockHeld = false;
   private readonly level: HTMLElement;
@@ -88,7 +89,7 @@ export class Hud {
       <div class="touch-buttons">
         <button class="touch-btn bag">Bag</button><button class="touch-btn act">Use</button>
         <button class="touch-btn dodge">Roll</button><button class="touch-btn attack">Hit</button>
-        <button class="touch-btn block">Block</button><button class="touch-btn full">Full</button><button class="touch-btn pause">Pause</button>
+        <button class="touch-btn block">Block</button><button class="touch-btn full">Full</button><button class="touch-btn pause">Pause</button><button class="touch-btn beacon">Beacon</button>
       </div>
       <div class="hud-loading"><div class="panel">Generating world…</div></div>`;
     this.notes = root.querySelector('.hud-notes')!;
@@ -134,6 +135,7 @@ export class Hud {
     button('attack', () => this.onAttack);
     button('dodge', () => this.onDodge);
     button('pause', () => this.onPause);
+    button('beacon', () => this.onBeacon);
     // Full screen: hidden where the browser cannot do it (iPhone).
     const full = root.querySelector<HTMLElement>('.touch-btn.full')!;
     full.hidden = !fullscreenSupported();
@@ -226,7 +228,7 @@ export class Hud {
       this.last.delete('prompt');
     }
     const move = `${k('up')}${k('left')}${k('down')}${k('right')}`;
-    const help = `${move} move · ${k('run')} run · Click / ${k('attack')} attack · Right-click / ${k('block')} block · ${k('dodge')} dodge · ${k('interact')} talk / gather · 1–8 hotbar · ${k('use')} use · ${k('drop')} drop · ${k('bag')} bag · Ctrl+S save`;
+    const help = `${move} move · ${k('run')} run · Click / ${k('attack')} attack · Right-click / ${k('block')} block · ${k('dodge')} dodge · ${k('interact')} talk / gather · 1–8 hotbar · ${k('use')} use · ${k('drop')} drop · ${k('bag')} bag · ${k('beacon')} beacon · Ctrl+S save`;
     if (this.changed('help', help)) this.help.textContent = help;
   }
 

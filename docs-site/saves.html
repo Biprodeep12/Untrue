@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html" class="current" aria-current="page">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html" class="current" aria-current="page">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Engine</p>
     <article><h1 id="saves">Saves</h1>
@@ -40,7 +40,7 @@
 <td>Biome records</td>
 </tr>
 <tr>
-<td>Where the player wakes after collapsing (<code>respawn</code>) and the Moonwells already drunk from</td>
+<td>Where the player wakes after collapsing (<code>respawn</code>) and the Moonwells already drunk from (while their region stands)</td>
 <td>World objects: every structure, rare or not (they regenerate)</td>
 </tr>
 <tr>
@@ -48,16 +48,16 @@
 <td></td>
 </tr>
 <tr>
-<td>Anchors whose chests were looted (<code>lootedAnchors</code>)</td>
+<td>Anchors whose chests were looted, per region visit (<code>lootedAnchors</code>)</td>
 <td>Enemies, projectiles, NPCs and fires</td>
 </tr>
 <tr>
-<td>Dungeons, arenas and legendary spots that were cleared, and closed rifts by object id (<code>clearedAnchors</code>)</td>
+<td>Dungeons, arenas and legendary spots cleared, per region visit, and closed rifts by object id (<code>clearedAnchors</code>)</td>
 <td>A trip into an outer dimension: its run, enemies and map</td>
 </tr>
 <tr>
 <td>Region visit counters, so regions come back as the player left them</td>
-<td></td>
+<td>Anything remembered of a region that has since drifted</td>
 </tr>
 <tr>
 <td>The harvest log, so gathered plants stay gathered until they regrow</td>
@@ -68,7 +68,7 @@
 <td></td>
 </tr>
 <tr>
-<td>The rift story: rifts closed, and whether the player has entered one</td>
+<td>The rift story: rifts closed, dimensions cleared, whether the player has entered one, the lore stones read per dimension, and each outer world&#39;s plot progress</td>
 <td></td>
 </tr>
 <tr>
@@ -77,10 +77,60 @@
 </tr>
 </tbody></table></div>
 <p>Lost travellers from rescue quests are not saved as NPCs; their position lives in the quest record and they reappear when their spot is simulated.</p>
+<h3 id="visiting-a-friends-world">Visiting a friend&#39;s world<a class="anchor" href="#visiting-a-friends-world" aria-label="Link to this section">#</a></h3>
+<p>While visiting a friend&#39;s world (by its code on the Drift Beacon: <a href="multiplayer-plan.html#overworld-by-invite">multiplayer-plan.md</a>), the world is theirs and their machine saves it. The visitor&#39;s game saves only their <strong>character</strong> into their own save (<code>characterSave</code> in <code>src/save/SaveManager.ts</code>): bag, worn gear, vitals, level and skills, their quests (so one handed in while visiting stays handed in), and their rift story (rifts closed, dimensions cleared, lore read). Everything else in the save stays as they left it: their world&#39;s seed, where they stood in it, their waking spot, regions, ground, chests, harvest, clock, weather and map. The character is saved a second after anything is given or put down, and when the visit ends (a passage under way is finished first; travelling after a collapse or a vision does not stop it, since the character holds no position). So they come home to their own world exactly where they left it, carrying what they gained. A visitor with no save of their own gets a fresh world to come home to. Visiting a host&#39;s test world (the playground) saves nothing.</p>
+<h2 id="the-drift">The Drift<a class="anchor" href="#the-drift" aria-label="Link to this section">#</a></h2>
+<p>A region (8 × 8 chunks) regenerates once its last chunk leaves the cache area: its visit counter rises, and every roll in it comes out differently (<a href="world-streaming.html">world-streaming.md</a>). What the world remembers of a place is kept for one visit of its region, and drifts with it (<a href="story.html#the-canon">story.md</a>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Remembered</th>
+<th>Kept as</th>
+<th>Forgotten when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A looted chest</td>
+<td><code>cx,cy/slot#visit</code> in <code>lootedAnchors</code> (the object&#39;s <code>anchor</code>)</td>
+<td>Its region drifts: a structure rolled there next has full chests</td>
+</tr>
+<tr>
+<td>A cleared dungeon or boss arena</td>
+<td>The same key in <code>clearedAnchors</code></td>
+<td>Its region drifts: its guards may wake again, if it is rolled again</td>
+</tr>
+<tr>
+<td>A legend defeated there</td>
+<td><code>legend@cx,cy#visit</code> in <code>clearedAnchors</code></td>
+<td>Its region drifts: a new legend may roam it (the trophy is the player&#39;s for good)</td>
+</tr>
+<tr>
+<td>A closed rift</td>
+<td>Its object id, which holds the visit (<code>rift@cx,cy#visit/slot</code>)</td>
+<td>Its region drifts: a new rift may open there</td>
+</tr>
+<tr>
+<td>A Moonwell drunk from</td>
+<td>Its object id, which holds the visit</td>
+<td>Its region drifts</td>
+</tr>
+<tr>
+<td>An item on the ground</td>
+<td>The region and its visit at the drop (<code>visit</code> on each saved item)</td>
+<td>Its region drifts: the item is gone, at once if the region drifts in play, or on load if the save is older than the region&#39;s visit</td>
+</tr>
+<tr>
+<td>A gathered plant</td>
+<td>The harvest log, per chunk and visit</td>
+<td>Its region drifts, or it regrows</td>
+</tr>
+</tbody></table></div>
+<p>Keys of past visits are dropped on saving (<code>WorldManager.liveMemory</code>), and so are keys of world events no longer standing, so the save does not grow without end. Nothing here runs per frame: the ground is swept only when a region&#39;s visit rises.</p>
+<p>What is the player&#39;s own is never tied to a place: the inventory, level, skills, trophies, recipes, quests, map markers and the rift story.</p>
 <h2 id="format">Format<a class="anchor" href="#format" aria-label="Link to this section">#</a></h2>
 <p><code>SaveData</code> (<code>src/save/SaveManager.ts</code>):</p>
 <pre><code class="language-ts">interface SaveData {
-  version: number;        // SAVE_VERSION, currently 8
+  version: number;        // SAVE_VERSION, currently 9
   seed: number;
   savedAt: number;        // Date.now()
   player: {
@@ -92,13 +142,14 @@
     respawn?: { x, y };                  // where the player wakes after collapsing
     moonwells?: string[];                // ids of Moonwells already drunk from
   };
-  lootedAnchors: string[];
-  clearedAnchors: string[];
+  lootedAnchors: string[];   // `cx,cy/slot#visit` (see &quot;The Drift&quot;)
+  clearedAnchors: string[];  // the same, `legend@cx,cy#visit`, and closed rifts&#39; object ids
   living: {                // null in saves from before the living world
     time: { day, minutes };
     weather: Record&lt;biome, { kind, hoursLeft }&gt;;
     quests: Quest[];
-    rift?: { version: 1, closed: number, entered: boolean };  // the story; missing before it
+    rift?: { version: 4, closed: number, entered: boolean, cleared: string[], lore: Record&lt;string, string[]&gt;,
+             plots: Record&lt;string, { met: boolean, relics: string[], restored: boolean }&gt; };  // the story; missing before it
   } | null;
   exploration: {           // null before the map existed
     explored: number[];    // flat pairs: chunk key, biome palette + 1
@@ -107,11 +158,11 @@
   } | null;
   regions: number[];       // flat pairs: region key, visit counter (only counters above 0)
   harvested: { key, visit, cells: number[] }[];  // per chunk: flat triples of cell, decoration, minute
-  ground: { id, count, durability?, x, y }[];      // items dropped on the ground
+  ground: { id, count, durability?, x, y, visit? }[];  // items on the ground, with their region&#39;s visit
 }
 </code></pre>
 <p><code>snapshot(world, player, living, exploration)</code> builds it; <code>restore(world, data)</code> puts the looted and cleared anchors, region visits, harvest log and ground items back into a fresh world built from the same seed. <code>Game</code> restores inventory, equipment, progression, vitals, the waking spot and the used Moonwells, and <code>LivingWorld.load</code> restores the clock, weather, quests and the rift story.</p>
-<p>Fields marked <code>?</code> are missing in older saves and load with defaults: the best armour carried is put on, there are no skills, trophies or recipes, the player wakes at the start, no Moonwell has been used, and the story starts at &quot;Find a rift&quot; with no rifts closed (and without the opening vision, which only a new world shows). The rift story is an optional field, so it needed no new save version.</p>
+<p>Fields marked <code>?</code> are missing in older saves and load with defaults: the best armour carried is put on, there are no skills, trophies or recipes, the player wakes at the start, no Moonwell has been used, and the story starts at &quot;Find a rift&quot; with no rifts closed (and without the opening vision, which only a new world shows). The rift story is an optional field with its own version, so it needed no new save version: version 2 kept stones read as <code>dimension:clue</code> ids (they become per-dimension lists), versions 1 and 2 kept no cleared dimensions (a closed rift then could only have been into The Hollow, so it counts as cleared), and versions before 4 kept no plots (every world&#39;s plot starts afresh). Ground items without a <code>visit</code> count as from the visit their region is on.</p>
 <p><strong>Saving in a dimension.</strong> As indoors, the save keeps the player&#39;s spot in the overworld: the doorstep outside the rift (<code>Place.spot</code>). Nothing of the trip is saved, so a reload starts outside the rift with the run&#39;s progress gone. A rift from a world event is not saved either, so after a reload it may not be there.</p>
 <h2 id="versions">Versions<a class="anchor" href="#versions" aria-label="Link to this section">#</a></h2>
 <p><code>migrate()</code> upgrades older saves one step at a time:</p>
@@ -150,8 +201,13 @@
 <td>7</td>
 <td>Every structure now forgets and the old story is gone: drops <code>objects</code> (persistent places, story places and kept villages, castles, mines and nomad camps), <code>known</code> (the register of discovered places) and <code>living.story</code> (the stage, flags, ending, whose world rules go with it, and the lantern memories). The Wanderer&#39;s Lantern, in the bag, the hotbar or the off hand, becomes an ordinary Lantern, so the player keeps a light that never burns out.</td>
 </tr>
+<tr>
+<td>8</td>
+<td>The Drift: looted anchors (<code>cx,cy/slot</code>) and cleared lairs (<code>cx,cy/slot</code>, <code>legend@cx,cy</code>) get the visit their region was on (<code>#visit</code>, from the save&#39;s own region counters), so they are forgotten once it drifts. Closed rifts&#39; and events&#39; keys are kept as they were.</td>
+</tr>
 </tbody></table></div>
 <p>The version 1 and 5 steps still fill in fields on an old save&#39;s <code>objects</code>; the version 7 step then drops them.</p>
+<p>Not a version step: a player without a Drift Beacon (a save from before it) is given one on load. Nothing of a shared dimension instance is ever saved; the beacon&#39;s public or private switch and the player&#39;s name for others live in <code>localStorage</code> (settings and <code>untrue.net.*</code>), not in the save.</p>
 <h2 id="saves-that-cannot-be-read">Saves that cannot be read<a class="anchor" href="#saves-that-cannot-be-read" aria-label="Link to this section">#</a></h2>
 <p>The game never lets a new world overwrite a save it could not use (<code>SaveManager.load()</code>, <code>Game.start()</code>):</p>
 <div class="table-wrap"><table>
@@ -181,6 +237,7 @@
 <li>Autosave every 30 seconds, and whenever the page is hidden (tab switch or minimise).</li>
 <li>Ctrl+S saves now and confirms with a notification.</li>
 <li>Nothing is saved while the player is travelling (waiting to be placed after a jump or a collapse), or while a vision is open, since a story may be half way through a change.</li>
+<li>Behind a rift, the save keeps the player at the rift&#39;s doorstep and, of the bag, what they carried in: what was found inside is the rift&#39;s until they are out. In danger (health under half, or something hunting them within 10 tiles), it keeps nothing carried but what is bound to them, as dying there would (<a href="dimensions.html#saving">dimensions.md</a>).</li>
 <li>A write counts as done once its IndexedDB transaction completes, not when the request succeeds.</li>
 <li><code>?new</code> or <code>?seed=N</code> starts a fresh world; its first autosave replaces the slot.</li>
 </ul>
@@ -193,7 +250,7 @@
 </article>
     <nav class="pager"><a class="prev" href="rendering.html"><small>Previous</small>Rendering</a><a class="next" href="survival.html"><small>Next</small>Survival</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#what-is-saved">What is saved</a></li><li class="l2"><a href="#format">Format</a></li><li class="l2"><a href="#versions">Versions</a></li><li class="l2"><a href="#saves-that-cannot-be-read">Saves that cannot be read</a></li><li class="l2"><a href="#storage">Storage</a></li><li class="l2"><a href="#two-tabs">Two tabs</a></li><li class="l2"><a href="#settings-and-tips">Settings and tips</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#what-is-saved">What is saved</a></li><li class="l3"><a href="#visiting-a-friends-world">Visiting a friend's world</a></li><li class="l2"><a href="#the-drift">The Drift</a></li><li class="l2"><a href="#format">Format</a></li><li class="l2"><a href="#versions">Versions</a></li><li class="l2"><a href="#saves-that-cannot-be-read">Saves that cannot be read</a></li><li class="l2"><a href="#storage">Storage</a></li><li class="l2"><a href="#two-tabs">Two tabs</a></li><li class="l2"><a href="#settings-and-tips">Settings and tips</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Untrue: Architecture, Infra, Story</title>
+<style>
+  :root {
+    --bg: #f7f5fb; --panel: #ffffff; --line: #ddd7ea; --ink: #1d1830; --dim: #5e5775;
+    --violet: #6f3fd6; --cyan: #0e8f94; --amber: #b7761a; --rose: #c8386f; --green: #2e8b57; --red: #c93b3b;
+    --mono: ui-monospace, Consolas, "Cascadia Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, Segoe UI, Roboto, sans-serif; padding: 24px 16px 64px; }
+  main { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h1 small { color: var(--dim); font-weight: 400; font-size: 15px; display: block; }
+  h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h2 .n { color: var(--violet); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 15px; margin: 18px 0 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  p { margin: 6px 0 10px; color: var(--dim); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 12px 0; overflow-x: auto; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .card { background: #faf8fe; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .card h4 { margin: 0 0 6px; font-size: 14px; }
+  .card ul, .panel ul { margin: 4px 0 0 18px; padding: 0; color: var(--dim); }
+  .card li, .panel li { margin: 2px 0; }
+  .tag { display: inline-block; font: 12px/1.4 var(--mono); padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; }
+  .v { color: var(--violet); } .c { color: var(--cyan); } .a { color: var(--amber); } .r { color: var(--rose); } .g { color: var(--green); } .x { color: var(--red); }
+  svg { display: block; max-width: 100%; height: auto; font-family: system-ui, sans-serif; }
+  svg text { fill: var(--ink); font-size: 13px; }
+  svg .lbl { fill: var(--dim); font-size: 11px; }
+  svg .box { fill: #faf8fe; stroke: var(--line); stroke-width: 1.5; rx: 8; }
+  svg .host { stroke: var(--amber); }
+  svg .guest { stroke: var(--cyan); }
+  svg .ext { fill: #f1f4f8; stroke: #8a9bb0; stroke-dasharray: 5 4; }
+  svg .link { stroke: var(--cyan); stroke-width: 1.6; fill: none; }
+  svg .link.ctrl { stroke: var(--violet); }
+  svg .link.weak { stroke: #8a9bb0; stroke-dasharray: 4 4; }
+  svg .arrow { fill: var(--cyan); }
+  svg .step { fill: #f3eefc; stroke: var(--violet); stroke-width: 1.5; rx: 8; }
+  svg .step.good { stroke: var(--green); } svg .step.bad { stroke: var(--red); } svg .step.gold { stroke: var(--amber); }
+  svg .flow { stroke: var(--dim); stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  code { font-family: var(--mono); font-size: 13px; color: var(--cyan); }
+  .timeline { position: relative; margin: 10px 0 0; padding-left: 26px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .ev { position: relative; margin: 0 0 14px; }
+  .ev::before { content: ""; position: absolute; left: -24px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--violet); border: 2px solid var(--bg); }
+  .ev.old::before { background: var(--dim); } .ev.now::before { background: var(--rose); } .ev.end::before { background: var(--amber); }
+  .ev b { color: var(--ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--dim); margin-top: 8px; }
+  .legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+  .note { border-left: 3px solid var(--amber); padding: 6px 12px; background: #fdf6e8; color: var(--dim); border-radius: 4px; margin: 10px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Untrue <small>Architecture · infrastructure · multiplayer · story and lore. One page, as planned on 2026-10-19.</small></h1>
+
+<!-- ===================================================== 1. BIG PICTURE -->
+<h2><span class="n">1</span>Big picture</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 330" role="img" aria-label="Big picture">
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5e5775"/></marker></defs>
+  <!-- static hosting -->
+  <rect class="box ext" x="20" y="20" width="300" height="120"/>
+  <text x="36" y="44" font-weight="600">Static hosting (Vercel)</text>
+  <text class="lbl" x="36" y="66">index.html · JS bundle · atlas painted at boot</text>
+  <text class="lbl" x="36" y="84">/dimensions/hollow.json … (fixed maps)</text>
+  <text class="lbl" x="36" y="102">CSP: script-src 'self', no eval, connect-src self + relays</text>
+  <text class="lbl" x="36" y="124">No backend of ours. Nothing runs server-side.</text>
+  <!-- public relays -->
+  <rect class="box ext" x="410" y="20" width="300" height="120"/>
+  <text x="426" y="44" font-weight="600">Public relays (not ours)</text>
+  <text class="lbl" x="426" y="66">Nostr relays (wss): invite codes, open-instance board</text>
+  <text class="lbl" x="426" y="84">STUN (Google / Cloudflare): find own public address</text>
+  <text class="lbl" x="426" y="102">No TURN in v1: ~10–20% of pairs can't connect</text>
+  <text class="lbl" x="426" y="124">Payloads encrypted with the join code; relays see noise</text>
+  <!-- later server -->
+  <rect class="box ext" x="800" y="20" width="300" height="120"/>
+  <text x="816" y="44" font-weight="600">Later (optional)</text>
+  <text class="lbl" x="816" y="66">Dimension files served by a server instead of the bundle</text>
+  <text class="lbl" x="816" y="84">Hosted TURN with a free allowance (Cloudflare)</text>
+  <text class="lbl" x="816" y="102">Same-repo serverless signaling if relays prove flaky</text>
+  <text class="lbl" x="816" y="124">All still "no server to run" from the game's side</text>
+  <!-- browsers -->
+  <rect class="box host" x="60" y="200" width="260" height="100"/>
+  <text x="76" y="224" font-weight="600">Player A (browser)</text>
+  <text class="lbl" x="76" y="246">Overworld: own seed, own save (IndexedDB)</text>
+  <text class="lbl" x="76" y="264">Hosts friends by invite code</text>
+  <text class="lbl" x="76" y="282">Rifts → dimension instances (public)</text>
+  <rect class="box guest" x="430" y="200" width="260" height="100"/>
+  <text x="446" y="224" font-weight="600">Player B (browser)</text>
+  <text class="lbl" x="446" y="246">Guest in A's overworld, or in own world</text>
+  <text class="lbl" x="446" y="264">Saves only their character when a guest</text>
+  <text class="lbl" x="446" y="282">Meets strangers only inside dimensions</text>
+  <rect class="box guest" x="800" y="200" width="260" height="100"/>
+  <text x="816" y="224" font-weight="600">Player C (stranger)</text>
+  <text class="lbl" x="816" y="246">Never sees A's or B's overworld</text>
+  <text class="lbl" x="816" y="264">Joins a public Hollow instance from the board</text>
+  <text class="lbl" x="816" y="282">Same map bytes, verified by hash</text>
+  <!-- links -->
+  <path class="flow" d="M170 140 L170 200"/>
+  <path class="flow" d="M560 140 L560 200"/>
+  <path class="flow" d="M930 140 L930 200"/>
+  <path class="link" d="M320 250 L430 250"/>
+  <text class="lbl" x="340" y="243">WebRTC p2p</text>
+  <path class="link" d="M690 250 L800 250"/>
+  <text class="lbl" x="700" y="243">WebRTC p2p</text>
+</svg>
+<div class="legend"><span><i style="color:var(--amber)"></i>host / authority</span><span><i style="color:var(--cyan)"></i>guest / peer link</span><span><i style="color:#8a9bb0;border-top-style:dashed"></i>external, not ours</span></div>
+</div>
+
+<!-- ===================================================== 2. TWO MODES -->
+<h2><span class="n">2</span>Two multiplayer modes</h2>
+<div class="grid">
+  <div class="card">
+    <h4><span class="tag a">Overworld</span> Invite code only</h4>
+    <ul>
+      <li>Private: join a friend by an 8-letter code on the Drift Beacon.</li>
+      <li>Star topology, host-authoritative. Host streams the world.</li>
+      <li>Chunks identical by construction: guests never generate.</li>
+      <li>Cap ~4 guests (host CPU simulates for everyone).</li>
+      <li>Host leaves → session ends; guests keep their character.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4><span class="tag v">Outer dimensions</span> Fully multiplayer</h4>
+    <ul>
+      <li>Fixed map file per dimension; everyone already has the bytes.</li>
+      <li>Public instances listed on the board; strangers meet here.</li>
+      <li>Mesh links (≤8 players), one acting host; host migration.</li>
+      <li>Host owns only run state: seals, Warden, creatures, chest, items.</li>
+      <li>A phone can host: nothing to generate, nothing to stream.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ===================================================== 3. SIGNALING -->
+<h2><span class="n">3</span>Finding each other with no server: the Drift Beacon</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 250" role="img" aria-label="Signaling flow">
+  <rect class="step" x="20" y="30" width="200" height="70"/>
+  <text x="34" y="56" font-weight="600">1 · Host opens beacon</text>
+  <text class="lbl" x="34" y="76">code K7QF-2M9A (≈40 bits)</text>
+  <text class="lbl" x="34" y="92">topic = hash(code), key = kdf(code)</text>
+  <rect class="step" x="260" y="30" width="200" height="70"/>
+  <text x="274" y="56" font-weight="600">2 · Guest enters code</text>
+  <text class="lbl" x="274" y="76">creates offer, gathers ICE (≤3 s)</text>
+  <text class="lbl" x="274" y="92">posts encrypted offer to topic</text>
+  <rect class="step" x="500" y="30" width="200" height="70"/>
+  <text x="514" y="56" font-weight="600">3 · Host sees request</text>
+  <text class="lbl" x="514" y="76">"Ana wants to join: Accept?"</text>
+  <text class="lbl" x="514" y="92">posts encrypted answer</text>
+  <rect class="step good" x="740" y="30" width="200" height="70"/>
+  <text x="754" y="56" font-weight="600">4 · Direct link</text>
+  <text class="lbl" x="754" y="76">ctrl: ordered, reliable</text>
+  <text class="lbl" x="754" y="92">snap: unordered, no retransmit</text>
+  <path class="flow" d="M220 65 L260 65"/><path class="flow" d="M460 65 L500 65"/><path class="flow" d="M700 65 L740 65"/>
+  <rect class="box ext" x="260" y="140" width="440" height="40"/>
+  <text x="276" y="165">Nostr relays carry steps 2–3 (6 in the list, first that answers wins)</text>
+  <path class="link weak" d="M360 100 L360 140"/><path class="link weak" d="M600 100 L600 140"/>
+  <rect class="step gold" x="980" y="30" width="120" height="70"/>
+  <text x="992" y="56" font-weight="600">Fallback</text>
+  <text class="lbl" x="992" y="76">manual code</text>
+  <text class="lbl" x="992" y="92">copy / paste</text>
+  <text class="lbl" x="20" y="215">After step 4 everything travels peer to peer, including new members' offers (the host relays them), ICE restarts and host migration.</text>
+  <text class="lbl" x="20" y="235">If the link fails after 15 s: "One of your networks blocks peer-to-peer. Try another network, or use the manual code."</text>
+</svg>
+</div>
+<div class="grid">
+  <div class="card"><h4>In the overworld the beacon shows</h4><ul><li>Your code (while your world is open).</li><li>Enter a friend's code → passage animation → arrive in their chunk.</li></ul></div>
+  <div class="card"><h4>Inside a dimension it shows</h4><ul><li>Public instances of this dimension: players, seals broken.</li><li>Retune a rift to any dimension you've cleared.</li></ul></div>
+  <div class="card"><h4>Identity</h4><ul><li>A per-browser keypair signs board notes. No accounts.</li><li>Hosts can kick and block a key.</li></ul></div>
+</div>
+
+<!-- ===================================================== 4. OVERWORLD SESSION -->
+<h2><span class="n">4</span>Overworld session: chunk commonness</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 300" role="img" aria-label="Overworld streaming">
+  <rect class="box host" x="20" y="20" width="400" height="260"/>
+  <text x="36" y="44" font-weight="600">Host (authority)</text>
+  <text class="lbl" x="36" y="68">ChunkManager with one View per player; cache = union</text>
+  <text class="lbl" x="36" y="86">Workers generate terrain (seed, visit, 3×3 biomes)</text>
+  <text class="lbl" x="36" y="104">BiomeManager grows biomes (load-order dependent → only here)</text>
+  <text class="lbl" x="36" y="122">RegionTracker: visit rises only when ALL players have left</text>
+  <text class="lbl" x="36" y="140">Structures rolled, chests, harvest log, ground items</text>
+  <text class="lbl" x="36" y="158">Simulates enemies, NPCs, events, weather, clock</text>
+  <text class="lbl" x="36" y="186">Sends per guest, by interest (that guest's cache):</text>
+  <text class="lbl" x="48" y="204">• base chunk bytes, deflated ≈0.5 KB (tiles+decos)</text>
+  <text class="lbl" x="48" y="222">• biome records, region visits, object layouts</text>
+  <text class="lbl" x="48" y="240">• deltas: harvested, chest opened, item dropped, rift closed</text>
+  <text class="lbl" x="48" y="258">• snapshots 15–20/s: players, enemies, NPCs near the guest</text>
+  <rect class="box guest" x="700" y="20" width="400" height="260"/>
+  <text x="716" y="44" font-weight="600">Guest (replica)</text>
+  <text class="lbl" x="716" y="68">NetChunkGenerator replaces WorkerGenerator</text>
+  <text class="lbl" x="716" y="86">Composes locally: base bytes → stamp objects → harvest</text>
+  <text class="lbl" x="716" y="104">Integer-only composition: identical on every engine</text>
+  <text class="lbl" x="716" y="122">Never calls ensure / resolveAnchor / regrow / visit++</text>
+  <text class="lbl" x="716" y="140">Renders, plays audio, runs UI and its own movement</text>
+  <text class="lbl" x="716" y="168">Sends 20/s: input + position (host validates speed, walls)</text>
+  <text class="lbl" x="716" y="186">Sends requests: harvest, open chest, hit, pick up, craft</text>
+  <text class="lbl" x="716" y="214">Saves ONLY its character: bag, gear, level, story progress</text>
+  <text class="lbl" x="716" y="232">Carries it between worlds and dimensions</text>
+  <path class="link ctrl" d="M420 120 L700 120"/><text class="lbl" x="500" y="112">ctrl · reliable · world + events</text>
+  <path class="link" d="M420 200 L700 200"/><text class="lbl" x="520" y="192">snap · unreliable · state</text>
+  <path class="link" d="M700 240 L420 240"/><text class="lbl" x="500" y="258">guest input + requests</text>
+</svg>
+<div class="note">Why stream instead of generating on both sides: biome borders depend on load order, region visits depend on the path, and <code>Math.sin/cos/hypot</code> differ by browser. Streaming makes chunks identical with zero generator changes. A later v2 can generate locally from a host-sent key <code>{seed, visit, biomes}</code> behind a per-chunk checksum, once biome growth is order-independent and generation uses deterministic math.</div>
+</div>
+
+<!-- ===================================================== 5. DIMENSION INSTANCE -->
+<h2><span class="n">5</span>Dimension instance: fixed map, mesh, migration</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 320" role="img" aria-label="Dimension instance mesh">
+  <!-- mesh of 5 -->
+  <g>
+    <circle cx="170" cy="160" r="34" fill="#faf8fe" stroke="#b7761a" stroke-width="2"/><text x="170" y="165" text-anchor="middle">Host</text>
+    <circle cx="60" cy="60" r="28" fill="#faf8fe" stroke="#0e8f94" stroke-width="1.5"/><text x="60" y="64" text-anchor="middle" class="lbl">P2</text>
+    <circle cx="290" cy="60" r="28" fill="#faf8fe" stroke="#0e8f94" stroke-width="1.5"/><text x="290" y="64" text-anchor="middle" class="lbl">P3</text>
+    <circle cx="60" cy="260" r="28" fill="#faf8fe" stroke="#0e8f94" stroke-width="1.5"/><text x="60" y="264" text-anchor="middle" class="lbl">P4</text>
+    <circle cx="290" cy="260" r="28" fill="#faf8fe" stroke="#0e8f94" stroke-width="1.5"/><text x="290" y="264" text-anchor="middle" class="lbl">P5</text>
+    <path class="link" d="M60 88 L60 232 M88 60 L262 60 M88 260 L262 260 M290 88 L290 232 M80 80 L270 240 M270 80 L80 240"/>
+    <path class="link ctrl" d="M145 135 L80 80 M195 135 L270 80 M145 185 L80 240 M195 185 L270 240"/>
+    <text class="lbl" x="20" y="305">Mesh ≤8 players (≤28 links). Violet = authority traffic.</text>
+  </g>
+  <!-- state owned by host -->
+  <rect class="box host" x="380" y="20" width="340" height="180"/>
+  <text x="396" y="44" font-weight="600">Instance state (host-owned, small)</text>
+  <text class="lbl" x="396" y="68">seals + trials done · Warden HP/phase · summons</text>
+  <text class="lbl" x="396" y="86">roaming creatures per spawn zone</text>
+  <text class="lbl" x="396" y="104">chest: who has taken their share</text>
+  <text class="lbl" x="396" y="122">dropped items · players · contribution table</text>
+  <text class="lbl" x="396" y="140">Warden return cooldown (20 min) / reset when empty</text>
+  <text class="lbl" x="396" y="166">Snapshot ≈ 2–6 KB: migrates in one message</text>
+  <!-- migration -->
+  <rect class="step gold" x="380" y="220" width="340" height="80"/>
+  <text x="396" y="244" font-weight="600">Host migration</text>
+  <text class="lbl" x="396" y="264">Host gone → longest-connected peer takes the last snapshot</text>
+  <text class="lbl" x="396" y="282">Links already exist: no re-signaling. Instances outlive their creator.</text>
+  <!-- board -->
+  <rect class="box ext" x="760" y="20" width="340" height="120"/>
+  <text x="776" y="44" font-weight="600">Open Instances board (Nostr)</text>
+  <text class="lbl" x="776" y="68">host posts every 60 s: dimension id, players, seals, version</text>
+  <text class="lbl" x="776" y="86">signed by its key; notes expire after 3 min</text>
+  <text class="lbl" x="776" y="104">entering a rift: join one with room, else host a new one</text>
+  <text class="lbl" x="776" y="122">"Private trip" toggle: alone or friends only</text>
+  <rect class="box" x="760" y="160" width="340" height="140"/>
+  <text x="776" y="184" font-weight="600">Not shared (per player, in own save)</text>
+  <text class="lbl" x="776" y="208">cleared dimensions · lore stones read · rifts closed</text>
+  <text class="lbl" x="776" y="226">bag, gear, level · which rift at home you came from</text>
+  <text class="lbl" x="776" y="244">attunement for THIS instance (not saved, not an item)</text>
+  <text class="lbl" x="776" y="262">map fog of war</text>
+  <text class="lbl" x="776" y="286">Handshake checks the map file hash + game version.</text>
+</svg>
+</div>
+
+<!-- ===================================================== 6. RIFT FLOW -->
+<h2><span class="n">6</span>A rift, start to finish</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 420" role="img" aria-label="Rift flow">
+  <rect class="step" x="20" y="20" width="200" height="60"/><text x="32" y="44" font-weight="600">Face rift, press E</text><text class="lbl" x="32" y="64">destination rolled from seed</text>
+  <rect class="step" x="260" y="20" width="200" height="60"/><text x="272" y="44" font-weight="600">Beacon: retune?</text><text class="lbl" x="272" y="64">any cleared world, or this one</text>
+  <rect class="step" x="500" y="20" width="200" height="60"/><text x="512" y="44" font-weight="600">Pick instance</text><text class="lbl" x="512" y="64">public with room · new · private</text>
+  <rect class="step" x="740" y="20" width="200" height="60"/><text x="752" y="44" font-weight="600">Passage (1.3 s)</text><text class="lbl" x="752" y="64">join + load under the veil</text>
+  <path class="flow" d="M220 50 L260 50"/><path class="flow" d="M460 50 L500 50"/><path class="flow" d="M700 50 L740 50"/>
+  <path class="flow" d="M840 80 L840 120"/>
+  <rect class="step" x="500" y="120" width="440" height="60"/><text x="512" y="144" font-weight="600">Open world inside: explore, gather, roam, lore stones, strangers</text><text class="lbl" x="512" y="164">friends who entered together land here too ("Follow into The Hollow?")</text>
+  <path class="flow" d="M720 180 L720 220"/>
+  <rect class="step" x="500" y="220" width="440" height="60"/><text x="512" y="244" font-weight="600">Trials in any order: Glitch Nest · Crumbling Path · Glyph Hall</text><text class="lbl" x="512" y="264">each broken seal = fixed score, shared by players in the room</text>
+  <path class="flow" d="M720 280 L720 320"/>
+  <rect class="step bad" x="500" y="320" width="440" height="60"/><text x="512" y="344" font-weight="600">Warden's gate opens → fight → Warden falls</text><text class="lbl" x="512" y="364">score += damage to Warden and summons · cooldown starts</text>
+  <!-- outcomes -->
+  <rect class="step good" x="20" y="320" width="440" height="80"/>
+  <text x="32" y="344" font-weight="600">Rewards by contribution (share = score / total)</text>
+  <text class="lbl" x="32" y="364">loot + coins ∝ share, remainder to top · XP ∝ share, floor 25% above threshold</text>
+  <text class="lbl" x="32" y="382">attuned if share ≥ 10% or broke a trial → portal takes you home and closes YOUR rift</text>
+  <path class="flow" d="M500 350 L460 350"/>
+  <rect class="step bad" x="20" y="120" width="440" height="60"/>
+  <text x="32" y="144" font-weight="600">Death inside</text>
+  <text class="lbl" x="32" y="164">lose everything carried (gear kept) · ejected to your own rift, still open</text>
+  <rect class="step" x="20" y="220" width="440" height="60"/>
+  <text x="32" y="244" font-weight="600">Leave by the arrival rift</text>
+  <text class="lbl" x="32" y="264">rift stays open · progress on this instance is kept while it lives</text>
+</svg>
+</div>
+
+<!-- ===================================================== 7. STORY -->
+<h2><span class="n">7</span>Story and lore</h2>
+<div class="grid">
+  <div class="card">
+    <h4><span class="tag v">The Drift</span> ancient, normal</h4>
+    <ul>
+      <li>The world is endless, nothing is permanent. Land beyond the active boundary is discarded; the same place regenerates differently.</li>
+      <li>Wilderness, ruins, towns: no exceptions. Civilisation adapts; stories tell of homelands no one can revisit.</li>
+      <li><b>In code:</b> chunk cache radius, region visit counters, structures forgetting. Multiplayer: a region drifts only when it has left <em>every</em> player's area.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4><span class="tag r">The Fracture</span> new, wrong</h4>
+    <ul>
+      <li>Rifts tear open onto outer dimensions: the expanse where discarded land goes. Regions overlap, creatures spill out, places vanish early.</li>
+      <li><b>In code:</b> rifts, glitches near them (jolts, tints, scorch), Hollow creatures. Later: Fracture events near open rifts.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4><span class="tag c">The Null</span> the force behind it</h4>
+    <ul>
+      <li>Hinted on lore stones; the Warden and glitchlings are Null-touched. Never explained early.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4><span class="tag a">The protagonist</span> the cause</h4>
+    <ul>
+      <li>Their own experiment reactivated an ancient dimensional network. It did not create the Drift; it exposed what lies beyond it.</li>
+      <li>Hinted from the start (gaps in memory, a lab-like ruin), revealed late through clues across several worlds.</li>
+    </ul>
+  </div>
+</div>
+<div class="panel">
+<h3>Timeline</h3>
+<div class="timeline">
+  <div class="ev old"><b>Always:</b> the Drift. Places leave the active world; some return changed, some never.</div>
+  <div class="ev old"><b>Long ago:</b> a dimensional network joined the world to the expanse beyond. Forgotten, sealed, misunderstood as myth.</div>
+  <div class="ev now"><b>Recently:</b> the protagonist's experiment. The network wakes. The first rift opens. <em>(game start: intro vision)</em></div>
+  <div class="ev now"><b>Now:</b> the Fracture spreads. Rifts across the land; glitches; creatures. Villagers speak of towns that should not have drifted yet.</div>
+  <div class="ev"><b>World 1, The Hollow (built):</b> drifted land in the void: a lost wood, a lost hamlet. Isolde asks for her bell's three pieces; rung, the Warden (her father, taken by the Null) remembers someone with ash on their hands asking the way into the network. Seven stones: the Drift, the roads, the Null, a hand like yours.</div>
+  <div class="ev"><b>World 2, The Drowned Archive (built):</b> the keepers' library, half under ink. Ondine asks for the Ledger's three index pages; opened, its newest entry is in the player's own hand. The Sluice Hall's tide, the cipher gallery, the Archivist. Cleared worlds stay reachable by retuning any rift.</div>
+  <div class="ev"><b>Further worlds:</b> each new fixed map (registry) holds drifted fragments and a resident with a plot. Clues move from <em>who</em> woke the network to <em>why</em>, and what the Null wants with roads it never built.</div>
+  <div class="ev"><b>Act 3, the network:</b> clues converge on the protagonist's own hand in it. The last world is the network's heart.</div>
+  <div class="ev end"><b>Ending:</b> can the connections be repaired before the worlds stop being distinct? Left open for later design.</div>
+</div>
+</div>
+<div class="grid">
+  <div class="card"><h4>Objectives (HUD tracker)</h4><ul><li>Find a rift → Enter the rift → Break the seals n/3 → Face the boss → Close the rift</li><li>Inside: the plot's line (seek out the resident → n/3 pieces → bring them back) · Lore stones read: n/7</li><li>Nobody falls: the void is a wall; slabs and tides throw you back, hurt</li></ul></div>
+  <div class="card"><h4>Items and names</h4><ul><li><b>Rift Shard:</b> crafting material from vault chests.</li><li><b>Resonance Core:</b> the lore name for attunement; not an item.</li><li><b>Drift Beacon:</b> the device: codes, instances, retuning.</li></ul></div>
+  <div class="card"><h4>Rules kept true everywhere</h4><ul><li>No protected places; the Drift follows the boundary, not importance.</li><li>Progress is remembered apart from the land.</li><li>Rifts are events, not the reason land drifts.</li></ul></div>
+</div>
+
+<!-- ===================================================== 8. DATA -->
+<h2><span class="n">8</span>Who owns which data</h2>
+<div class="panel">
+<table>
+  <tr><th>Data</th><th>Solo</th><th>Overworld guest</th><th>Dimension instance</th><th>Saved where</th></tr>
+  <tr><td>Terrain, biomes, region visits</td><td>local workers</td><td>streamed from host</td><td>fixed file (hash-checked)</td><td>seed + visits in host save; file in bundle</td></tr>
+  <tr><td>Structures, chests, harvest, ground items</td><td>local</td><td>host deltas</td><td>host (chest shares, drops)</td><td>host save (overworld) · not saved (dimension)</td></tr>
+  <tr><td>Enemies, NPCs, events, weather, clock</td><td>local</td><td>host snapshots</td><td>host snapshots (creatures, Warden)</td><td>host save (living)</td></tr>
+  <tr><td>Player: bag, gear, vitals, level</td><td>local</td><td>own, host-validated</td><td>own, host-validated</td><td>own character save</td></tr>
+  <tr><td>Story: rifts closed, cleared worlds, lore read</td><td>local</td><td>own</td><td>own</td><td>own character save (story v3)</td></tr>
+  <tr><td>Seals, Warden, contribution, cooldown</td><td>local run</td><td>—</td><td>host, migrates with it</td><td>never</td></tr>
+  <tr><td>Attunement</td><td>implicit</td><td>—</td><td>host flag per player</td><td>never</td></tr>
+</table>
+</div>
+
+<!-- ===================================================== 9. BUILD ORDER -->
+<h2><span class="n">9</span>Build order</h2>
+<div class="panel">
+<svg viewBox="0 0 1120 120" role="img" aria-label="Build order">
+  <g>
+    <rect class="step" x="10" y="20" width="150" height="70"/><text x="20" y="44" font-weight="600">0 · Refactors</text><text class="lbl" x="20" y="62">multi-view chunks</text><text class="lbl" x="20" y="78">change events, replica</text>
+    <rect class="step" x="195" y="20" width="150" height="70"/><text x="205" y="44" font-weight="600">1 · Transport</text><text class="lbl" x="205" y="62">WebRTC, codec, manual</text><text class="lbl" x="205" y="78">code, beacon UI, 2 tabs</text>
+    <rect class="step" x="380" y="20" width="150" height="70"/><text x="390" y="44" font-weight="600">2 · Nostr</text><text class="lbl" x="390" y="62">invite codes, board,</text><text class="lbl" x="390" y="78">CSP connect-src wss</text>
+    <rect class="step gold" x="565" y="20" width="150" height="70"/><text x="575" y="44" font-weight="600">3 · Dimensions</text><text class="lbl" x="575" y="62">mesh, migration, run</text><text class="lbl" x="575" y="78">state, contribution</text>
+    <rect class="step" x="750" y="20" width="150" height="70"/><text x="760" y="44" font-weight="600">4 · Overworld</text><text class="lbl" x="760" y="62">streaming, invite join,</text><text class="lbl" x="760" y="78">NPCs, events, trade</text>
+    <rect class="step" x="935" y="20" width="150" height="70"/><text x="945" y="44" font-weight="600">5 · Polish</text><text class="lbl" x="945" y="62">kick/block, caps, TURN,</text><text class="lbl" x="945" y="78">local gen + checksums</text>
+    <path class="flow" d="M160 55 L195 55"/><path class="flow" d="M345 55 L380 55"/><path class="flow" d="M530 55 L565 55"/><path class="flow" d="M715 55 L750 55"/><path class="flow" d="M900 55 L935 55"/>
+  </g>
+</svg>
+<p>Story work runs alongside, independent of networking: rewrite intro and visions to the Drift/Fracture, make dropped items and chests drift with their region, add drifted fragments and Null hints to the Hollow, villager lines about the Drift, story save v3 (cleared worlds, lore per world).</p>
+</div>
+
+<h2><span class="n">10</span>Known limits</h2>
+<div class="panel"><ul>
+  <li>No TURN: some pairs never connect. The UI says so instead of spinning.</li>
+  <li>Relays are not ours: keep the manual code as the always-works path.</li>
+  <li>No persistent shared world: an instance lives while someone is in it.</li>
+  <li>Guests can grief in dimensions (take loot, run). Hosts kick and block; contribution gating limits the damage.</li>
+  <li>Phones hosting an overworld with 4 guests will struggle: cap at 2 on touch devices.</li>
+</ul></div>
+</main>
+</body>
+</html>

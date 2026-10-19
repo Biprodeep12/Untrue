@@ -64,8 +64,49 @@ export const Tile = {
   Farmland: 55,
   /** Scorched, violet-veined ground around a rift. */
   RiftGround: 56,
+  // The outer dimensions (The Hollow). Never generated in the overworld.
+  /** Violet moss, the Hollow's ground. */
+  HollowMoss: 57,
+  HollowMossDark: 58,
+  /** Grey ash with embers. */
+  Ash: 59,
+  /** Pale shard sand along the void's edge. */
+  ShardSand: 60,
+  /** Nothing: open to walk onto, and walking onto it is a fall. */
+  Void: 61,
+  /** The void just below land: the land's cliff face hanging into it. A fall too. */
+  VoidCliff: 62,
+  /** Old flagstones of the ruins and their causeways. */
+  RuinFloor: 63,
+  RuinWall: 64,
+  RuinWallFace: 65,
+  /** A safe pad on a crumbling path: falls return to the last one touched. */
+  RunePad: 66,
+  /** Flagstones with a rune inlay. */
+  Rune: 67,
+  /** Moss with a small, perfectly round absence in it: where the Null has touched. */
+  NullMark: 68,
+  // The Drowned Archive.
+  /** Pale, cold marble of the archive's halls. */
+  ArchiveFloor: 69,
+  /** The same marble, wet, with standing puddles. */
+  ArchiveWet: 70,
+  /** A worn reading-room carpet. */
+  ArchiveCarpet: 71,
+  /** Shelves stacked to the ceiling: the archive's walls. */
+  BookWall: 72,
+  BookWallFace: 73,
+  /** Black, still ink-water: too deep to wade. */
+  InkWater: 74,
+  /** Ankle-deep water over the floor: wadeable. */
+  Shallows: 75,
 } as const;
-export const TILE_COUNT = 57;
+export const TILE_COUNT = 76;
+
+/** Nothing to stand on: the void of an outer dimension. */
+export function isVoid(tile: number): boolean {
+  return tile === Tile.Void || tile === Tile.VoidCliff;
+}
 
 /** Water the player can swim in. */
 export function isWater(tile: number): boolean {
@@ -150,10 +191,34 @@ export const Deco = {
   Rift: 57,
   /** Where a rift was closed: a faint scar on the ground. */
   RiftScar: 58,
+  // The outer dimensions (The Hollow).
+  /** A twisted tree with glowing leaves; chopped for wood. */
+  HollowTree: 59,
+  /** A bare, ash-grey tree. */
+  AshTree: 60,
+  /** Glowing shard grass; picked for herbs. */
+  ShardGrass: 61,
+  /** Glowing mushrooms; picked. */
+  GlowCap: 62,
+  /** A cyan crystal cluster; mined like a crystal. */
+  RiftCrystal: 63,
+  /** A ruined pillar with a crystal band. */
+  RuinPillar: 64,
+  /** A standing stone carved with a clue to what is happening; E reads it. */
+  LoreStone: 65,
+  /** A lost piece of something, glowing faintly: what an outer world's plot
+   *  asks the player to find; E takes it. */
+  Relic: 66,
+  /** A bell frame with no bell in it. */
+  BellFrame: 67,
+  /** A drift of sodden books. */
+  BookPile: 68,
+  /** A reading lectern with a book chained to it. */
+  Lectern: 69,
   /** Layout-only: remove whatever decoration the terrain placed. */
   Clear: 255,
 } as const;
-export const DECO_COUNT = 59;
+export const DECO_COUNT = 70;
 
 const SOLID_TILES = new Set<number>([
   Tile.Water,
@@ -171,6 +236,11 @@ const SOLID_TILES = new Set<number>([
   Tile.WoodWallFace,
   Tile.CaveWall,
   Tile.CaveRoof,
+  Tile.RuinWall,
+  Tile.RuinWallFace,
+  Tile.BookWall,
+  Tile.BookWallFace,
+  Tile.InkWater,
 ]);
 
 const SOLID_DECOS = new Set<number>([
@@ -222,6 +292,14 @@ const SOLID_DECOS = new Set<number>([
   Deco.Dummy,
   Deco.Footprint,
   Deco.Rift,
+  Deco.HollowTree,
+  Deco.AshTree,
+  Deco.RiftCrystal,
+  Deco.RuinPillar,
+  Deco.LoreStone,
+  Deco.Relic,
+  Deco.BellFrame,
+  Deco.Lectern,
 ]);
 
 export function isSolid(tile: number, deco: number): boolean {

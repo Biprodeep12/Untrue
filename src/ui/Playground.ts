@@ -1,9 +1,10 @@
 // Story playground (development builds, ?playground): a panel for testing in
 // a fresh world that is never saved. Travel to the spawn, set the clock, play
-// on with god mode, open a rift beside the player, jump into The Hollow, and
-// skip straight to any of its chambers.
+// on with god mode, open a rift beside the player, jump into any outer world
+// (alone, or into a shared instance), skip straight to any of its sites, and
+// count every world as cleared (so a rift offers the retune chooser).
 
-import type { ChamberKind } from '../dimension/Dimension';
+import { DIMENSIONS, type SiteKind } from '../dimension/Dimension';
 
 export interface PlaygroundActions {
   goToSpawn(): void;
@@ -11,10 +12,16 @@ export interface PlaygroundActions {
   restart(): void;
   /** Tears a rift open near the player. */
   riftNearby(): void;
-  /** Straight into an outer dimension. */
-  enterHollow(): void;
-  /** Into a dimension (if not in one) and on to its chamber of this kind. */
-  skipTo(kind: ChamberKind): void;
+  /** Straight into an outer dimension (by id; the nearest rift's own if none). */
+  enterHollow(id?: string): void;
+  /** Into an outer dimension through a rift's passage, meeting others there
+   *  (a public instance; with ?net=local, other tabs of this browser). */
+  enterHollowShared(): void;
+  /** Into a dimension (if not in one) and on to its site of this kind; the
+   *  Warden's and the vault with what bars them done. */
+  skipTo(kind: SiteKind): void;
+  /** Counts every outer world as cleared, so rifts offer to be retuned. */
+  clearAll(): void;
 }
 
 export class Playground {
@@ -64,8 +71,10 @@ export class Playground {
     add('.pg-world', 'Morning', () => actions.setHour(8));
     add('.pg-world', 'Restart', () => actions.restart());
     add('.pg-rifts', 'Rift nearby', () => actions.riftNearby());
-    add('.pg-rifts', 'Enter the Hollow', () => actions.enterHollow());
-    const skips: Array<[ChamberKind, string]> = [['combat', 'Combat'], ['hazard', 'Path'], ['puzzle', 'Puzzle'], ['boss', 'Boss'], ['vault', 'Vault']];
+    for (const d of DIMENSIONS) add('.pg-rifts', `Enter ${d.name.replace(/^The /, 'the ')}`, () => actions.enterHollow(d.id));
+    add('.pg-rifts', 'Enter (shared)', () => actions.enterHollowShared());
+    add('.pg-rifts', 'Clear all worlds', () => actions.clearAll());
+    const skips: Array<[SiteKind, string]> = [['combat', 'Waves'], ['hazard', 'Path'], ['tide', 'Tide'], ['puzzle', 'Glyphs'], ['boss', 'Boss'], ['vault', 'Vault']];
     for (const [kind, label] of skips) add('.pg-rifts', `→ ${label}`, () => actions.skipTo(kind));
     parent.appendChild(this.root);
   }

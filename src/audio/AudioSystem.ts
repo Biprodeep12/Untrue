@@ -37,6 +37,8 @@ const SCALES = {
   snow: [0, 2, 4, 6, 7, 11],
   /** The outer dimensions: close, unresolved intervals. */
   rift: [0, 1, 3, 6, 7, 10],
+  /** The Drowned Archive: a low, mournful minor. */
+  archive: [0, 2, 3, 7, 8, 10],
 };
 const ROOTS = [220, 196, 174.6, 246.9];
 /** Seconds per music beat, per land: brisk in the desert, slow in the snow. */
@@ -242,6 +244,11 @@ export class AudioSystem {
     const r = Math.random();
     // Ambience never crowds out the sound effects.
     if (this.voices >= MAX_VOICES - 6) return;
+    if (mood.dimension === 'archive') {
+      // Water dripping somewhere in the stacks.
+      if (r < 0.18) this.tone(t, 900 + Math.random() * 700, 0.18, 0.03, 'sine', 300, this.sfxBus, 0.01);
+      return;
+    }
     if (mood.dimension) {
       // Glassy chimes in the void, now and then.
       if (r < 0.12) this.tone(t, 1800 + Math.random() * 1600, 1.2, 0.025, 'sine', undefined, this.sfxBus, 0.3);
@@ -320,8 +327,9 @@ export class AudioSystem {
   /** An outer dimension's music: a low drone, sparse notes from a scale that
    *  never settles, and the heartbeat when something hunts the player. */
   private riftBeat(at: number, mood: MusicMood): void {
-    const scale = SCALES.rift;
-    const root = 130.8;
+    const archive = mood.dimension === 'archive';
+    const scale = archive ? SCALES.archive : SCALES.rift;
+    const root = archive ? 110 : 130.8;
     const note = (step: number) => root * Math.pow(2, (scale[step % scale.length] + 12 * Math.floor(step / scale.length)) / 12);
     if (this.beat % 8 === 0) {
       this.tone(at, root / 2, RIFT_BEAT * 8.2, 0.05, 'sine', undefined, this.musicBus, 1.5);

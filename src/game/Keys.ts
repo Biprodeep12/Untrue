@@ -16,6 +16,7 @@ export type Action =
   | 'drop'
   | 'bag'
   | 'map'
+  | 'beacon'
   | 'zoomIn'
   | 'zoomOut';
 
@@ -34,6 +35,7 @@ export const DEFAULT_KEYS: Record<Action, string> = {
   drop: 'KeyQ',
   bag: 'Tab',
   map: 'KeyM',
+  beacon: 'KeyB',
   zoomIn: 'Equal',
   zoomOut: 'Minus',
 };
@@ -64,6 +66,7 @@ export const ACTION_LABELS: Record<Action, string> = {
   drop: 'Drop the selected item',
   bag: 'Bag, crafting, quests',
   map: 'Map',
+  beacon: 'Drift Beacon: who you meet behind the rifts',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
 };

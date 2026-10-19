@@ -3,15 +3,15 @@
 // It fights on an `Arena`: the overworld, or an outer dimension, where the
 // overworld's own spawning, guards and legends wait until the player is back.
 
-import { CHUNK_SIZE } from '../config';
-import { chunkKey, inRect, tileToChunk } from '../coords';
+import { CHUNK_SIZE, SIM_RADIUS } from '../config';
+import { chunkKey, inRect, tileToChunk, type ChunkRect } from '../coords';
 import { Enemy, type EnemyContext } from '../entities/Enemy';
 import { elementFactor, SPECIES, type ProjectileKind, type Species } from '../entities/Species';
 import { eliteChance, groupSize, LEGEND_CHANCE, MIN_SPAWN_DISTANCE, pickSpecies, populationCap, SAFE_RADIUS } from '../generation/EnemyGenerator';
 import { Rng, streamRng, Stream } from '../generation/Random';
 import { difficultyBand } from '../generation/WorldRules';
 import { BiomeType, isWater } from '../generation/Tiles';
-import { Items, type Element, type WeaponStats } from '../items/Items';
+import { Items, type Element, type ItemDef, type WeaponStats } from '../items/Items';
 import type { Stack } from './InventorySystem';
 import type { WorldManager } from '../world/WorldManager';
 import type { WorldObject } from '../world/WorldObject';
@@ -60,7 +60,21 @@ export interface Projectile {
   /** Seconds left in flight. */
   ttl: number;
   source?: Enemy;
+  /** Its id on the network (enemy shots on a shared dimension's host). */
+  id?: number;
+  /** Another machine's shot, drawn here: the network moves it; it hits nothing. */
+  replica?: boolean;
 }
+
+/** Another player in a fight this machine runs (a shared dimension's host). */
+export interface OtherBody {
+  slot: number;
+  x: number;
+  y: number;
+}
+
+/** Ids for enemy shots on the network: a range of their own. */
+const SHOT_IDS = 0x8000;
 
 /** The player as combat sees it. */
 export interface PlayerBody {
@@ -111,6 +125,9 @@ export interface Arena {
   drop(stack: Stack, x: number, y: number): void;
   /** An enemy died, by the player's hand or by falling. */
   killed?(e: Enemy): void;
+  /** A player took `amount` of an enemy's health (a dimension tallies who
+   *  hurt its Warden): `who` is another player's id, null for this one. */
+  hurt?(e: Enemy, amount: number, who: string | null): void;
 }
 
 interface Guarded {
@@ -138,6 +155,18 @@ export class CombatSystem {
   onKill?: (e: Enemy) => void;
   /** A dungeon, arena, legendary creature or event group was cleared. */
   onCleared?: (kind: string) => void;
+  /** Other players on ground this machine runs (a shared dimension's host),
+   *  written in place by the network: enemies hunt whoever is nearest. */
+  readonly others: OtherBody[] = [];
+  /** An enemy, or its shot, struck another player: their machine takes the hit. */
+  onOtherHit?: (slot: number, raw: number, species: Species, fromX: number, fromY: number) => void;
+  /** Another player's blow killed an enemy here: what they earned of it. */
+  onOtherKill?: (who: string, e: Enemy, xp: number, drops: ReadonlyArray<readonly [ItemDef, number]>) => void;
+  /** This player struck a replica (another machine runs it): tell that machine. */
+  onReplicaHit?: (e: Enemy, amount: number, crit: boolean, pushX: number, pushY: number, ranged: boolean) => void;
+  /** The other player an enemy is after while it thinks, or -1 for this one. */
+  private targetSlot = -1;
+  private nextShot = 0;
   private readonly rng: Rng;
   private spawnTimer = SPAWN_INTERVAL;
   private cooldown = 0;
@@ -171,10 +200,14 @@ export class CombatSystem {
     alert: (group) => {
       for (const e of this.enemies) if (e.group === group) e.provoke();
     },
-    hitPlayer: (e) => this.hitPlayer(e.damage, e.species, e.x, e.y),
+    hitPlayer: (e) => {
+      if (this.targetSlot >= 0) this.onOtherHit?.(this.targetSlot, e.damage, e.species, e.x, e.y);
+      else this.hitPlayer(e.damage, e.species, e.x, e.y);
+    },
     shoot: (e, dx, dy) => {
       const r = e.species.ranged!;
-      this.projectiles.push({ x: e.x, y: e.y - BODY, vx: dx * r.speed, vy: dy * r.speed, kind: r.kind, damage: e.damage * 0.8, fromPlayer: false, ttl: (r.range + 1) / r.speed, source: e });
+      const id = SHOT_IDS + (this.nextShot = (this.nextShot + 1) & 0x7fff);
+      this.projectiles.push({ x: e.x, y: e.y - BODY, vx: dx * r.speed, vy: dy * r.speed, kind: r.kind, damage: e.damage * 0.8, fromPlayer: false, ttl: (r.range + 1) / r.speed, source: e, id });
     },
     random: () => this.rng.next(),
   };
@@ -234,23 +267,56 @@ export class CombatSystem {
   update(dt: number, body: PlayerBody): void {
     this.body = body;
     this.cooldown = Math.max(0, this.cooldown - dt);
-    if (this.arena.wild) {
+    // A guest's wild is the host's: its creatures come from there.
+    if (this.arena.wild && !this.world.replica) {
       this.despawn();
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         this.spawnTimer = SPAWN_INTERVAL;
-        this.spawnWild();
-        this.spawnAnimals();
+        this.spawnAll();
       }
       this.triggers();
       this.rollLegends();
     }
 
     const ctx = this.ctx;
-    ctx.playerX = body.x;
-    ctx.playerY = body.y;
-    for (const e of this.enemies) e.update(dt, ctx);
+    const others = this.others;
+    for (const e of this.enemies) {
+      // Another machine's enemy: only its flash fades here.
+      if (e.replica) {
+        e.hitFlash = Math.max(0, e.hitFlash - dt);
+        continue;
+      }
+      ctx.playerX = body.x;
+      ctx.playerY = body.y;
+      this.targetSlot = -1;
+      if (others.length) {
+        // Each hunts whichever player is nearest.
+        let best = (e.x - body.x) ** 2 + (e.y - body.y) ** 2;
+        for (const o of others) {
+          const d = (e.x - o.x) ** 2 + (e.y - o.y) ** 2;
+          if (d >= best) continue;
+          best = d;
+          ctx.playerX = o.x;
+          ctx.playerY = o.y;
+          this.targetSlot = o.slot;
+        }
+      }
+      e.update(dt, ctx);
+    }
+    this.targetSlot = -1;
     this.updateProjectiles(dt);
+  }
+
+  /** Another player's blow, as their machine reports it (already checked by
+   *  the caller): `amount` is what it takes, `who` is whose it was. */
+  strike(e: Enemy, amount: number, crit: boolean, pushX: number, pushY: number, who: string): void {
+    if (e.alive && this.enemies.includes(e)) this.damageEnemy(e, amount, crit, pushX, pushY, undefined, who);
+  }
+
+  /** An enemy on another machine struck this player there. */
+  takeHit(raw: number, species: Species, fromX: number, fromY: number): void {
+    this.hitPlayer(raw, species, fromX, fromY);
   }
 
   /** Swings or shoots with the weapon in a hotbar slot (or fists). */
@@ -283,7 +349,9 @@ export class CombatSystem {
         const d = Math.hypot(ex, ey);
         if (d > weapon.reach + 0.4 || (d > 0.3 && (ex * dx + ey * dy) / d < SWING_COS)) continue;
         const crit = this.rng.chance(CRIT_CHANCE);
-        this.damageEnemy(e, playerHitDamage(weapon.damage, this.progression.damageBonus, crit), crit, dx, dy, weapon.element);
+        const raw = playerHitDamage(weapon.damage, this.progression.damageBonus, crit);
+        if (e.replica) this.hitReplica(e, raw, crit, dx, dy, weapon.element, false);
+        else this.damageEnemy(e, raw, crit, dx, dy, weapon.element);
       }
     }
     this.cooldown = weapon.cooldown;
@@ -291,9 +359,21 @@ export class CombatSystem {
     return true;
   }
 
-  private damageEnemy(e: Enemy, raw: number, crit: boolean, pushX: number, pushY: number, element?: Element): void {
+  /** A blow on another machine's enemy: shown here at once, and sent there,
+   *  where it really lands. */
+  private hitReplica(e: Enemy, raw: number, crit: boolean, pushX: number, pushY: number, element: Element | undefined, ranged: boolean): void {
+    const amount = Math.max(1, Math.round(raw * elementFactor(e.species, element)));
+    e.hitFlash = 0.15;
+    this.events.damage(e.x, e.y - 1, amount, crit, false);
+    this.onReplicaHit?.(e, amount, crit, pushX, pushY, ranged);
+  }
+
+  /** `who`: another player's blow (a shared dimension's host applies it), or
+   *  null for this player's. */
+  private damageEnemy(e: Enemy, raw: number, crit: boolean, pushX: number, pushY: number, element?: Element, who: string | null = null): void {
     // Some creatures are weak to a damage type, some shrug it off.
     const amount = Math.max(1, Math.round(raw * elementFactor(e.species, element)));
+    const before = e.hp;
     e.takeHit(amount);
     this.events.damage(e.x, e.y - 1, amount, crit, false);
     // Knockback, unless something solid is in the way. A walker knocked off
@@ -313,7 +393,9 @@ export class CombatSystem {
         this.events.notify(`The ${e.name} falls into the void`);
       }
     }
-    if (!e.alive) this.kill(e);
+    // What was really taken, a fall included, before a death is reported.
+    this.arena.hurt?.(e, before - Math.max(0, e.hp), who);
+    if (!e.alive) this.kill(e, who);
   }
 
   private hitPlayer(raw: number, species: Species, fromX: number, fromY: number): void {
@@ -333,23 +415,30 @@ export class CombatSystem {
     this.events.playerHurt(fromX, fromY);
   }
 
-  private kill(e: Enemy): void {
+  private kill(e: Enemy, who: string | null = null): void {
     const i = this.enemies.indexOf(e);
     // Already gone: splice(-1) would remove another enemy.
     if (i < 0) return;
     this.enemies.splice(i, 1);
-    this.grantXp(e.xp);
-    if (e.species.boss) this.progression.trophies[e.species.id] = (this.progression.trophies[e.species.id] ?? 0) + 1;
-    this.onKill?.(e);
+    if (who === null) {
+      this.grantXp(e.xp);
+      if (e.species.boss) this.progression.trophies[e.species.id] = (this.progression.trophies[e.species.id] ?? 0) + 1;
+      this.onKill?.(e);
+    }
     this.arena.killed?.(e);
     this.events.killed?.(e);
     const drops: Array<[typeof Items.wood, number]> = [];
     // Hunters get more from animals.
-    const hunter = e.species.passive ? 0.35 * this.progression.rank('hunter') : 0;
+    const hunter = e.species.passive && who === null ? 0.35 * this.progression.rank('hunter') : 0;
     for (const [item, min, max, chance] of e.species.drops) {
       if (this.rng.chance(chance)) drops.push([item, this.rng.int(min, max) * (e.elite ? 2 : 1) + (this.rng.chance(hunter) ? 1 : 0)]);
     }
     if (e.species.boss || e.elite) drops.push(...rollChest(this.rng, e.band + (e.species.boss ? 3 : 0)));
+    // Another player's kill: the experience and the spoils are theirs.
+    if (who !== null) {
+      this.onOtherKill?.(who, e, e.xp, drops);
+      return;
+    }
     for (const [item, count] of drops) {
       const left = this.inv.add(item, count);
       if (count > left) this.events.notify(`+${count - left} ${item.name}`);
@@ -386,6 +475,8 @@ export class CombatSystem {
     const b = this.body;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+      // Another machine's shot: drawn where the network puts it, nothing more.
+      if (p.replica) continue;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.ttl -= dt;
@@ -394,12 +485,20 @@ export class CombatSystem {
         const hit = this.enemies.find((e) => e.state !== 'burrowed' && Math.hypot(e.x - p.x, e.y - BODY - p.y) < 0.6);
         if (hit) {
           const len = Math.hypot(p.vx, p.vy) || 1;
-          this.damageEnemy(hit, p.damage, false, p.vx / len, p.vy / len, p.element);
+          if (hit.replica) this.hitReplica(hit, p.damage, false, p.vx / len, p.vy / len, p.element, true);
+          else this.damageEnemy(hit, p.damage, false, p.vx / len, p.vy / len, p.element);
           done = true;
         }
       } else if (!done && Math.hypot(b.x - p.x, b.y - BODY - p.y) < 0.5) {
         this.hitPlayer(p.damage, p.source?.species ?? SPECIES.skeleton, p.x - p.vx, p.y - p.vy);
         done = true;
+      } else if (!done) {
+        for (const o of this.others) {
+          if (Math.hypot(o.x - p.x, o.y - BODY - p.y) >= 0.5) continue;
+          this.onOtherHit?.(o.slot, p.damage, p.source?.species ?? SPECIES.skeleton, p.x - p.vx, p.y - p.vy);
+          done = true;
+          break;
+        }
       }
       if (done) this.projectiles.splice(i, 1);
     }
@@ -428,6 +527,32 @@ export class CombatSystem {
     return spawned;
   }
 
+  /** Inside the simulation radius of this player, or of another player on
+   *  this ground (a host's guests). */
+  private simulated(sim: ChunkRect, x: number, y: number): boolean {
+    const cx = tileToChunk(x);
+    const cy = tileToChunk(y);
+    if (inRect(sim, cx, cy)) return true;
+    for (const o of this.others) {
+      if (Math.abs(tileToChunk(o.x) - cx) <= SIM_RADIUS && Math.abs(tileToChunk(o.y) - cy) <= SIM_RADIUS) return true;
+    }
+    return false;
+  }
+
+  /** Each other player's simulation radius, as a chunk rectangle (reused). */
+  private areaOf(o: OtherBody): ChunkRect {
+    const a = this.area;
+    const cx = tileToChunk(o.x);
+    const cy = tileToChunk(o.y);
+    a.x0 = cx - SIM_RADIUS;
+    a.y0 = cy - SIM_RADIUS;
+    a.x1 = cx + SIM_RADIUS;
+    a.y1 = cy + SIM_RADIUS;
+    return a;
+  }
+
+  private readonly area: ChunkRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
+
   /** Enemies leave with the simulation radius; guards come back next visit.
    *  Night walkers fade at dawn. */
   private despawn(): void {
@@ -437,7 +562,7 @@ export class CombatSystem {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       const faded = e.species.nightOnly && !this.night;
-      if (!faded && inRect(sim, tileToChunk(e.x), tileToChunk(e.y))) continue;
+      if (!faded && this.simulated(sim, e.x, e.y)) continue;
       this.enemies.splice(i, 1);
       if (e.tag && this.guarded.delete(e.tag)) (reset ??= new Set()).add(e.tag);
     }
@@ -448,16 +573,41 @@ export class CombatSystem {
     }
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
-      if (!inRect(sim, tileToChunk(p.x), tileToChunk(p.y))) this.projectiles.splice(i, 1);
+      if (!this.simulated(sim, p.x, p.y)) this.projectiles.splice(i, 1);
     }
   }
 
-  private spawnWild(): void {
+  /** The wild around this player and, on a host, around each guest outdoors. */
+  private spawnAll(): void {
     const sim = this.world.chunks.simRect;
-    const { x: px, y: py } = this.body;
-    if (!sim || Math.hypot(px, py) < SAFE_RADIUS) return;
+    if (!sim) return;
+    const { x, y } = this.body;
+    const shared = this.others.length > 0;
+    this.spawnWild(sim, x, y, shared);
+    this.spawnAnimals(sim, x, y, shared);
+    for (const o of this.others) {
+      // A guest beside the host shares the host's wild.
+      if (Math.abs(o.x - x) < CHUNK_SIZE && Math.abs(o.y - y) < CHUNK_SIZE) continue;
+      const area = this.areaOf(o);
+      this.spawnWild(area, o.x, o.y, true);
+      this.spawnAnimals(this.areaOf(o), o.x, o.y, true);
+    }
+  }
+
+  /** How many matching enemies are in an area. */
+  private countIn(sim: ChunkRect, match: (e: Enemy) => boolean): number {
+    let n = 0;
+    for (const e of this.enemies) if (match(e) && inRect(sim, tileToChunk(e.x), tileToChunk(e.y))) n++;
+    return n;
+  }
+
+  /** `local`: count only the enemies in this area against the cap (with
+   *  guests about); alone, every enemy counts, as they all live in it. */
+  private spawnWild(sim: ChunkRect, px: number, py: number, local: boolean): void {
+    if (Math.hypot(px, py) < SAFE_RADIUS) return;
     const band = difficultyBand(px, py);
-    if (this.enemies.filter((e) => !e.tag && !e.species.passive).length >= populationCap(band, this.night)) return;
+    const hostile = (e: Enemy) => !e.tag && !e.species.passive;
+    if ((local ? this.countIn(sim, hostile) : this.enemies.filter(hostile).length) >= populationCap(band, this.night)) return;
 
     for (let attempt = 0; attempt < 8; attempt++) {
       const gx = this.rng.int(sim.x0 * CHUNK_SIZE, (sim.x1 + 1) * CHUNK_SIZE - 1);
@@ -481,12 +631,10 @@ export class CombatSystem {
     }
   }
 
-  private spawnAnimals(): void {
-    const sim = this.world.chunks.simRect;
-    const { x: px, y: py } = this.body;
-    if (!sim) return;
+  private spawnAnimals(sim: ChunkRect, px: number, py: number, local: boolean): void {
     const cap = this.night ? ANIMAL_CAP.night : ANIMAL_CAP.day;
-    if (this.enemies.filter((e) => e.species.passive).length >= cap) return;
+    const animal = (e: Enemy) => !!e.species.passive;
+    if ((local ? this.countIn(sim, animal) : this.enemies.filter(animal).length) >= cap) return;
     for (let attempt = 0; attempt < 8; attempt++) {
       const gx = this.rng.int(sim.x0 * CHUNK_SIZE, (sim.x1 + 1) * CHUNK_SIZE - 1);
       const gy = this.rng.int(sim.y0 * CHUNK_SIZE, (sim.y1 + 1) * CHUNK_SIZE - 1);
@@ -508,9 +656,14 @@ export class CombatSystem {
     }
   }
 
-  /** Entering an uncleared dungeon or boss arena wakes its guards. */
+  /** Entering an uncleared dungeon or boss arena wakes its guards: this
+   *  player, or a guest on a host's ground. */
   private triggers(): void {
-    const { x, y } = this.body;
+    this.triggerAt(this.body.x, this.body.y);
+    for (const o of this.others) this.triggerAt(o.x, o.y);
+  }
+
+  private triggerAt(x: number, y: number): void {
     const gx = Math.floor(x);
     const gy = Math.floor(y);
     for (const o of this.world.objects.inChunk(chunkKey(tileToChunk(gx), tileToChunk(gy)))) {
@@ -550,23 +703,31 @@ export class CombatSystem {
     this.events.notify(boss ? `${boss.name} awakens!` : `Something stirs in the ${o.name.toLowerCase()}…`);
   }
 
-  /** Rolls each simulated chunk once per region visit for a legendary creature. */
+  /** Rolls each simulated chunk once per region visit for a legendary
+   *  creature, around this player and any guests. */
   private rollLegends(): void {
     const sim = this.world.chunks.simRect;
     if (!sim) return;
-    // Only new chunks can roll: look again when the simulated area moves.
-    const at = `${sim.x0},${sim.y0},${sim.x1},${sim.y1}`;
+    // Only new chunks can roll: look again when a simulated area moves.
+    let at = `${sim.x0},${sim.y0},${sim.x1},${sim.y1}`;
+    for (const o of this.others) at += `;${tileToChunk(o.x)},${tileToChunk(o.y)}`;
     if (at === this.legendRect) return;
     this.legendRect = at;
     // Rolls are seeded, so forgetting old ones only means rolling them again.
     if (this.legendChecked.size > 4096) this.legendChecked.clear();
+    this.legendsIn(sim);
+    for (const o of this.others) this.legendsIn(this.areaOf(o));
+  }
+
+  private legendsIn(sim: ChunkRect): void {
     for (let cy = sim.y0; cy <= sim.y1; cy++) {
       for (let cx = sim.x0; cx <= sim.x1; cx++) {
         const visit = this.world.regions.visit(cx, cy);
         const id = `${cx},${cy}#${visit}`;
         if (this.legendChecked.has(id)) continue;
         this.legendChecked.add(id);
-        const key = `legend@${cx},${cy}`;
+        // Per visit: once the region drifts, a new legend may roam here.
+        const key = `legend@${cx},${cy}#${visit}`;
         if (this.world.clearedAnchors.has(key) || this.guarded.has(key)) continue;
         const gx = cx * CHUNK_SIZE + 16;
         const gy = cy * CHUNK_SIZE + 16;

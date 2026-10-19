@@ -57,6 +57,8 @@ export interface ItemDef {
   look?: number;
   /** A shield: share of damage that gets through a block, and its stamina cost. */
   shield?: { pass: number; stamina: number };
+  /** Bound to the player: never dropped, sold, or lost behind a rift. */
+  bound?: boolean;
 }
 
 const list: ItemDef[] = [];
@@ -140,6 +142,8 @@ export const Items = {
   riftShard: item({ id: 'rift-shard', name: 'Rift Shard', description: 'A splinter of an outer dimension. It flickers, as if it cannot decide to exist.', rarity: ItemRarity.Epic, weight: 0.2 }),
   riftBlade: item({ id: 'rift-blade', name: 'Rift Blade', description: 'An iron blade set with rift shards. It flickers between here and elsewhere; rift creatures come apart under it.', rarity: ItemRarity.Epic, stack: 1, weapon: { kind: 'melee', damage: 24, durability: 280, reach: 1.7, cooldown: 0.4, element: 'spirit' } }),
   riftTonic: item({ id: 'rift-tonic', name: 'Rift Tonic', description: 'A shard dissolved in herb water. Mends wounds and clears poison; it tastes of static.', rarity: ItemRarity.Rare, food: { health: 45, thirst: 10 }, cures: 'poison' }),
+  // Every player carries one: it tunes into others behind the rifts (see src/coop).
+  driftBeacon: item({ id: 'drift-beacon', name: 'Drift Beacon', description: 'A brass dial that hums when someone else is near a rift. Use it to choose who you meet behind the rifts.', rarity: ItemRarity.Rare, stack: 1, weight: 0, bound: true }),
 } as const;
 
 export const ITEM_LIST: readonly ItemDef[] = list;

@@ -26,6 +26,11 @@ export class InteriorRenderer {
     this.view.visible = false;
   }
 
+  /** The room's y-sorted things: others in the same room are drawn here too. */
+  get room(): Container {
+    return this.things;
+  }
+
   open(interior: Interior, player: Container): void {
     this.interior = interior;
     this.floor.removeChildren().forEach((c) => c.destroy());

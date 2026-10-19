@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHUNK_SIZE } from '../config';
 import { Npc } from '../entities/NPC';
+import { VILLAGER_TALK } from '../game/LivingWorld';
 import { Rng } from '../generation/Random';
 import { BiomeType, Deco } from '../generation/Tiles';
 import { Items } from '../items/Items';
@@ -95,6 +96,13 @@ describe('npcs', () => {
     expect(npc.hidden).toBe(true);
     npc.update(0.2, { ...ctx, hour: 8 });
     expect(npc.hidden).toBe(false);
+  });
+
+  it('talk of the Drift as old and ordinary, and of the Fracture as new', () => {
+    const fracture = VILLAGER_TALK.filter((l) => /\brifts?\b|tears in the air|isn't the Drift/i.test(l));
+    const drift = VILLAGER_TALK.filter((l) => /drift/i.test(l) && !fracture.includes(l));
+    expect(drift.length).toBeGreaterThanOrEqual(3);
+    expect(fracture.length).toBeGreaterThanOrEqual(3);
   });
 
   it('fills villages with villagers, a quest giver and a trader', () => {

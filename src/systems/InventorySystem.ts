@@ -204,7 +204,7 @@ export class Inventory {
   /** Takes a whole slot out of the bag, e.g. to drop it. */
   takeSlot(slot: number): Stack | null {
     const s = this.slots[slot];
-    if (!s) return null;
+    if (!s || s.item.bound) return null;
     this.version++;
     this.slots[slot] = null;
     return s;
@@ -215,6 +215,8 @@ export class Inventory {
   clearCarried(): number {
     let lost = 0;
     for (let i = 0; i < this.slots.length; i++) {
+      // What is bound to the player stays with them.
+      if (this.slots[i]?.item.bound) continue;
       lost += this.slots[i]?.count ?? 0;
       this.slots[i] = null;
     }

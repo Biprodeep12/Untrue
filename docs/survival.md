@@ -98,23 +98,25 @@ Time is `seconds ÷ (1 + tool tier)`, doubled when stamina is below 4. Tools wor
 
 | Decoration | Base time | Tool | Min tier | Drops |
 | --- | --- | --- | --- | --- |
-| Oak, autumn oak, pine, snowy pine, palm | 4 s | axe | 0 | Wood ×(1–2 + tier) |
+| Oak, autumn oak, pine, snowy pine, palm; in the outer dimensions, violet and ash trees | 4 s | axe | 0 | Wood ×(1–2 + tier) |
 | Dead bush | 0.7 s | – | 0 | Wood ×1 |
 | Bush | 0.7 s | – | 0 | Berries ×1–3, 30% chance of 1 Herb |
 | Flowers | 0.7 s | – | 0 | Herb ×1–2 |
 | Mushroom | 0.7 s | – | 0 | Mushroom ×1 |
+| Glow caps (outer dimensions) | 0.7 s | – | 0 | Mushroom ×1–2 |
+| Shard grass (outer dimensions) | 0.7 s | – | 0 | Herb ×1 |
 | Garden vegetables (villages) | 0.7 s | – | 0 | Vegetables ×1–2, Herb (20%) |
 | Cactus | 1.2 s | – | 0 | Cactus Fruit ×1–2 |
 | Stone, red rock, snowy rock | 3.5 s | pickaxe | 0 | Stone ×(1–2 + tier) |
 | Ore | 4 s | pickaxe | 1 | 1–2 of: Gold Ore (12% + 5% per band, with tier 2 or more), Coal (the next 40%, plus the gold share below tier 2), else Iron Ore |
-| Crystal | 5 s | pickaxe | 2 | Crystal ×1 (×2 with a 15% chance per band); a Gemstone too, 6% + 3% per band |
+| Crystal; rift crystal (outer dimensions) | 5 s | pickaxe | 2 | Crystal ×1 (×2 with a 15% chance per band); a Gemstone too, 6% + 3% per band |
 | Barrel | 0.8 s | – | 0 | Barrel loot (below) |
 | Buried treasure (X mark) | 1.6 s | – | 0 | Coin ×10–40 plus a chest roll at band 2 |
 | Meteorite | 5 s | pickaxe | 1 | Star Metal ×(2–3 + tier) |
 
 Below the minimum tier the prompt reads "Needs a pickaxe" or "Needs an iron pickaxe". Tiers run from stone (1) through iron (2) to starforged (3).
 
-Rare finds get likelier further out: the band is the difficulty band where the rock stands. In a mine it is the band of the mine's door outside (`GatheringSystem.bandAt`).
+Rare finds get likelier further out: the band is the difficulty band where the rock stands. In a mine it is the band of the mine's door outside, and in an outer dimension the band of its rift (`GatheringSystem.bandAt`). There, what is gathered is gone for that trip only ([dimensions.md](dimensions.md#the-land)).
 
 Drops are seeded by the tile and the region's visit counter, so the same plant gives the same drop until its region regenerates. Gathered decorations are removed through `WorldManager.harvest()`. They stay gone until the region regenerates, except plants that regrow ([living-world.md](living-world.md#regrowth)).
 
@@ -216,6 +218,7 @@ Rivers and lakes can be swum (`Game.walker` lets the player through water tiles 
 | Rift Shard | Epic | 99 | From the vaults behind the rifts: Rift Blade, Rift Tonic, arrows; sell (30c) |
 | Rift Blade | Epic | 1 | Melee 24, spirit, reach 1.7; see [combat.md](combat.md#weapons) |
 | Rift Tonic | Rare | 99 | +45 health, +10 thirst, cures poison |
+| Drift Beacon | Rare | 1 | Every player carries one; use it (or press B) to choose who you meet behind the rifts. Bound: never dropped, sold or lost on dying; see [dimensions.md](dimensions.md#playing-with-others) |
 
 Every rare material now has a use in a recipe. Sell prices come from `SELL_PRICES` in `src/systems/TradeSystem.ts`. Items without a price can't be sold.
 
@@ -348,7 +351,7 @@ A chest makes 2–4 rolls, plus one more per two difficulty bands (`floor(band /
 
 Chest contents are seeded by the chest's object id and layout index, so a chest always holds the same loot.
 
-**Chests never refill.** Opening one marks its object's anchor in `WorldManager.lootedAnchors`. Every chest that later regenerates from that anchor starts open and empty (`emptyChests`). An open chest shows as `ChestOpen` and answers "Already looted".
+**Chests stay looted while their region stands.** Opening one marks its object's anchor, which holds the region's visit, in `WorldManager.lootedAnchors`. A chest regenerated from that anchor before the region drifts starts open and empty (`emptyChests`); once the region drifts, a structure rolled there has full chests ([saves.md](saves.md#the-drift)). An open chest shows as `ChestOpen` and answers "Already looted".
 
 ### Barrels
 

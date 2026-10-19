@@ -17,12 +17,53 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html" class="current" aria-current="page">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html" class="current" aria-current="page">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Story</p>
     <article><h1 id="story">Story</h1>
-<p>The world has started to forget itself. Paths lead somewhere else from one day to the next, wells move in the night, valleys are not where the old maps put them. It began when rifts tore open all over the land: tears hanging in the air, burning violet at the edges, each one onto an outer dimension. Around them the land stutters and glitches. Something on the other side is calling.</p>
-<p>Why any of it is happening is left for later: the story hints and explains nothing. For now the player&#39;s thread is simple: find a rift, step through, survive what waits inside, and close it. The world is still open to explore around it.</p>
+<h2 id="the-canon">The canon<a class="anchor" href="#the-canon" aria-label="Link to this section">#</a></h2>
+<p><strong>The Drift</strong> is old and ordinary. The world is endless, and no part of it is kept forever: land left far enough behind lets go, and when the player comes back the same ground has regenerated as something new. Forests, ruins and whole towns drift alike; nothing is protected for being lived in or important. People live with it. They trade directions instead of maps, say goodbye to places before leaving them, and tell stories of homelands nobody can walk back to. What drifts does not end: it passes out into the expanse beyond the world&#39;s edge.</p>
+<p><strong>The Fracture</strong> is new and wrong. Rifts have torn open in the air, burning violet at the edges, each one onto an outer dimension: the expanse where drifted places go. Around them the land stutters and glitches, places vanish that should have stayed, and creatures crawl out. Rifts are events, not the reason land drifts.</p>
+<p><strong>Behind it</strong> lies an ancient network of roads laid between lost places, long asleep, and woken. Beyond the furthest lost place is <strong>the Null</strong>, a place where nothing has ever been, which spreads wherever the edges thin; the Warden and the glitch creatures are touched by it. And the player is not innocent: they woke beside one of the first rifts with ash on their hands and days missing, and the clues lead, slowly, to their own experiment as what woke the network. It did not create the Drift; it opened a way into what lies beyond it.</p>
+<p>None of this is told outright. The intro says only what everyone knows (the Drift) and what everyone fears (the Fracture), with two faint hints at the player (the ash, the gap). The lore stones and the plots of the outer worlds carry the rest, a few lines at a time, world by world: The Hollow hints that someone came up the old road before the Null, with ash on their hands; The Drowned Archive tells what the network was for, and shows the player their own hand in its Ledger. Why they did it, and what the Null wants with roads it never built, is further out.</p>
+<h3 id="how-the-game-keeps-to-it">How the game keeps to it<a class="anchor" href="#how-the-game-keeps-to-it" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>The canon says</th>
+<th>The game does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Land drifts when it leaves the active area, whatever is on it</td>
+<td>A region (8 × 8 chunks) regenerates once its last chunk leaves the cache area (<a href="world-streaming.html">world-streaming.md</a>); there are no protected places</td>
+</tr>
+<tr>
+<td>What the world remembers of a place goes with it</td>
+<td>Looted chests, cleared lairs, legends, Moonwells drunk from and items on the ground are kept per region visit and forgotten when it drifts (<a href="saves.html#the-drift">saves.md</a>)</td>
+</tr>
+<tr>
+<td>Progress is remembered apart from the land</td>
+<td>The story (rifts closed, dimensions cleared, stones read), quests, level and map markers are the player&#39;s, saved apart from any place</td>
+</tr>
+<tr>
+<td>Rifts are events</td>
+<td>Rifts are rolled structures and world events; a closed rift may open again once its region drifts</td>
+</tr>
+<tr>
+<td>Maps of drifting land go stale</td>
+<td>Maps work only inside the outer dimensions, whose land is fixed</td>
+</tr>
+<tr>
+<td>Drifted places end up in the dimensions</td>
+<td>The Hollow holds two: A Drifted Wood and The Lost Hamlet, in the overworld&#39;s own grass, timber and stone; the Archive&#39;s Ledger lists them</td>
+</tr>
+<tr>
+<td>The Null is close to the Warden</td>
+<td>The ground round the Warden&#39;s arena is pocked with round absences (<code>Tile.NullMark</code>); Null Shades roam there, and in the Archive near its Atrium</td>
+</tr>
+</tbody></table></div>
+<p><strong>Multiplayer.</strong> The same rule holds with several players: a region drifts only once it has left every player&#39;s active area (<a href="multiplayer-plan.html">multiplayer-plan.md</a>).</p>
 <h2 id="in-play">In play<a class="anchor" href="#in-play" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
 <thead>
@@ -43,14 +84,19 @@
 <td>Toward it</td>
 </tr>
 <tr>
-<td>Survive The Hollow: <em>k</em>/4 chambers</td>
-<td>Inside a dimension, its way home still shut</td>
-<td>None</td>
+<td>Break the seals: <em>k</em>/3 trials</td>
+<td>Inside a dimension, the Warden&#39;s gate still sealed</td>
+<td>Toward the nearest trial not done</td>
+</tr>
+<tr>
+<td>Face the Rift Warden (the Archivist, …)</td>
+<td>Inside, once the three trials are done</td>
+<td>Toward the boss&#39;s arena</td>
 </tr>
 <tr>
 <td>Close the rift: step through the portal</td>
 <td>Inside, once its boss has fallen</td>
-<td>None</td>
+<td>Toward the portal</td>
 </tr>
 <tr>
 <td>Rifts closed: <em>N</em></td>
@@ -60,13 +106,109 @@
 </tbody></table></div>
 <p>The objective is always the tracker&#39;s first line, and the compass needle points where its arrow does unless a map marker is tracked (<a href="exploration.html#compass">exploration.md</a>). &quot;Loaded&quot; means a live rift object, within the cache area around the player; rifts further out are not known.</p>
 <ul>
-<li><strong>A new world</strong> opens with a vision of three pages, <em>Rifts</em>, once the opening screen has cleared (<code>RiftStory.intro</code>).</li>
-<li><strong>Closing the first rift</strong> shows a one-page vision, <em>The Tear Seals</em>: the land holds still for a moment, and the call comes again from further off. Every rift closed counts toward &quot;Rifts closed&quot;, and is worth 150 XP.</li>
-<li><strong>Leaving without closing</strong> (stepping back onto the rift, or dying inside) leaves the rift open; the objective goes back to &quot;Enter the rift&quot;.</li>
+<li><strong>A new world</strong> opens with a vision of three pages, <em>The Fracture</em>, once the opening screen has cleared (<code>RiftStory.intro</code>): the Drift, the rifts, and the player waking beside one.</li>
+<li><strong>Clearing a world</strong> for the first time shows that world&#39;s own closing vision (<em>The Hollow Holds</em>, <em>The Archive Sleeps</em>); a world without one shows <em>The Tear Seals</em> on the first rift closed. Every rift closed counts toward &quot;Rifts closed&quot; and is worth the player&#39;s share of the world&#39;s experience (<a href="dimensions.html#contribution-and-attunement">dimensions.md</a>). The world it was closed from counts as <strong>cleared</strong>.</li>
+<li><strong>Leaving without closing</strong> (stepping back through the rift home before the boss falls, or dying inside) leaves the rift open; the objective goes back to &quot;Enter the rift&quot;. Once the boss has fallen, stepping back through the rift home seals it as the portal would.</li>
+<li><strong>Clues.</strong> Inside, the tracker counts the world&#39;s lore stones read (&quot;Lore stones read: 2/7&quot;). Reading one shows its text as a vision; the first read of each is worth 20 XP. The stones are numbered so they read in order.</li>
+<li><strong>The plot&#39;s line.</strong> Inside, the tracker also follows the world&#39;s plot (<a href="#outer-worlds">below</a>): &quot;Someone waits here: seek out Isolde&quot;, &quot;Restore the hamlet&#39;s bell: 1/3 pieces&quot;, &quot;Bring the pieces back to Isolde&quot;.</li>
 </ul>
+<h2 id="outer-worlds">Outer worlds<a class="anchor" href="#outer-worlds" aria-label="Link to this section">#</a></h2>
+<p>Each outer world tells a short story of its own through someone who lives there, alongside its lore stones (<a href="dimensions.html#plots">dimensions.md</a> has how plots play). Their text, like the stones&#39;, is in each world&#39;s map data.</p>
+<h3 id="the-hollow-the-bell">The Hollow: the bell<a class="anchor" href="#the-hollow-the-bell" aria-label="Link to this section">#</a></h3>
+<p><strong>Isolde</strong> rang the bell of a hamlet that drifted into the Hollow, slowly, &quot;like falling asleep&quot;. Her father kept watch on the old road; when the hum came up it he went to meet it, and came back as the <strong>Rift Warden</strong>. The bell broke the night the tear opened. If it rang once more, he might remember he was a man. Its crown lies in the Ember Watch, its lip on the Far Shelf, its clapper on the Quiet Islet. Rung (<em>The Bell Rings</em>), the Warden stops for a heartbeat, a man in a watchman&#39;s coat; and Isolde hears what he remembers: someone came up the road before the hum, with ash on their hands, asking the way into the old network, and he showed them. Closing it (<em>The Hollow Holds</em>): the roads run on, toward a drowned library where every lost thing was written down.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Stone</th>
+<th>Where</th>
+<th>What it hints at</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>I. A Stone by the Rift</td>
+<td>Beside the rift home</td>
+<td>Drifted places do not end; they come here, and so did whoever carved it</td>
+</tr>
+<tr>
+<td>II. The Causeway Stone</td>
+<td>The Causeway&#39;s plaza</td>
+<td>The roads were laid to join lost places: a network, asleep</td>
+</tr>
+<tr>
+<td>III. The Hamlet Stone</td>
+<td>The Lost Hamlet</td>
+<td>The Drift was a slow tide; the woken roads made it tear</td>
+</tr>
+<tr>
+<td>IV. The Listening Stone</td>
+<td>The Glyphwood</td>
+<td>The Null, past the furthest lost place; its hum</td>
+</tr>
+<tr>
+<td>V. The Stone Beyond the Path</td>
+<td>The Far Shelf</td>
+<td>The Warden was set to keep the roads shut; the Null reached it</td>
+</tr>
+<tr>
+<td>VI. The Last Stone</td>
+<td>The vault</td>
+<td>The network was woken on purpose; a newer line &quot;in a hand very like your own&quot;</td>
+</tr>
+<tr>
+<td>VII. The Stone Nobody Was Meant to Find</td>
+<td>The Quiet Islet</td>
+<td>The keepers wrote down every drifted place; their library lies past here; &quot;Found their ledger. It answers when you write in it. I wrote.&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="the-drowned-archive-the-ledger">The Drowned Archive: the Ledger<a class="anchor" href="#the-drowned-archive-the-ledger" aria-label="Link to this section">#</a></h3>
+<p><strong>Ondine</strong> is the last of the keepers who catalogued every place the world let go of, not to bring them back (&quot;the Drift is the world breathing&quot;) but so nothing would be lost entirely, and who built the roads so the lost could be visited. When the Null began to follow the roads home, the keepers drowned the archive and tore the index out of the <strong>Ledger of the Drift</strong>, so no road could open again; Ondine hid the three pages and forgot where. With them the Ledger opens (<em>The Ledger Opens</em>): centuries of lost places in a hundred hands, then nothing for a long time, then one new entry, the ink barely dry: &quot;The road answers. I am going to see where the lost things go.&quot; The hand is the player&#39;s. The <strong>Archivist</strong>, read hollow by the Null, was her friend. Closing it (<em>The Archive Sleeps</em>): the player knows whose hand woke the network, not yet why, nor what the Null wants with roads it never built.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Stone</th>
+<th>Where</th>
+<th>What it hints at</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>I. The Porter&#39;s Stone</td>
+<td>By the rift home</td>
+<td>The archive keeps the names of every place the world let go of</td>
+</tr>
+<tr>
+<td>II. The Keepers&#39; Charter</td>
+<td>The Reading Room</td>
+<td>The Drift is not undone, only remembered; the roads were built to visit the lost</td>
+</tr>
+<tr>
+<td>III. On the Shelving of Places</td>
+<td>The Flooded Stacks</td>
+<td>Places drift twice; some came from worlds that were never ours</td>
+</tr>
+<tr>
+<td>IV. The Catalogue</td>
+<td>Outside the Cipher Gallery</td>
+<td>The gallery&#39;s order, spelt out (the puzzle&#39;s key)</td>
+</tr>
+<tr>
+<td>V. The Flood</td>
+<td>The Sluice Wing</td>
+<td>Why the archive was drowned and the index torn out</td>
+</tr>
+<tr>
+<td>VI. The Last Keeper&#39;s Note</td>
+<td>The Lost Carrel</td>
+<td>&quot;If the Ledger is ever written in again, it will be by someone who does not know what it is. Forgive them, Ondine. Then stop them.&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="where-rifts-lead">Where rifts lead<a class="anchor" href="#where-rifts-lead" aria-label="Link to this section">#</a></h3>
+<p>Each rift rolls its dimension from its seed when it appears (<code>dimensionForRift</code>). The registry&#39;s order is the story&#39;s (The Hollow, then The Drowned Archive): rifts lean toward the first world the player has not cleared (six times likelier than any one already cleared), sometimes open onto one already cleared, and never skip ahead. Once every world is cleared, any. So every rift opens onto The Hollow until it is cleared; then mostly onto the Archive.</p>
+<p><strong>Retuning.</strong> Once the player has cleared a dimension other than where a rift opens, pressing E at the rift asks where to tune it: where it opens, or any dimension cleared (keys 1–8, or a click or tap). With one choice it opens straight away.</p>
 <p>Where rifts come from, how often, and what closing one does to the world: <a href="objects-and-structures.html#rifts">objects-and-structures.md</a>. What is behind them: <a href="dimensions.html">dimensions.md</a>.</p>
+<h3 id="villagers">Villagers<a class="anchor" href="#villagers" aria-label="Link to this section">#</a></h3>
+<p>Villagers&#39; everyday talk mixes in what they make of the Drift (old, ordinary, a little sad: a grandmother&#39;s drifted town, saying goodbye to places before leaving) and of the Fracture (new and frightening: an orchard gone with people still in it, things crawling out of rifts, the hum). One line a day each (<code>VILLAGER_TALK</code> in <code>src/game/LivingWorld.ts</code>).</p>
 <h2 id="implementation">Implementation<a class="anchor" href="#implementation" aria-label="Link to this section">#</a></h2>
-<p><code>RiftStory</code> (<code>src/story/RiftStory.ts</code>) holds the story&#39;s state: rifts closed and whether the player has ever entered one. It is built in <code>LivingWorld</code>&#39;s constructor (the seam where a story plugs in) with a function that shows a <code>Vision</code>.</p>
+<p><code>RiftStory</code> (<code>src/story/RiftStory.ts</code>) holds the story&#39;s state: rifts closed, whether the player has ever entered one, the dimensions cleared (at most 64), the lore stones read, per dimension (at most 500 in all), and each world&#39;s plot progress (met its resident, the relics found, restored; at most 64 plots, 16 relics each). It is built in <code>LivingWorld</code>&#39;s constructor (the seam where a story plugs in) with a function that shows a <code>Vision</code>.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -76,28 +218,45 @@
 </thead>
 <tbody><tr>
 <td><code>LivingWorld.tracker()</code></td>
-<td><code>objective(at, rift, run)</code> puts the objective first. <code>at</code> is the player&#39;s spot in the overworld, <code>rift</code> the centre of <code>WorldManager.nearestRift</code> (live, open rifts only), and <code>run</code> the trip in progress (<code>LivingWorld.trip</code>, set by <code>Game</code>; chambers done, chambers in all, whether the portal is open)</td>
+<td><code>objective(at, rift, run)</code> puts the objective first. <code>at</code> is the player&#39;s spot in the overworld, <code>rift</code> the centre of <code>WorldManager.nearestRift</code> (live, open rifts only), and <code>run</code> the trip in progress (<code>LivingWorld.trip</code>, set by <code>Game</code>; trials done, trials in all, whether the Warden&#39;s gate and the portal are open, and the way to the next step). Inside, <code>clueLine(run)</code> comes second</td>
+</tr>
+<tr>
+<td><code>WorldManager.riftDestination</code></td>
+<td>Set by <code>Game</code>: <code>dimensionForRift(seed, story.cleared)</code> for each new rift</td>
+</tr>
+<tr>
+<td><code>Game.approachRift</code></td>
+<td><code>retuneChoices(own, story.cleared)</code>; more than one opens the chooser (<code>Dialog.talk</code>, <code>Dialog.choose</code> for number keys)</td>
+</tr>
+<tr>
+<td><code>Game.interactDimension</code></td>
+<td><code>readClue(dimension, clue)</code> shows a lore stone&#39;s text; true the first time. <code>talk(dimension, plot)</code> gives the resident&#39;s words; <code>findRelic</code>, <code>restore</code> move the plot on</td>
+</tr>
+<tr>
+<td><code>LivingWorld.tracker()</code> (inside)</td>
+<td><code>plotLine(run)</code> and <code>clueLine(run)</code> follow the objective</td>
 </tr>
 <tr>
 <td><code>Game.loaded()</code></td>
 <td>On a new world (not a loaded save, not the playground), <code>intro()</code> after the opening screen</td>
 </tr>
 <tr>
-<td><code>Game.enterRift</code> / <code>exitRift</code></td>
-<td><code>onEnter()</code>; <code>onClosed()</code> when the portal closed the rift</td>
+<td><code>Game.enterRift</code> / <code>riftSealed</code></td>
+<td><code>onEnter()</code>; <code>onClosed(dimension, closing)</code> once the passage out of a closed rift is over (the world&#39;s closing vision, the first time)</td>
 </tr>
 <tr>
 <td><code>LivingWorld.save()</code> / <code>load()</code></td>
-<td><code>rift: { version: 1, closed, entered }</code> in the living save; a save without it (from before the rifts) starts at &quot;Find a rift&quot;, without the intro</td>
+<td><code>rift: { version: 4, closed, entered, cleared, lore, plots }</code> in the living save</td>
 </tr>
 </tbody></table></div>
-<p>Nothing in the story runs per frame: the tracker is refreshed with the HUD, four times a second.</p>
-<p><strong>Testing.</strong> The story playground (<code>?playground</code>, development builds; <a href="index.html#url-parameters">README.md</a>) has the rift tools: &quot;Rift nearby&quot; tears one open beside the player, &quot;Enter the Hollow&quot; jumps straight into a dimension (through the nearest rift, opening one if need be), and &quot;→ Combat&quot;, &quot;→ Path&quot;, &quot;→ Puzzle&quot;, &quot;→ Boss&quot; and &quot;→ Vault&quot; skip to that chamber with the ones before it done (<code>DimensionRun.skipTo</code>). The playground shows no intro vision and never saves.</p>
-<p>See also: <a href="index.html">README.md</a> · <a href="dimensions.html">dimensions.md</a> · <a href="living-world.html">living-world.md</a> · <a href="exploration.html">exploration.md</a></p>
+<p>Older story saves load cleanly: version 2 kept stones read as <code>dimension:clue</code> ids, which become per-dimension lists; versions 1 and 2 kept no cleared dimensions, and since only The Hollow existed then, a closed rift means it was cleared; versions before 4 had no plots, so every world&#39;s plot starts afresh. Junk (wrong types, overlong ids) is dropped. A save without a story (from before the rifts) starts at &quot;Find a rift&quot;, without the intro.</p>
+<p>Nothing in the story runs per frame: the tracker is refreshed with the HUD, four times a second, and everything else happens on an event (a rift entered or closed, a stone read).</p>
+<p><strong>Testing.</strong> The story playground (<code>?playground</code>, development builds; <a href="index.html#url-parameters">README.md</a>) has the rift tools: &quot;Rift nearby&quot; tears one open beside the player; &quot;Enter the Hollow&quot; and &quot;Enter the Drowned Archive&quot; jump straight into that world (through the nearest rift, opening one if need be; from inside one world, into the other); &quot;Enter (shared)&quot; goes in through a rift&#39;s passage to meet others; &quot;Clear all worlds&quot; counts every world as cleared, so a rift offers the retune chooser; and &quot;→ Waves&quot;, &quot;→ Path&quot;, &quot;→ Tide&quot; and &quot;→ Glyphs&quot; go to that trial of the world the player is in, and &quot;→ Boss&quot; and &quot;→ Vault&quot; to the arena or the vault with what bars the way done (<code>DimensionRun.skipTo</code>). The playground shows no intro vision and never saves.</p>
+<p>See also: <a href="index.html">README.md</a> · <a href="dimensions.html">dimensions.md</a> · <a href="living-world.html">living-world.md</a> · <a href="exploration.html">exploration.md</a> · <a href="saves.html">saves.md</a></p>
 </article>
     <nav class="pager"><a class="prev" href="audio.html"><small>Previous</small>Audio</a><a class="next" href="dimensions.html"><small>Next</small>Dimensions</a></nav>
   </main>
-  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#in-play">In play</a></li><li class="l2"><a href="#implementation">Implementation</a></li></ul></nav>
+  <nav class="toc" aria-label="On this page"><h4>On this page</h4><ul><li class="l2"><a href="#the-canon">The canon</a></li><li class="l3"><a href="#how-the-game-keeps-to-it">How the game keeps to it</a></li><li class="l2"><a href="#in-play">In play</a></li><li class="l2"><a href="#outer-worlds">Outer worlds</a></li><li class="l3"><a href="#the-hollow-the-bell">The Hollow: the bell</a></li><li class="l3"><a href="#the-drowned-archive-the-ledger">The Drowned Archive: the Ledger</a></li><li class="l3"><a href="#where-rifts-lead">Where rifts lead</a></li><li class="l3"><a href="#villagers">Villagers</a></li><li class="l2"><a href="#implementation">Implementation</a></li></ul></nav>
 </div>
 <script src="search-index.js"></script>
 <script src="site.js"></script>

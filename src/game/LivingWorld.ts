@@ -51,6 +51,22 @@ const TORCH_HOURS = 2;
 const MERCHANT_STAY_MINUTES = 180;
 const INVASION_REWARD = 30;
 
+/** What villagers say, besides the weather: everyday talk; the Drift, which is
+ *  old and ordinary and a little sad; and the Fracture, which is new and is not. */
+export const VILLAGER_TALK: readonly string[] = [
+  'The traders by the well pay well for treasure.',
+  'Stay out of the old dungeons after dark.',
+  "If you're hungry, the campfires out in the wild will cook a good meal.",
+  "My gran came from a town that drifted before I was born. She used to sing about its bridges. I'll never see them.",
+  "Don't wander too far from what you love. Leave a place behind long enough and the Drift takes it, same as it always has.",
+  "Folk trade directions here, not maps. A map's only true until the Drift takes the land behind you.",
+  "We say goodbye to a place before we leave it. Just in case. It's an old habit.",
+  'The Drift I understand. These tears in the air, though... my grandfather never saw the like, nor his.',
+  "A whole orchard vanished last week in the middle of the day, with people still in it picking. That isn't the Drift. The Drift waits till you've gone.",
+  'Things crawl out of those violet rifts. Keep a blade close if you go near one.',
+  "Near a rift there's a hum, low and patient. My dog won't go anywhere near it.",
+];
+
 export interface LivingSave {
   time: TimeSave;
   weather: WeatherSave;
@@ -106,6 +122,10 @@ export class LivingWorld {
   outside: { x: number; y: number } | null = null;
   /** The trip into an outer dimension the player is on, if any. */
   trip: RiftRunView | null = null;
+  /** Visiting a friend's world: its clock, weather, events and fires are the
+   *  host's (they come over the network); villagers and quests are this
+   *  player's own, as everywhere. */
+  guest = false;
 
   constructor(private readonly d: LivingDeps) {
     this.rng = new Rng(d.world.seed ^ 0x11fe);
@@ -188,7 +208,7 @@ export class LivingWorld {
     for (let h = 0; h < hours; h++) this.onHour();
     combat.night = this.time.isNight;
     const kind = this.kind;
-    this.hazards.update(dt, kind === 'storm', WEATHER[kind].wet, player.x, player.y, player.invulnerable);
+    if (!this.guest) this.hazards.update(dt, kind === 'storm', WEATHER[kind].wet, player.x, player.y, player.invulnerable);
     this.npcs.update(dt, this.time.hour, player.x, player.y, this.time.total);
     this.spawnLostTravellers();
     // Backwards: an escort brought home is removed from the list.
@@ -309,6 +329,9 @@ export class LivingWorld {
       return { text: `${q.title}: ${progressText(q, inventory)}`, angle };
     });
     if (this.waypoint) lines.unshift({ text: this.waypoint.label, angle: toward(this.waypoint.x, this.waypoint.y) });
+    if (this.trip?.layout.clues.length) lines.unshift(this.story.clueLine(this.trip));
+    const plot = this.trip ? this.story.plotLine(this.trip) : null;
+    if (plot) lines.unshift(plot);
     lines.unshift(objective);
     return lines;
   }
@@ -359,10 +382,16 @@ export class LivingWorld {
     const { player, settings } = this.d;
     this.particles.view.visible = false;
     this.effects.update(dt, NONE, NONE);
-    lights.push({ x: player.x * TILE_SIZE, y: (player.y - 0.5) * TILE_SIZE, radius: this.playerLight() * TILE_SIZE, warmth: 0.3 });
+    // The player's own light, kept and moved rather than made each frame.
+    const own = this.dimLight;
+    own.x = player.x * TILE_SIZE;
+    own.y = (player.y - 0.5) * TILE_SIZE;
+    own.radius = this.playerLight() * TILE_SIZE;
+    lights.push(own);
     this.effects.lights(lights);
     this.lighting.update(dt, darkness, lights, toScreen, zoom, !settings.values.lighting, tint);
   }
+  private readonly dimLight: Light = { x: 0, y: 0, radius: 0, warmth: 0.3 };
 
   rest(message = 'You rest by the fire until morning'): void {
     const { vitals, hud } = this.d;
@@ -386,6 +415,7 @@ export class LivingWorld {
 
   /** Why the player cannot rest right now, or null if they can. */
   restBlocked(): string | null {
+    if (this.guest) return 'This is your friend’s world: only they can sleep the night away.';
     const hunting = this.d.combat.enemies.some((e) => !e.species.passive && e.state !== 'patrol' && e.state !== 'burrowed');
     return hunting ? "You can't rest with enemies nearby" : null;
   }
@@ -393,6 +423,17 @@ export class LivingWorld {
   /** The player's world position, even while indoors. */
   private pos(): { x: number; y: number } {
     return this.outside ?? this.d.player;
+  }
+
+  /** A guest takes the host's clock (if it has drifted from it) and weather. */
+  adoptClock(day: number, minutes: number, weather: string): void {
+    const t = this.time;
+    if (t.day !== day || Math.abs(t.minutes - minutes) > 2) t.load({ day, minutes });
+    try {
+      this.weather.load(JSON.parse(weather) as WeatherSave);
+    } catch {
+      // Unreadable weather keeps what there is.
+    }
   }
 
   save(): LivingSave {
@@ -420,7 +461,8 @@ export class LivingWorld {
     const { world, inventory, hud } = this.d;
     const player = this.pos();
     if (this.time.hour === 0) this.quests.newDay();
-    this.weather.onHour();
+    // A guest's weather and world events are the host's.
+    if (!this.guest) this.weather.onHour();
     world.regrow();
     // Torches burn down through the night, unless a lantern is already doing the work.
     if (this.time.darkness > 0.5 && !inventory.count(Items.lantern) && inventory.count(Items.torch)) {
@@ -430,6 +472,7 @@ export class LivingWorld {
         hud.notify('A torch burns out');
       }
     }
+    if (this.guest) return;
     const village = this.villageAt(player.x, player.y);
     this.events.onHour({
       x: player.x,
@@ -509,13 +552,10 @@ export class LivingWorld {
       ]);
       return;
     }
-    const lines = [
-      `Lovely ${this.effect.label.toLowerCase()} today, isn't it?`,
-      'The traders by the well pay well for treasure.',
-      'Stay out of the old dungeons after dark.',
-      "If you're hungry, the campfires out in the wild will cook a good meal.",
-    ];
-    this.dialog.talk(n.name, lines[hashString(n.name + this.time.day) % lines.length], options);
+    // One line a day each: small talk, or what they make of the Drift and the Fracture.
+    const k = hashString(n.name + this.time.day) % (VILLAGER_TALK.length + 1);
+    const line = k === VILLAGER_TALK.length ? `Lovely ${this.effect.label.toLowerCase()} today, isn't it?` : VILLAGER_TALK[k];
+    this.dialog.talk(n.name, line, options);
   }
 
   private talkLost(n: Npc): void {

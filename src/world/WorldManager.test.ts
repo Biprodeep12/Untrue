@@ -122,3 +122,96 @@ describe('MVP: multi-chunk lifetime and regeneration', () => {
     expect(same / types.size).toBeGreaterThan(0.8);
   });
 });
+
+describe('a world shared with guests', () => {
+  it('keeps the union of everyone’s areas, and a region drifts only once all have left it', () => {
+    const world = newWorld();
+    const home = { x: 0, y: 0 };
+    const far = { x: 5000, y: 0 };
+    world.update(view(home.x, home.y));
+    const cx = Math.floor(home.x / CHUNK_SIZE);
+    const cy = Math.floor(home.y / CHUNK_SIZE);
+    // A guest far off: both areas are loaded and simulated.
+    world.update(view(home.x, home.y), [view(far.x, far.y)]);
+    expect(world.tileAt(far.x, far.y)).not.toBeNull();
+    expect(world.chunks.simRects.length).toBe(2);
+    expect(world.chunks.get(Math.floor(far.x / CHUNK_SIZE), 0)!.simulated).toBe(true);
+    // The host walks away; the guest walks home and stays: home does not drift.
+    world.update(view(far.x + 3000, 0), [view(home.x, home.y)]);
+    world.update(view(far.x + 3000, 0), [view(home.x, home.y)]);
+    expect(world.regions.visit(cx, cy)).toBe(0);
+    expect(world.tileAt(home.x, home.y)).not.toBeNull();
+    // Now the guest leaves too: home has left everyone's area, and drifts.
+    world.update(view(far.x + 3000, 0), []);
+    expect(world.tileAt(home.x, home.y)).toBeNull();
+    expect(world.regions.visit(cx, cy)).toBe(1);
+  });
+
+  it('a structure lives while any player’s cache holds one of its chunks', () => {
+    const world = newWorld();
+    let o: WorldObject | undefined;
+    for (let x = 0; x < 20000 && !o; x += 64) {
+      world.update(view(x, 0));
+      o = [...world.objects.objects.values()].find((s) => s.chunks.length > 1);
+    }
+    const at = { x: o!.x + o!.w / 2, y: o!.y + o!.h / 2 };
+    world.update(view(at.x, at.y));
+    // The host leaves; a guest stands on it.
+    world.update(view(at.x + 20000, at.y), [view(at.x, at.y)]);
+    expect(world.objects.objects.get(o!.id)).toBe(o);
+    world.update(view(at.x + 20000, at.y), []);
+    expect(world.objects.objects.has(o!.id)).toBe(false);
+  });
+
+  it('only generates a far chunk a guest asks for once it is in the guest’s area', () => {
+    const world = newWorld();
+    world.update(view(0, 0));
+    expect(world.chunks.demand(200, 200)).toBe(false);
+    world.update(view(0, 0), [view(200 * CHUNK_SIZE, 200 * CHUNK_SIZE)]);
+    expect(world.chunks.demand(200, 200)).toBe(true);
+    world.update(view(0, 0), [view(200 * CHUNK_SIZE, 200 * CHUNK_SIZE)]);
+    expect(world.chunks.get(200, 200)?.ready).toBe(true);
+  });
+
+  it('tells a listener every change, and costs nothing without one', () => {
+    const world = newWorld();
+    world.update(view(0, 0));
+    const heard: string[] = [];
+    world.changes = {
+      harvested: (gx, gy, deco) => heard.push(`harvested ${gx},${gy} ${deco}`),
+      regrown: () => heard.push('regrown'),
+      objectChanged: (o) => heard.push(`changed ${o.kind}`),
+      objectAdded: (o) => heard.push(`added ${o.kind}`),
+      objectRemoved: (o) => heard.push(`removed ${o.kind}`),
+    };
+    let tree: [number, number] | null = null;
+    for (let y = -9; y < 9 && !tree; y++) for (let x = -15; x < 15 && !tree; x++) if (world.tileAt(x, y)?.deco) tree = [x, y];
+    const deco = world.tileAt(tree![0], tree![1])!.deco;
+    world.harvest(tree![0], tree![1]);
+    expect(heard).toEqual([`harvested ${tree![0]},${tree![1]} ${deco}`]);
+    expect(world.harvestOf(world.chunks.get(Math.floor(tree![0] / CHUNK_SIZE), Math.floor(tree![1] / CHUNK_SIZE))!.key)).toHaveLength(3);
+    // Walking away drops the structures around: each going is heard.
+    const before = world.objects.objects.size;
+    world.update(view(20000, 0));
+    expect(heard.filter((h) => h.startsWith('removed')).length).toBeGreaterThanOrEqual(before);
+  });
+
+  it('a guest’s copy never rolls its own biomes, structures or visits', () => {
+    const host = newWorld();
+    host.update(view(0, 0));
+    const guest = new WorldManager(1234, new SyncGenerator(), true);
+    guest.update(view(0, 0));
+    expect(guest.objects.objects.size).toBe(0);
+    expect(guest.biomes.records.size).toBe(0);
+    // What the host says is taken as is.
+    const key = [...host.chunks.cached][0];
+    const b = host.biomes.at(key)!;
+    guest.adoptChunk(keyX(key), keyY(key), 3, b);
+    expect(guest.biomes.at(key)?.id).toBe(b.id);
+    expect(guest.regions.visit(keyX(key), keyY(key))).toBe(3);
+    // Leaving never raises a visit here.
+    guest.update(view(20000, 0));
+    expect(guest.regions.visit(keyX(key), keyY(key))).toBe(3);
+    expect(guest.biomes.at(key)).toBeUndefined();
+  });
+});

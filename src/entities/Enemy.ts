@@ -46,6 +46,11 @@ export class Enemy {
    *  phases); the species itself is shared and never changed. */
   speedScale = 1;
   cooldownScale = 1;
+  /** A copy of an enemy another player's machine runs (a shared dimension's
+   *  host): it never thinks for itself; the network moves it. */
+  replica = false;
+  /** A replica's wind-up, as its host last said. */
+  windupShown = false;
   private stateTime = 0;
   private cooldown = 0;
   private wanderX = 0;
@@ -161,7 +166,16 @@ export class Enemy {
 
   /** True during the wind-up, so the renderer can telegraph the hit. */
   get windingUp(): boolean {
-    return this.state === 'attack' && !this.swung;
+    return this.replica ? this.windupShown : this.state === 'attack' && !this.swung;
+  }
+
+  /** A replica becomes the real thing (its host left, and this machine runs
+   *  the fight now): it carries on from the state it was last seen in. */
+  takeOver(): void {
+    this.replica = false;
+    this.windupShown = false;
+    const s = this.state;
+    this.enter(s === 'attack' ? 'chase' : s);
   }
 
   private enter(state: EnemyState): void {

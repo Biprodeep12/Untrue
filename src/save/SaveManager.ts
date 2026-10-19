@@ -1,6 +1,8 @@
 // Save system (spec 8.4). Only the seed, the player and what the player changed
-// are stored; the world itself, every structure included, regenerates. Saves
-// live in IndexedDB.
+// are stored; the world itself, every structure included, regenerates. What is
+// remembered of a place (looted chests, cleared lairs, items on the ground) is
+// kept for its region's current visit only: once a region drifts, it goes.
+// Saves live in IndexedDB.
 
 import type { EquipSlot } from '../items/Items';
 import type { SavedSlot } from '../systems/InventorySystem';
@@ -9,9 +11,10 @@ import type { ExplorationSave } from '../systems/ExplorationSystem';
 import type { ProgressionSave } from '../systems/Progression';
 import type { VitalValues } from '../systems/Vitals';
 import type { SavedGroundItem } from '../world/GroundItems';
+import { regionKey } from '../coords';
 import type { WorldManager } from '../world/WorldManager';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /** Everything about the player that survives a reload. */
 export interface PlayerSave {
@@ -33,9 +36,10 @@ export interface SaveData {
   seed: number;
   savedAt: number;
   player: PlayerSave;
-  /** Anchors whose chests were looted, so they never refill. */
+  /** Anchors whose chests were looted, per region visit (`driftKey`). */
   lootedAnchors: string[];
-  /** Dungeons, arenas and legendary spots that stay cleared. */
+  /** Dungeons, arenas and legendary spots cleared, per region visit, and
+   *  closed rifts by object id. */
   clearedAnchors: string[];
   /** Clock, weather and quests; null before the living world existed. */
   living: LivingSave | null;
@@ -68,13 +72,56 @@ export function snapshot(
     seed: world.seed,
     savedAt: Date.now(),
     player,
-    lootedAnchors: [...world.lootedAnchors],
-    clearedAnchors: [...world.clearedAnchors],
+    // What has drifted since is not worth keeping.
+    lootedAnchors: world.liveMemory(world.lootedAnchors),
+    clearedAnchors: world.liveMemory(world.clearedAnchors),
     living,
     exploration,
     regions: world.regions.save(),
     harvested: world.saveHarvest(),
     ground: world.ground.save(),
+  };
+}
+
+/** A player's character, apart from any world: what they carry, wear and
+ *  have become, and how far their story has gone. */
+export interface Character {
+  inventory: SavedSlot[];
+  equipment: Partial<Record<EquipSlot, SavedSlot>>;
+  vitals: VitalValues | null;
+  progression: ProgressionSave | null;
+  story: NonNullable<LivingSave['rift']>;
+  /** Quests taken and handed in while visiting stay so at home (missing: kept as they were). */
+  quests?: LivingSave['quests'];
+}
+
+/** A guest's save while visiting a friend's world: their own save, with only
+ *  their character taken from the visit. Their own world (its seed, places,
+ *  ground, clock, and where they stood in it) is kept exactly as they left
+ *  it. A player with no save of their own gets a new world to come home to,
+ *  seeded by `freshSeed`. */
+export function characterSave(own: SaveData | null, c: Character, freshSeed: number): SaveData {
+  const living: LivingSave = own?.living
+    ? { ...own.living, rift: c.story, quests: c.quests ?? own.living.quests }
+    : { time: { day: 1, minutes: 8 * 60 }, weather: {}, quests: c.quests ?? [], rift: c.story };
+  const base: SaveData = own ?? {
+    version: SAVE_VERSION,
+    seed: freshSeed,
+    savedAt: 0,
+    player: { x: 0, y: 0, inventory: [], vitals: null, progression: null },
+    lootedAnchors: [],
+    clearedAnchors: [],
+    living: null,
+    exploration: null,
+    regions: [],
+    harvested: [],
+    ground: [],
+  };
+  return {
+    ...base,
+    savedAt: Date.now(),
+    player: { ...base.player, inventory: c.inventory, equipment: c.equipment, vitals: c.vitals, progression: c.progression },
+    living,
   };
 }
 
@@ -90,6 +137,23 @@ export function restore(world: WorldManager, data: SaveData): void {
 /** The old story's lantern: an ordinary lantern takes its place, so the player
  *  keeps a light that never burns out. */
 const swapLantern = (s: SavedSlot): SavedSlot => (s?.id === 'wanderers-lantern' ? { id: 'lantern', count: 1 } : s);
+
+/** Before v9, looted anchors (`cx,cy/slot`) and cleared lairs (`legend@cx,cy`)
+ *  were kept for good; they now hold the region's visit (`#visit`). What the
+ *  old save knew is taken as of the visit its regions were then on. */
+const OLD_ANCHOR = /^(?:legend@)?(-?\d+),(-?\d+)(?:\/[\w-]+)?$/;
+function withVisit(keys: unknown, regions: unknown): string[] {
+  const visits = new Map<number, number>();
+  if (Array.isArray(regions)) for (let i = 0; i + 1 < regions.length; i += 2) visits.set(Number(regions[i]), Number(regions[i + 1]));
+  const out: string[] = [];
+  if (!Array.isArray(keys)) return out;
+  for (const k of keys) {
+    if (typeof k !== 'string') continue;
+    const m = OLD_ANCHOR.exec(k);
+    out.push(m ? `${k}#${visits.get(regionKey(Number(m[1]), Number(m[2]))) ?? 0}` : k);
+  }
+  return out;
+}
 
 /** Brings older saves up to the current format. */
 export function migrate(data: OldSave): SaveData | null {
@@ -134,6 +198,13 @@ export function migrate(data: OldSave): SaveData | null {
       for (const slot of Object.keys(player.equipment) as EquipSlot[]) player.equipment[slot] = swapLantern(player.equipment[slot] ?? null);
     }
     data.version = 8;
+  }
+  if (data.version === 8) {
+    // The Drift: memories of places hold their region's visit. Ground items
+    // without one count as from the visit their region is on.
+    data.lootedAnchors = withVisit(data.lootedAnchors, data.regions);
+    data.clearedAnchors = withVisit(data.clearedAnchors, data.regions);
+    data.version = 9;
   }
   return data.version === SAVE_VERSION ? data : null;
 }

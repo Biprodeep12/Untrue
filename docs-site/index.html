@@ -17,7 +17,7 @@
   <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
 </header>
 <div class="shell">
-  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html" class="current" aria-current="page">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div></aside>
+  <aside class="sidebar"><div class="nav-group"><h4>Start here</h4><ul><li><a href="index.html" class="current" aria-current="page">Overview</a></li><li><a href="design-spec.html">Design spec</a></li></ul></div><div class="nav-group"><h4>Engine</h4><ul><li><a href="architecture.html">Architecture</a></li><li><a href="world-streaming.html">World streaming</a></li><li><a href="world-generation.html">World generation</a></li><li><a href="objects-and-structures.html">Objects and structures</a></li><li><a href="rendering.html">Rendering</a></li><li><a href="saves.html">Saves</a></li></ul></div><div class="nav-group"><h4>Gameplay</h4><ul><li><a href="survival.html">Survival</a></li><li><a href="combat.html">Combat</a></li><li><a href="living-world.html">Living world</a></li><li><a href="buildings-and-interiors.html">Buildings and interiors</a></li><li><a href="exploration.html">Exploration</a></li><li><a href="audio.html">Audio</a></li></ul></div><div class="nav-group"><h4>Story</h4><ul><li><a href="story.html">Story</a></li><li><a href="dimensions.html">Dimensions</a></li></ul></div><div class="nav-group"><h4>Multiplayer</h4><ul><li><a href="multiplayer-plan.html">Multiplayer plan</a></li><li><a href="networking.html">Networking</a></li></ul></div></aside>
   <main class="content">
     <p class="crumb">Start here</p>
     <article><h1 id="untrue-documentation">Untrue: documentation</h1>
@@ -55,6 +55,10 @@
 <td><code>npm run docs</code></td>
 <td>Builds this documentation as a website in <code>docs-site/</code>; open <code>docs-site/index.html</code>.</td>
 </tr>
+<tr>
+<td><code>npm run bake</code></td>
+<td>Bakes the outer dimensions&#39; fixed maps into <code>public/dimensions/</code> (<a href="dimensions.html#baking-a-fixed-map">dimensions.md</a>); run when a map&#39;s design changes, and commit the result.</td>
+</tr>
 </tbody></table></div>
 <h2 id="controls">Controls<a class="anchor" href="#controls" aria-label="Link to this section">#</a></h2>
 <div class="table-wrap"><table>
@@ -86,7 +90,7 @@
 </tr>
 <tr>
 <td>E</td>
-<td>Talk, read, gather, open, drink, rest, enter a building or a rift, take the stairs, open a dimension&#39;s vault; advances a story vision</td>
+<td>Talk, read, gather, open, drink, rest, enter a building or a rift (or step back out of one), take the stairs, read a lore stone, open a dimension&#39;s vault; advances a story vision</td>
 </tr>
 <tr>
 <td>1 to 8</td>
@@ -109,6 +113,10 @@
 <td>Open or close the map, where maps work: only inside an outer dimension (the overworld won&#39;t hold still)</td>
 </tr>
 <tr>
+<td>B</td>
+<td>The Drift Beacon: public or private rift trips, who is with you behind a rift, the open instances ahead, your name (<a href="dimensions.html#playing-with-others">dimensions.md</a>); opening your world to friends by its code, or visiting a friend&#39;s (<a href="multiplayer-plan.html#overworld-by-invite">multiplayer-plan.md</a>)</td>
+</tr>
+<tr>
 <td>Escape</td>
 <td>Close a dialog or the menu; otherwise pause</td>
 </tr>
@@ -125,8 +133,8 @@
 <td>Debug overlay</td>
 </tr>
 <tr>
-<td>G, then B</td>
-<td>Debug, development builds only: jump 20,000 tiles east, then come back</td>
+<td>G, then H</td>
+<td>Debug, development builds only: jump 20,000 tiles east, then come back home</td>
 </tr>
 </tbody></table></div>
 <p><strong>Changing keys.</strong> On desktop, Settings → Keys lists each action with its main key. Click one, then press the new key (Esc cancels). A key does one thing: if another action had it, that action gets the old key back. &quot;Reset keys&quot; restores the defaults. The arrow keys, right Shift, I (bag) and the numpad + and − always work too. Esc, F3, F4 and 1–8 are kept for the game and cannot be bound. Keys are physical positions (<code>KeyboardEvent.code</code>), so WASD sits in the same place on any layout. The controls bar, the pause menu and the tips name the player&#39;s own keys. Code: <code>src/game/Keys.ts</code>.</p>
@@ -136,7 +144,8 @@
 <li>tap-to-interact (a quick tap anywhere on the game, or on the action prompt, acts like E),</li>
 <li>pinch to zoom: two fingers together zoom instead of steering (the second finger counts as a pinch if it lands within 250 ms of the first, or if the first is not steering),</li>
 <li>Use, Bag, Hit, Roll and hold-to-Block buttons; Hit aims at the nearest enemy in reach,</li>
-<li>small Pause and Full buttons above the action buttons. Full is full screen (also in the pause menu). iPhones have no full screen for pages, so the button is hidden there; Add to Home Screen opens the game full screen instead (<code>public/manifest.webmanifest</code>).</li>
+<li>small Beacon, Pause and Full buttons above the action buttons (Beacon opens the Drift Beacon&#39;s panel),</li>
+<li>the Full button is full screen (also in the pause menu). iPhones have no full screen for pages, so the button is hidden there; Add to Home Screen opens the game full screen instead (<code>public/manifest.webmanifest</code>).</li>
 </ul>
 <p>Tapping a hotbar slot selects it and shows the item&#39;s name (and a weapon&#39;s durability) above the bar for a moment; tapping it again uses it. On touch screens the vitals sit under the compass and the buttons bottom right, and the pause menu lists the touch controls.</p>
 <h2 id="url-parameters">URL parameters<a class="anchor" href="#url-parameters" aria-label="Link to this section">#</a></h2>
@@ -173,31 +182,40 @@
 </tr>
 <tr>
 <td><code>?playground</code> or <code>?playground=SEED</code></td>
-<td>Story playground (development builds only): a fresh world, never saved, with a panel (F4 or tapping its title folds it) to travel to the spawn, set night or morning, toggle god mode and restart, and for the rifts: tear one open nearby, enter The Hollow, and skip to its combat, path, puzzle, boss or vault chamber.</td>
+<td>Story playground (development builds only): a fresh world, never saved, with a panel (F4 or tapping its title folds it) to travel to the spawn, set night or morning, toggle god mode and restart, and for the rifts: tear one open nearby, enter The Hollow (alone, or shared: through the rift&#39;s passage into a shared instance), and go to its Glitch Nest, Crumbling Path or Glyph Hall, or to the Warden or the vault with what bars the way done.</td>
 </tr>
 <tr>
 <td><code>?fps=30</code></td>
 <td>Cap the frame rate at 30 (it is otherwise capped at 60).</td>
+</tr>
+<tr>
+<td><code>?net=local</code></td>
+<td>Testing multiplayer on one machine: tabs of this browser find each other (over a BroadcastChannel) instead of strangers on public relays, and each tab is a new player. Shared rift trips: open two or three windows of <code>?playground&amp;net=local</code> and press &quot;Enter the Hollow (shared)&quot; in each. Visiting a world: in one window of <code>?playground&amp;net=local</code> open the Drift Beacon (B), press &quot;Open my world&quot; and read the code; in another window open <code>?join=CODE&amp;net=local</code> (or type the code into its beacon), then let them in on the first.</td>
+</tr>
+<tr>
+<td><code>?join=CODE</code></td>
+<td>Visit the world with this code (what the beacon&#39;s Visit button does). The visitor&#39;s own world is saved and set aside; going home (the beacon&#39;s &quot;Go home&quot;, or the host closing their world) brings them back to it.</td>
 </tr>
 </tbody></table></div>
 <p>The game strips the query string after reading it, so reloading continues the same world.</p>
 <p>In dev builds (<code>npm run dev</code>), the running game is available in the browser console as <code>window.game</code>.</p>
 <h2 id="deploying">Deploying<a class="anchor" href="#deploying" aria-label="Link to this section">#</a></h2>
 <p><code>npm run build</code> writes a static site to <code>dist/</code>: upload the folder to any static host (Netlify, GitHub Pages, itch.io, an S3 bucket, nginx). Paths are relative, so it works from a subfolder too. The game code (about 100 KB gzipped) and Pixi (about 160 KB gzipped) are separate files, so players keep Pixi cached across updates; serve <code>dist/assets/</code> with long cache headers, since its file names change with every build. Pixi&#39;s WebGPU code ships inside the Pixi file even though the game uses WebGL: Pixi&#39;s main export imports it statically, so splitting it out would need a custom Pixi build, and <code>vite.config.ts</code> does not try.</p>
-<p><strong>On Vercel:</strong> import the project (or run <code>vercel</code> in its folder). <code>vercel.json</code> already sets everything: <code>npm ci</code>, <code>npm run build</code>, output <code>dist/</code>, a year of immutable caching for <code>dist/assets/</code>, and a few safe security headers. Node 22.12 or newer is required (<code>engines</code> in <code>package.json</code>; Vercel&#39;s default Node 22 is fine). No environment variables or server functions are needed: the game is entirely static, and saves stay in each player&#39;s browser. The game makes no outside requests: the Pixelify Sans font ships with it (<code>@fontsource/pixelify-sans</code>, imported at the top of <code>src/style.css</code> so the opening screen has it from the first paint), so no player data reaches Google Fonts.</p>
+<p><strong>On Vercel:</strong> import the project (or run <code>vercel</code> in its folder). <code>vercel.json</code> already sets everything: <code>npm ci</code>, <code>npm run build</code>, output <code>dist/</code>, a year of immutable caching for <code>dist/assets/</code>, and a few safe security headers. Node 22.12 or newer is required (<code>engines</code> in <code>package.json</code>; Vercel&#39;s default Node 22 is fine). No environment variables or server functions are needed: the game is entirely static, and saves stay in each player&#39;s browser. Playing alone makes no outside requests; a public rift trip (the Drift Beacon&#39;s default) reaches public Nostr relays (to find others) and public STUN servers (to link to them), listed in the CSP&#39;s <code>connect-src</code>, and the multiplayer code (about 35 KB gzipped) is a separate file loaded only then. The Pixelify Sans font ships with the game (<code>@fontsource/pixelify-sans</code>, imported at the top of <code>src/style.css</code> so the opening screen has it from the first paint), so no player data reaches Google Fonts.</p>
 <p>What keeps a live build safe:</p>
 <ul>
 <li><strong>Saves</strong> live in IndexedDB in the player&#39;s browser. If storage is blocked (some private modes), the game still runs and says once that it cannot save. A save that cannot be read (for example, one from a newer version) is kept as a backup and a new world begins, with an alert, instead of the game failing to start. If storage fails to read at all, that session does not save, so it cannot overwrite a save it never saw. Older save versions are upgraded. See <a href="saves.html">saves.md</a>.</li>
 <li><strong>World generation</strong> runs in web workers, and falls back to the main thread if workers cannot start or one fails, so the world always loads.</li>
 <li><strong>Errors</strong> in a frame are logged and the game carries on (Pixi would otherwise stop ticking). If the game cannot start at all (no WebGL), the page says so.</li>
-<li><strong>Cheats are off:</strong> <code>?spawn</code>, <code>?hour</code>, <code>?weather</code>, the G/B teleport and <code>window.game</code> only exist in development builds. <code>?seed</code>, <code>?new</code> and <code>?fps=30</code> work everywhere.</li>
+<li><strong>Cheats are off:</strong> <code>?spawn</code>, <code>?hour</code>, <code>?weather</code>, the G/H teleport and <code>window.game</code> only exist in development builds. <code>?seed</code>, <code>?new</code>, <code>?fps=30</code> and <code>?net=local</code> work everywhere.</li>
+<li><strong>Others behind the rifts</strong> cannot reach a player&#39;s overworld or save: a guest&#39;s blows are requests the host checks (reach, rate, strength), every message is bounds-checked and malformed ones are dropped, and peers on another game version or with a different map are refused. See <a href="networking.html">networking.md</a>.</li>
 <li><strong>Two tabs:</strong> only the first tab saves (a Web Lock, with a <code>BroadcastChannel</code> fallback); a later tab plays without saving and says so.</li>
-<li><strong>Touch screens</strong> get a left-half stick, tap-to-interact, pinch zoom, a tappable action prompt, Use, Bag, Hit, Roll, hold-to-Block, Pause and Full buttons, and a layout that fits phones upright or sideways.</li>
+<li><strong>Touch screens</strong> get a left-half stick, tap-to-interact, pinch zoom, a tappable action prompt, Use, Bag, Hit, Roll, hold-to-Block, Beacon, Pause and Full buttons, and a layout that fits phones upright or sideways.</li>
 <li><strong>Accessibility:</strong> screen flashes can be turned off (and are off by default under the system&#39;s reduced-motion setting, which also stops HUD animation), the text and HUD size runs from 0.8 to 1.5, desktop keys can be changed, and first-time tips explain each part of the game as it comes up.</li>
 </ul>
 <h2 id="privacy-and-licenses">Privacy and licenses<a class="anchor" href="#privacy-and-licenses" aria-label="Link to this section">#</a></h2>
 <ul>
-<li><strong>No personal data:</strong> no accounts, analytics, ads or cookies. Saves (IndexedDB) and settings (<code>localStorage</code>) stay in the player&#39;s browser, which counts as strictly necessary storage, so no consent banner is needed. The host&#39;s server logs (Vercel) are the only data anyone else sees.</li>
+<li><strong>No personal data:</strong> no accounts, analytics, ads or cookies. Saves (IndexedDB) and settings (<code>localStorage</code>) stay in the player&#39;s browser, which counts as strictly necessary storage, so no consent banner is needed. The host&#39;s server logs (Vercel) are the only data anyone else sees while playing alone. Meeting others behind a rift links players&#39; browsers directly, so each sees the others&#39; IP addresses (as in any peer-to-peer game), and the public relays see the board&#39;s notes (a name, a dimension, a join code) and encrypted signaling; a random key, kept in <code>localStorage</code>, is the only identity. Private rift trips (the beacon) avoid all of it.</li>
 <li><strong>About tab</strong> (beside Settings in the menu, <code>src/ui/About.ts</code>): a short privacy note, credits (original art and sound) and the open source licenses, with the full texts on demand.</li>
 <li><strong>Third-party notices:</strong> <code>npm run build</code> first runs <code>scripts/build-notices.mjs</code> (also <code>npm run notices</code>), which writes the license of every shipped package (Pixi.js and its dependencies, Pixelify Sans under the SIL OFL 1.1) to <code>public/THIRD_PARTY_NOTICES.txt</code>. Type-only packages are skipped.</li>
 <li><strong>Before the app stores, analytics, ads, accounts or sales:</strong> the stores want a privacy policy URL; tracking needs a full privacy policy and consent; selling needs a trademark check on the name.</li>
@@ -218,10 +236,12 @@
 <li><a href="combat.html">Combat</a></li>
 <li><a href="living-world.html">Living world</a></li>
 <li><a href="story.html">Story</a>: the rifts, and the objective in the tracker</li>
-<li><a href="dimensions.html">Dimensions</a>: The Hollow behind the rifts, its challenges, the map, and dying there</li>
+<li><a href="dimensions.html">Dimensions</a>: The Hollow behind the rifts, its fixed map as data, its challenges and clues, the map, and dying there</li>
 <li><a href="buildings-and-interiors.html">Buildings and interiors</a>: building sprites, walls with height, and walking inside</li>
 <li><a href="exploration.html">Exploration</a>: the map (not in the overworld), fog of war, markers and the compass</li>
 <li><a href="audio.html">Audio</a>: synthesised sound effects, music and weather ambience</li>
+<li><a href="networking.html">Networking</a>: playing with others with no server of our own: WebRTC, Nostr relays, sessions, and how shared dimension instances run</li>
+<li><a href="multiplayer-plan.html">Multiplayer plan</a>: shared dimension instances, and visiting a friend&#39;s world by code (both built)</li>
 </ul>
 <p>Design:</p>
 <ul>

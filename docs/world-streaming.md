@@ -27,6 +27,17 @@ A chunk key packs `(cx, cy)` into one safe integer: `(cx + 2^23) × 2^24 + (cy +
 
 The render area grows and shrinks with the screen size and zoom, so the player never sees a chunk appear at the edge. The cache area always covers the render area. A cache margin of at least 1 is required: structures can reach one chunk out from their anchor, so every object that touches the render area has its anchor chunk inside the cache area and is rolled before it is drawn.
 
+### With friends visiting
+
+A host whose world friends are visiting ([multiplayer-plan.md](multiplayer-plan.md#overworld-by-invite)) passes each guest's view too: `update(view, others)`. Each guest's view gets its own render, cache and simulation areas, worked out the same way (in place, no allocation per frame). Then:
+
+- **The cache is the union** of everyone's. A chunk is disposed, and a region's visit rises, only once it has left every player's cache: a region drifts only when no one is near it, whoever walked away first. Objects live while any player's cache holds one of their chunks.
+- **Simulation is a set of areas** (`simRects`, this player's first): a chunk is `simulated` if it is in anyone's. Combat spawns, despawns, wakes guards and rolls legends around every guest outdoors too (`CombatSystem.others`).
+- **Generation** covers this player's render area and predicted strip first, then each guest's render area (nearest its middle first), then chunks a guest asked for (`demand`, refused outside that guest's cache area).
+- **Only this player's render area is drawn.** A chunk that becomes ready calls `onReady`, so the host can serve it to whoever asked.
+
+Without guests, `others` is empty and nothing of this runs.
+
 ## Lifecycle
 
 | Step | What happens | Where |
